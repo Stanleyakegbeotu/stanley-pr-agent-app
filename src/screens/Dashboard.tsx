@@ -127,8 +127,8 @@ export function Dashboard() {
                   <Check size={17} strokeWidth={3.2} />
                 </span>
               }
-              label="Arrived at Branch"
-              value={String(today.arrived)}
+              label="Completed at Branch"
+              value={String(today.completed)}
               ink="text-[#14633a]"
               onClick={() => navigate('/referrals')}
             />

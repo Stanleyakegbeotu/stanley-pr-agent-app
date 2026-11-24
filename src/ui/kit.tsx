@@ -172,7 +172,6 @@ export function Stepper({ steps, current }: { steps: string[]; current: number }
 
 const STATUS_STYLE: Record<ReferralStatus, string> = {
   Completed: 'bg-[#dcf5e6] text-good-ink',
-  Arrived: 'bg-brand-50 text-brand-700',
   Pending: 'bg-[#ffecd9] text-warn-ink',
   Cancelled: 'bg-[#fde2e2] text-[#b42318]',
 };

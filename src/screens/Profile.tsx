@@ -19,7 +19,7 @@ import { Button, Card, Chip, ChipRow, EmptyState, Field, InitialsAvatar, ScreenH
 /** Which patients a figure opens. */
 export type PatientView = 'all' | 'completed' | 'waiting';
 const VIEW_LABEL: Record<PatientView, string> = { all: 'All', completed: 'Completed', waiting: 'Waiting' };
-const inView = (r: Referral, v: PatientView) => (v === 'all' ? true : v === 'completed' ? r.status === 'Completed' : r.status === 'Pending' || r.status === 'Arrived');
+const inView = (r: Referral, v: PatientView) => (v === 'all' ? true : v === 'completed' ? r.status === 'Completed' : r.status === 'Pending');
 
 export function Profile() {
   const { referrals, navigate, showToast } = useApp();
@@ -28,8 +28,7 @@ export function Profile() {
   const file = useRef<HTMLInputElement>(null);
 
   const completed = referrals.filter((r) => r.status === 'Completed');
-  const waiting = referrals.filter((r) => r.status === 'Pending' || r.status === 'Arrived');
-  const notArrived = waiting.filter((r) => r.status === 'Pending').length;
+  const waiting = referrals.filter((r) => r.status === 'Pending');
   const earned = completed.reduce((s, r) => s + commissionOf(r), 0);
   const paid = completed.filter((r) => r.paidAt).reduce((s, r) => s + commissionOf(r), 0);
 
@@ -80,7 +79,7 @@ export function Profile() {
       <div className="mb-2 grid grid-cols-2 gap-3">
         <Stat icon={<Users size={19} />} tone="bg-tint-blue text-brand-700" value={String(referrals.length)} label="Patients referred" note="Everyone you’ve sent" onClick={() => navigate('/profile/patients?show=all')} />
         <Stat icon={<CheckCircle2 size={19} />} tone="bg-tint-green text-good-ink" value={String(completed.length)} label="Completed" note="Tests done at the branch" onClick={() => navigate('/profile/patients?show=completed')} />
-        <Stat icon={<Clock3 size={19} />} tone="bg-tint-orange text-orange" value={String(waiting.length)} label="Still waiting" note={`${notArrived} yet to arrive, ${waiting.length - notArrived} not finished`} onClick={() => navigate('/profile/patients?show=waiting')} />
+        <Stat icon={<Clock3 size={19} />} tone="bg-tint-orange text-orange" value={String(waiting.length)} label="Still waiting" note="Submitted, not completed yet" onClick={() => navigate('/profile/patients?show=waiting')} />
         <Stat icon={<Wallet size={19} />} tone="bg-tint-purple text-violet" value={naira(earned)} label="Total earned" note={`${naira(paid)} paid out so far`} onClick={() => navigate('/earnings')} />
       </div>
       <p className="mb-5 px-1 text-[12.5px] text-muted">Tap a figure to see the patients behind it.</p>
@@ -233,7 +232,7 @@ export function ProfilePatients() {
   const NOTE: Record<PatientView, string> = {
     all: 'Every patient you’ve referred, newest first.',
     completed: 'Patients whose tests are done. Their commission is confirmed.',
-    waiting: 'Patients yet to arrive at the branch, or who arrived but haven’t finished their tests.',
+    waiting: 'Patients you submitted whose tests haven’t been completed and billed at the branch yet.',
   };
   return (
     <>
@@ -266,7 +265,7 @@ export function ProfilePatients() {
                     {r.id}, {new Date(r.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
                   </span>
                   <span className="block truncate text-[13px] text-muted">{serviceSummary(r)}</span>
-                  {view === 'waiting' && <span className="mt-1 block text-[12.5px] font-medium text-orange">{r.status === 'Pending' ? 'Yet to arrive at the branch' : 'Arrived, tests not finished'}</span>}
+                  {view === 'waiting' && <span className="mt-1 block text-[12.5px] font-medium text-orange">Submitted, not completed yet</span>}
                 </span>
                 <span className="flex shrink-0 flex-col items-end gap-1.5">
                   <StatusBadge status={r.status} />

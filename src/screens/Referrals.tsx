@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { CalendarDays, Check, ClipboardList, Copy, Filter, Hash, Phone, Plus } from 'lucide-react';
 import { BRANCH } from '@/config/org';
 import { displayPhone, naira, shortDate } from '@/domain/format';
-import { billOf, commissionOf, isEstimate, serviceSummary, servicesOf, type ReferralStatus, STATUS_LABEL, testChanges, billedIds } from '@/domain/referrals';
+import { billOf, commissionOf, isEstimate, serviceSummary, servicesOf, type ReferralStatus, STATUS_LABEL, testChanges, billedIds, cancelSummary, cancelTitle } from '@/domain/referrals';
 import { useApp } from '@/app/store';
 import { Button, Card, Chip, ChipRow, EmptyState, FilterButton, InitialsAvatar, ScreenHeader, SearchField, StatusBadge, Subtitle, WhatsAppButton } from '@/ui/kit';
 import { shareOnWhatsApp } from '@/domain/whatsapp';
@@ -11,7 +11,7 @@ import { ChangeNote } from '@/screens/home/HomeSections';
 import { priceText } from '@/screens/Services';
 
 type FilterKey = 'All' | ReferralStatus;
-const FILTERS: FilterKey[] = ['All', 'Pending', 'Arrived', 'Completed', 'Cancelled'];
+const FILTERS: FilterKey[] = ['All', 'Pending', 'Completed', 'Cancelled'];
 
 /** Local calendar day of a date ("2026-11-23"). */
 const dayKey = (d: Date | string) => {
@@ -82,7 +82,7 @@ export function MyReferrals() {
   const live = ofDay.filter((r) => r.status !== 'Cancelled');
   const summary = {
     referred: live.length,
-    arrived: live.filter((r) => r.status === 'Arrived' || r.status === 'Completed').length,
+    cancelled: ofDay.filter((r) => r.status === 'Cancelled').length,
     completed: live.filter((r) => r.status === 'Completed').length,
     commission: live.reduce((s, r) => s + commissionOf(r), 0),
   };
@@ -127,8 +127,8 @@ export function MyReferrals() {
         <div className="mt-2 grid grid-cols-4 gap-2">
           {[
             ['Referred', String(summary.referred)],
-            ['Arrived', String(summary.arrived)],
             ['Completed', String(summary.completed)],
+            ['Cancelled', String(summary.cancelled)],
             ['Est. comm.', naira(summary.commission)],
           ].map(([l, v]) => (
             <div key={l} className="min-w-0">
@@ -196,10 +196,9 @@ export function MyReferrals() {
   );
 }
 
-const STAGES: ReferralStatus[] = ['Pending', 'Arrived', 'Completed'];
+const STAGES: ReferralStatus[] = ['Pending', 'Completed'];
 const STAGE_TEXT: Record<string, string> = {
-  Pending: 'Sent to the branch, awaiting the patient',
-  Arrived: 'The patient arrived at the branch',
+  Pending: 'Sent to the branch with the referral ID',
   Completed: 'Billing done at the branch, commission confirmed',
 };
 
@@ -251,8 +250,8 @@ export function ReferralDetails({ id }: { id: string }) {
 
       {r.status === 'Cancelled' && (
         <div className="mb-3.5 rounded-[20px] border border-[#f6c9c9] bg-[#fdecec] p-4">
-          <p className="text-[15.5px] font-bold text-[#b42318]">The patient cancelled</p>
-          <p className="mt-0.5 text-[14px] text-[#7a271a]">{r.cancelReason ?? 'The branch recorded this visit as cancelled.'} There is no commission for this referral.</p>
+          <p className="text-[15.5px] font-bold text-[#b42318]">{cancelTitle(r)}</p>
+          <p className="mt-0.5 text-[14px] text-[#7a271a]">{cancelSummary(r)} There is no commission for this referral.</p>
         </div>
       )}
       {r.status !== 'Cancelled' && (

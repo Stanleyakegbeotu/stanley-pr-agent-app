@@ -56,7 +56,7 @@ export interface Notice {
 }
 export const NOTIFICATIONS: Notice[] = [
   { id: 'n1', title: 'Patient completed', text: 'John Adeyemi’s X-Ray and MRI are completed. Commission confirmed.', when: 'Today · 09:42', sticker: 'check', to: '/referrals' },
-  { id: 'n2', title: 'Patient arrived', text: 'Mary Okafor has arrived at the Abuja branch.', when: 'Today · 09:10', sticker: 'hospital', to: '/referrals' },
+  { id: 'n2', title: 'Referral cancelled', text: 'Blessing Udo cancelled before visiting the branch.', when: 'Today · 09:10', sticker: 'hospital', to: '/referrals' },
   { id: 'n3', title: 'Commission rate updated', text: 'Your commission is now 15% on eligible services.', when: 'This week', sticker: 'moneyBag', to: '/earnings' },
 ];
 

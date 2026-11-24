@@ -7,8 +7,9 @@
  *    (owner rule). Pending referrals show an ESTIMATE; it is confirmed once
  *    the patient's tests are completed and paid.
  *  • Status (owner, 2026-11-24): every referral starts as SUBMITTED (stored as
- *    'Pending': sent, awaiting the patient), then Arrived, then Completed once
- *    billing is done at the branch, or Cancelled (with the reason).
+ *    'Pending'), then becomes Completed once billing is done at the branch, or
+ *    Cancelled: before visiting, or at the branch (the patient came but
+ *    decided not to do the tests). There is no "Arrived" status.
  *  • The branch may bill different tests than were referred (the patient drops
  *    or adds tests). Commission follows what was BILLED, and testChanges()
  *    tells the agent exactly what changed and by how much.
@@ -16,7 +17,7 @@
 import { BRANCH, RULES } from '@/config/org';
 import { categoryInfo, serviceById, type Service } from '@/data/services';
 
-export type ReferralStatus = 'Pending' | 'Arrived' | 'Completed' | 'Cancelled';
+export type ReferralStatus = 'Pending' | 'Completed' | 'Cancelled';
 
 export interface Referral {
   id: string;
@@ -31,21 +32,29 @@ export interface Referral {
   queued?: boolean;
   /** What the branch actually billed (set at billing). Absent = the referred tests. */
   billedServiceIds?: string[];
-  /** When the status last changed at the branch (arrived, completed, cancelled). */
+  /** When the status last changed at the branch (completed or cancelled). */
   updatedAt?: string;
-  /** Why the visit was cancelled, as recorded by the branch. */
+  /** Where the patient cancelled: before visiting, or after coming to the branch. */
+  cancelStage?: 'before-visit' | 'at-branch';
+  /** Anything else the branch recorded about the cancellation. */
   cancelReason?: string;
 }
 
 /** What the agent sees for each status. */
-export const STATUS_LABEL: Record<ReferralStatus, string> = { Pending: 'Submitted', Arrived: 'Arrived', Completed: 'Completed', Cancelled: 'Cancelled' };
+export const STATUS_LABEL: Record<ReferralStatus, string> = { Pending: 'Submitted', Completed: 'Completed', Cancelled: 'Cancelled' };
 /** One line explaining where the patient is. */
 export const STATUS_NOTE: Record<ReferralStatus, string> = {
-  Pending: 'Awaiting the patient at the branch',
-  Arrived: 'Arrived at the branch, tests in progress',
+  Pending: 'Sent to the branch, billing not done yet',
   Completed: 'Completed at the branch, billing done',
   Cancelled: 'Cancelled by the patient',
 };
+
+/** Plain words for a cancellation: where it happened, plus any note from the branch. */
+export function cancelSummary(r: Pick<Referral, 'cancelStage' | 'cancelReason'>) {
+  const where = r.cancelStage === 'at-branch' ? 'The patient came to the branch but decided not to do the tests.' : 'The patient cancelled before visiting the branch and won’t be doing the tests.';
+  return r.cancelReason ? `${where} ${r.cancelReason}` : where;
+}
+export const cancelTitle = (r: Pick<Referral, 'cancelStage'>) => (r.cancelStage === 'at-branch' ? 'Cancelled at the branch' : 'Cancelled before visiting');
 
 type Billable = Pick<Referral, 'serviceIds'> & { billedServiceIds?: string[] };
 /** The tests that count for the bill: what the branch billed, or what was referred. */
@@ -78,7 +87,7 @@ export const serviceSummary = (r: Pick<Referral, 'serviceIds'>) => {
   return Array.from(new Set(s.map((x) => categoryInfo(x.category).label))).join(', ');
 };
 
-export const isEstimate = (r: Referral) => r.status === 'Pending' || r.status === 'Arrived';
+export const isEstimate = (r: Referral) => r.status === 'Pending';
 
 /* ─────────────── periods ─────────────── */
 
@@ -99,7 +108,6 @@ export const inPeriod = (iso: string, p: Period, now = new Date()) => {
 
 export interface PeriodStats {
   referred: number;
-  arrived: number;
   completed: number;
   /** Commission of everything referred in the period that isn't cancelled. */
   estimated: number;
@@ -116,7 +124,6 @@ export function statsFor(list: Referral[], p: Period, now = new Date()): PeriodS
   const paid = completed.filter((r) => r.paidAt && inPeriod(r.paidAt, p, now)).reduce((s, r) => s + commissionOf(r), 0);
   return {
     referred: inP.length,
-    arrived: inP.filter((r) => r.status === 'Arrived' || r.status === 'Completed').length,
     completed: completed.length,
     estimated: inP.reduce((s, r) => s + commissionOf(r), 0),
     confirmed,

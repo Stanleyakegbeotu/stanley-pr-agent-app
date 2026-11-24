@@ -1,17 +1,18 @@
 /**
  * Home sections (owner, 2026-11-24).
  *  • Updates from your branch: shown in the "required" area at the top of
- *    Home, under the bank details card. A patient arrived, completed their
- *    tests (billing done), cancelled, or changed tests at billing (and how
- *    that moved the commission). Each update can be dismissed.
+ *    Home, under the bank details card. A patient completed their tests
+ *    (billing done), cancelled (before visiting, or at the branch), or
+ *    removed/added tests at billing (and how that moved the commission).
+ *    Each update can be dismissed. There is no "Arrived" status.
  *  • Today's referred patients: below Quick Actions, every patient referred
  *    today with their status; "No patient referred today" when there are none.
  */
 import { useState } from 'react';
-import { ArrowDownRight, ArrowUpRight, Ban, CheckCircle2, ChevronRight, DoorOpen, Plus, Send, X } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, Ban, CheckCircle2, ChevronRight, Plus, Send, X } from 'lucide-react';
 import { useApp } from '@/app/store';
 import { naira } from '@/domain/format';
-import { STATUS_NOTE, commissionOf, serviceSummary, testChanges, type Referral } from '@/domain/referrals';
+import { STATUS_NOTE, cancelSummary, cancelTitle, commissionOf, serviceSummary, testChanges, type Referral } from '@/domain/referrals';
 import { Button, InitialsAvatar, SectionTitle, StatusBadge } from '@/ui/kit';
 
 const timeOf = (iso: string) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
@@ -28,7 +29,7 @@ export function ChangeNote({ r, className = '' }: { r: Referral; className?: str
       {c.removed.length > 0 && (
         <span className="block">
           <b>
-            {c.removed.length} test{c.removed.length === 1 ? '' : 's'} removed:
+            {c.removed.length} test{c.removed.length === 1 ? '' : 's'} removed by the patient:
           </b>{' '}
           {names(c.removed)}
         </span>
@@ -36,7 +37,7 @@ export function ChangeNote({ r, className = '' }: { r: Referral; className?: str
       {c.added.length > 0 && (
         <span className="block">
           <b>
-            {c.added.length} test{c.added.length === 1 ? '' : 's'} added:
+            {c.added.length} test{c.added.length === 1 ? '' : 's'} added at the branch:
           </b>{' '}
           {names(c.added)}
         </span>
@@ -104,13 +105,10 @@ export function BranchUpdates() {
 }
 
 function Update({ r, onOpen, onDismiss }: { r: Referral; onOpen: () => void; onDismiss: () => void }) {
-  const first = r.patient.name.split(' ')[0];
   const kind =
     r.status === 'Completed'
       ? { icon: <CheckCircle2 size={20} />, tone: 'bg-tint-green text-good', title: `${r.patient.name} completed at the branch`, text: `Billing is done. Your commission of ${naira(commissionOf(r))} is confirmed.` }
-      : r.status === 'Arrived'
-        ? { icon: <DoorOpen size={20} />, tone: 'bg-tint-blue text-brand-600', title: `${r.patient.name} arrived at the branch`, text: `${first} is doing the tests now. You’ll see here when billing is done.` }
-        : { icon: <Ban size={20} />, tone: 'bg-[#fdecec] text-[#d93036]', title: `${r.patient.name} cancelled`, text: `${r.cancelReason ?? 'The patient cancelled the visit.'} No commission for this referral.` };
+      : { icon: <Ban size={20} />, tone: 'bg-[#fdecec] text-[#d93036]', title: `${r.patient.name}: ${cancelTitle(r).toLowerCase()}`, text: `${cancelSummary(r)} No commission for this referral.` };
   return (
     <div className="card relative flex items-start gap-3 p-3.5 pr-10">
       <button type="button" onClick={onOpen} className="press flex min-w-0 flex-1 items-start gap-3 text-left">
@@ -166,8 +164,8 @@ export function TodayPatients() {
                   <span className="block truncate text-[12.5px] text-muted">
                     {r.id}, {timeOf(r.createdAt)}, {serviceSummary(r)}
                   </span>
-                  <span className={`mt-1 block text-[13px] font-medium ${r.status === 'Completed' ? 'text-good-ink' : r.status === 'Cancelled' ? 'text-[#d93036]' : r.status === 'Arrived' ? 'text-brand-700' : 'text-orange'}`}>
-                    {r.status === 'Cancelled' && r.cancelReason ? `Cancelled: ${r.cancelReason}` : STATUS_NOTE[r.status]}
+                  <span className={`mt-1 block text-[13px] font-medium ${r.status === 'Completed' ? 'text-good-ink' : r.status === 'Cancelled' ? 'text-[#d93036]' : 'text-orange'}`}>
+                    {r.status === 'Cancelled' ? cancelSummary(r) : STATUS_NOTE[r.status]}
                   </span>
                   <ChangeNote r={r} className="mt-1.5" />
                   <span className="mt-1 flex items-center justify-between text-[13px]">

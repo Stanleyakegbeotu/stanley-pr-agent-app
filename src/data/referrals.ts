@@ -8,18 +8,19 @@
 import { referralId, type Referral, type ReferralStatus } from '@/domain/referrals';
 import { serviceByName } from './services';
 
-type Seed = [name: string, services: string[], status: ReferralStatus, daysAgo: number, phone: string, gender: 'Male' | 'Female', age: number, billed?: string[], cancelReason?: string];
+type Seed = [name: string, services: string[], status: ReferralStatus, daysAgo: number, phone: string, gender: 'Male' | 'Female', age: number, billed?: string[], cancelStage?: 'before-visit' | 'at-branch', cancelReason?: string];
 
 // Newest first. Service names exactly as recorded in the catalogue.
 // John: LEG X RAY ₦18,000 + KNEE MRI ₦160,000 = ₦178,000 → 15% = ₦26,700.
 const SEEDS: Seed[] = [
-  // Sample billing changes (owner, 2026-11-24): John added a chest X-ray; Tunde dropped 2 tests; Blessing cancelled.
+  // Sample billing changes (owner, 2026-11-24): John added a chest X-ray; Tunde removed 2 tests; Blessing cancelled.
+  // There is no "Arrived" status: Submitted (Pending), Completed or Cancelled.
   ['John Adeyemi', ['LEG X RAY', 'KNEE MRI'], 'Completed', 0, '8034567890', 'Male', 42, ['LEG X RAY', 'KNEE MRI', 'CHEST (AP)']],
-  ['Mary Okafor', ['ABDOMINOPELVIC SCAN'], 'Arrived', 0, '8023344556', 'Female', 35],
+  ['Mary Okafor', ['ABDOMINOPELVIC SCAN'], 'Pending', 0, '8023344556', 'Female', 35],
   ['Tunde Bakare', ['FASTING LIPID PROFILE', 'FBS', 'E/U/C'], 'Completed', 0, '7061234567', 'Male', 51, ['FASTING LIPID PROFILE']],
   ['Aisha Bello', ['FULL BLOOD COUNT', 'MP'], 'Pending', 0, '8159876543', 'Female', 27],
   ['Chinedu Obi', ['THYROID MARKERS (T3,T4,TSH)'], 'Pending', 0, '9032221100', 'Male', 39],
-  ['Blessing Udo', ['PELVIC ULTRASOUND'], 'Cancelled', 0, '8023456781', 'Female', 32, undefined, 'The patient changed their mind and cancelled the visit.'],
+  ['Blessing Udo', ['PELVIC ULTRASOUND'], 'Cancelled', 0, '8023456781', 'Female', 32, undefined, 'before-visit', 'They changed their mind.'],
   ['Emeka Igwe', ['CT ABDOMEN WITH CONTRAST'], 'Pending', 1, '8067788990', 'Male', 58],
   ['Faith Obi', ['E/U/C', 'LIVER FUNCTION TEST (LFT)'], 'Pending', 2, '7012345678', 'Female', 31],
   ['Halima Yusuf', ['PELVIC ULTRASOUND'], 'Completed', 3, '8134455667', 'Female', 29],
@@ -28,20 +29,20 @@ const SEEDS: Seed[] = [
   ['Ibrahim Musa', ['ECG'], 'Completed', 15, '8037788112', 'Male', 63],
   ['Bisi Adebayo', ['ABDOMINOPELVIC SCAN'], 'Completed', 21, '7039988776', 'Female', 38],
   ['Samuel Ojo', ['FBS', 'FASTING LIPID PROFILE'], 'Pending', 26, '8126677889', 'Male', 55],
-  ['Zainab Sani', ['THYROID MARKERS (T3,T4,TSH)'], 'Arrived', 29, '9011223344', 'Female', 33],
-  ['Peter Okon', ['LEG X RAY'], 'Arrived', 33, '8056677001', 'Male', 24],
-  ['Ruth Alabi', ['PELVIC ULTRASOUND'], 'Arrived', 37, '8169900112', 'Female', 30],
-  ['Daniel Uche', ['KNEE MRI'], 'Arrived', 41, '8022211334', 'Male', 36],
-  ['Fatima Lawal', ['E/U/C'], 'Arrived', 45, '7055443322', 'Female', 49],
+  ['Zainab Sani', ['THYROID MARKERS (T3,T4,TSH)'], 'Completed', 29, '9011223344', 'Female', 33],
+  ['Peter Okon', ['LEG X RAY'], 'Cancelled', 33, '8056677001', 'Male', 24, undefined, 'at-branch'],
+  ['Ruth Alabi', ['PELVIC ULTRASOUND'], 'Completed', 37, '8169900112', 'Female', 30],
+  ['Daniel Uche', ['KNEE MRI'], 'Completed', 41, '8022211334', 'Male', 36],
+  ['Fatima Lawal', ['E/U/C'], 'Cancelled', 45, '7055443322', 'Female', 49, undefined, 'before-visit'],
   ['Victor Ede', ['CHEST (AP)'], 'Completed', 49, '8098877665', 'Male', 41],
   ['Joy Nnamdi', ['WIDAL', 'MP'], 'Pending', 53, '8131122445', 'Female', 26],
-  ['Musa Danjuma', ['CT BRAIN/HEAD'], 'Arrived', 57, '8064433221', 'Male', 60],
+  ['Musa Danjuma', ['CT BRAIN/HEAD'], 'Completed', 57, '8064433221', 'Male', 60],
   ['Ada Nwosu', ['FASTING LIPID PROFILE'], 'Completed', 61, '9025566778', 'Female', 47],
   ['Yemi Coker', ['ABDOMINOPELVIC SCAN'], 'Completed', 65, '8087766554', 'Female', 34],
-  ['Uchenna Agu', ['PSA'], 'Arrived', 70, '7077889900', 'Male', 52],
+  ['Uchenna Agu', ['PSA'], 'Pending', 70, '7077889900', 'Male', 52],
   ['Hauwa Garba', ['ECG', 'ECHOCARDIOGRAPHY (ADULT)'], 'Completed', 75, '8152233445', 'Female', 57],
   ['Ola Fashola', ['URINALYSIS'], 'Pending', 80, '8048899001', 'Male', 28],
-  ['Ifeoma Chukwu', ['MRI BRAIN'], 'Arrived', 85, '8119988007', 'Female', 37],
+  ['Ifeoma Chukwu', ['MRI BRAIN'], 'Cancelled', 85, '8119988007', 'Female', 37, undefined, 'at-branch'],
   ['Segun Ajayi', ['HB GENOTYPE', 'FULL BLOOD COUNT'], 'Completed', 90, '8035566220', 'Male', 45],
 ];
 
@@ -49,7 +50,7 @@ export const FIRST_SAMPLE_NUMBER = 842;
 
 export function sampleReferrals(now = new Date()): Referral[] {
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 10, 0, 0);
-  return SEEDS.map(([name, services, status, daysAgo, phone, gender, age, billed, cancelReason], i) => {
+  return SEEDS.map(([name, services, status, daysAgo, phone, gender, age, billed, cancelStage, cancelReason], i) => {
     const d = new Date(now);
     d.setDate(d.getDate() - daysAgo);
     // Spread the day's referrals over the morning, newest first, never in the future.
@@ -65,6 +66,6 @@ export function sampleReferrals(now = new Date()): Referral[] {
     const billedServiceIds = status === 'Completed' ? ids(billed ?? services) : undefined;
     // The branch updated the status a little after the referral (never in the future).
     const updatedAt = status === 'Pending' ? undefined : new Date(Math.min(now.getTime(), d.getTime() + (25 + (i % 4) * 20) * 60_000)).toISOString();
-    return { id: referralId(FIRST_SAMPLE_NUMBER - i), patient: { name, phone, gender, age: String(age) }, serviceIds, status, createdAt, paidAt, billedServiceIds, updatedAt, cancelReason };
+    return { id: referralId(FIRST_SAMPLE_NUMBER - i), patient: { name, phone, gender, age: String(age) }, serviceIds, status, createdAt, paidAt, billedServiceIds, updatedAt, cancelStage, cancelReason };
   });
 }
