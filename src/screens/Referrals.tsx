@@ -1,5 +1,5 @@
 /** My Referrals (owner's reference) and one referral's details. */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { CalendarDays, Check, ClipboardList, Copy, Filter, Hash, Phone, Plus } from 'lucide-react';
 import { BRANCH } from '@/config/org';
 import { displayPhone, naira, shortDate } from '@/domain/format';
@@ -12,29 +12,134 @@ import { priceText } from '@/screens/Services';
 type FilterKey = 'All' | ReferralStatus;
 const FILTERS: FilterKey[] = ['All', 'Pending', 'Arrived', 'Completed', 'Cancelled'];
 
+/** Local calendar day of a date ("2026-11-23"). */
+const dayKey = (d: Date | string) => {
+  const x = new Date(d);
+  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+};
+const dayDate = (k: string) => new Date(`${k}T12:00:00`);
+const WEEKDAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MONTH = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function dayLabel(k: string) {
+  const today = dayKey(new Date());
+  const y = new Date();
+  y.setDate(y.getDate() - 1);
+  const d = dayDate(k);
+  const date = `${WEEKDAY[d.getDay()]}, ${d.getDate()} ${MONTH[d.getMonth()]}`;
+  return k === today ? `Today · ${date}` : k === dayKey(y) ? `Yesterday · ${date}` : `${date} ${d.getFullYear()}`;
+}
+
+/**
+ * My Referrals (owner, 2026-11-23): a DAILY report — opens on today's
+ * referrals; the day strip and calendar show any other day's work.
+ * Searching looks across every day.
+ */
 export function MyReferrals() {
-  const { referrals, navigate } = useApp();
+  const { referrals, navigate, route } = useApp();
+  const today = dayKey(new Date());
+  const [day, setDay] = useState<string>(route.query.get('day') ?? today);
   const [q, setQ] = useState('');
   const [f, setF] = useState<FilterKey>('All');
   const [newestFirst, setNewestFirst] = useState(true);
-  const counts = useMemo(() => {
-    const c: Record<string, number> = { All: referrals.length };
-    for (const r of referrals) c[r.status] = (c[r.status] ?? 0) + 1;
-    return c;
+  const picker = useRef<HTMLInputElement>(null);
+  const strip = useRef<HTMLDivElement>(null);
+
+  // Referrals per day (for the strip's counts).
+  const perDay = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of referrals) m.set(dayKey(r.createdAt), (m.get(dayKey(r.createdAt)) ?? 0) + 1);
+    return m;
   }, [referrals]);
+  // The last 14 days, today on the right (like a calendar strip).
+  const days = useMemo(() => {
+    const out: string[] = [];
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      out.push(dayKey(d));
+    }
+    if (!out.includes(day)) out.unshift(day);
+    return out;
+  }, [day]);
+  useEffect(() => {
+    strip.current?.querySelector<HTMLElement>('[aria-pressed="true"]')?.scrollIntoView({ inline: 'center', block: 'nearest' });
+  }, [day]);
+
   const t = q.trim().toLowerCase();
   const digits = t.replace(/\D/g, '');
-  const list = referrals
+  const searching = t.length > 0;
+  const ofDay = useMemo(() => referrals.filter((r) => searching || dayKey(r.createdAt) === day), [referrals, day, searching]);
+  const counts = useMemo(() => {
+    const c: Record<string, number> = { All: ofDay.length };
+    for (const r of ofDay) c[r.status] = (c[r.status] ?? 0) + 1;
+    return c;
+  }, [ofDay]);
+  const list = ofDay
     .filter((r) => f === 'All' || r.status === f)
     .filter((r) => !t || r.patient.name.toLowerCase().includes(t) || r.id.toLowerCase().includes(t) || (digits.length >= 3 && (r.patient.phone.includes(digits) || r.id.includes(digits))) || serviceSummary(r).toLowerCase().includes(t))
     .sort((a, b) => (newestFirst ? b.createdAt.localeCompare(a.createdAt) : a.createdAt.localeCompare(b.createdAt)));
+  const live = ofDay.filter((r) => r.status !== 'Cancelled');
+  const summary = {
+    referred: live.length,
+    arrived: live.filter((r) => r.status === 'Arrived' || r.status === 'Completed').length,
+    completed: live.filter((r) => r.status === 'Completed').length,
+    commission: live.reduce((s, r) => s + commissionOf(r), 0),
+  };
+  const pick = (k: string) => {
+    setDay(k);
+    setF('All');
+  };
 
   return (
     <>
-      <ScreenHeader title="My Referrals" back={false} />
-      <Subtitle>Track all your referred patients and status.</Subtitle>
+      <ScreenHeader
+        title="My Referrals"
+        back={false}
+        right={
+          <button type="button" onClick={() => picker.current?.showPicker?.() ?? picker.current?.click()} aria-label="Pick a day" className="press grid h-11 w-11 place-items-center rounded-full bg-white text-brand-600 shadow-[0_4px_12px_rgba(30,74,160,0.1)] ring-1 ring-line">
+            <CalendarDays size={20} />
+          </button>
+        }
+      />
+      <input ref={picker} type="date" max={today} value={day} onChange={(e) => e.target.value && pick(e.target.value)} className="sr-only" aria-label="Pick a day" tabIndex={-1} />
+      <Subtitle>Your daily referral report — pick a day to see that day’s work.</Subtitle>
+
+      {/* Day strip */}
+      <div ref={strip} className="-mx-5 mb-4 flex gap-2 overflow-x-auto px-5 pb-1 md:-mx-8 md:px-8">
+        {days.map((k) => {
+          const d = dayDate(k);
+          const on = k === day && !searching;
+          const n = perDay.get(k) ?? 0;
+          return (
+            <button key={k} type="button" aria-pressed={on} onClick={() => pick(k)} className={`press flex w-[58px] shrink-0 flex-col items-center rounded-[18px] py-2.5 ${on ? 'bg-brand-600 text-white shadow-[0_10px_22px_rgba(31,111,232,0.3)]' : 'bg-white text-ink ring-1 ring-line'}`}>
+              <span className={`text-[11.5px] font-medium ${on ? 'text-white/85' : 'text-muted'}`}>{k === today ? 'Today' : WEEKDAY[d.getDay()]}</span>
+              <span className="text-[19px] font-bold leading-tight">{d.getDate()}</span>
+              <span className={`mt-0.5 h-1.5 w-1.5 rounded-full ${n ? (on ? 'bg-white' : 'bg-brand-500') : 'bg-transparent'}`} />
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Day summary */}
+      <section className="mb-4 rounded-[22px] bg-linear-to-br from-brand-600 to-brand-800 p-4 text-white shadow-[0_14px_30px_rgba(31,111,232,0.28)]">
+        <p className="text-[13px] font-medium text-white/80">{searching ? `Search results across all days` : dayLabel(day)}</p>
+        <div className="mt-2 grid grid-cols-4 gap-2">
+          {[
+            ['Referred', String(summary.referred)],
+            ['Arrived', String(summary.arrived)],
+            ['Completed', String(summary.completed)],
+            ['Est. comm.', naira(summary.commission)],
+          ].map(([l, v]) => (
+            <div key={l} className="min-w-0">
+              <p className={`truncate font-bold leading-tight ${v!.length > 6 ? 'text-[15px]' : 'text-[22px]'}`}>{v}</p>
+              <p className="text-[11.5px] text-white/75">{l}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
       <div className="mb-4 flex gap-3">
-        <SearchField value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name, phone or referral ID..." aria-label="Search referrals" />
+        <SearchField value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search all days by name, phone or ID..." aria-label="Search referrals" />
         <FilterButton onClick={() => setNewestFirst((v) => !v)} label={newestFirst ? 'Showing newest first — tap for oldest first' : 'Showing oldest first — tap for newest first'} icon={<Filter size={21} />} />
       </div>
       <ChipRow>
@@ -48,12 +153,14 @@ export function MyReferrals() {
       {list.length === 0 ? (
         <EmptyState
           sticker="clipboard"
-          title={referrals.length ? 'No matching referrals' : 'No referrals yet'}
-          text={referrals.length ? 'Try another name, phone number or referral ID.' : 'Patients you refer will appear here with their status.'}
+          title={searching ? 'No matching referrals' : `No referrals ${day === today ? 'yet today' : 'on this day'}`}
+          text={searching ? 'Try another name, phone number or referral ID.' : day === today ? 'Patients you refer today will appear here with their status.' : `You didn’t send any referrals on ${dayLabel(day)}. Pick another day above.`}
           action={
-            <Button onClick={() => navigate('/refer')}>
-              <Plus size={19} /> Refer a Patient
-            </Button>
+            day === today && !searching ? (
+              <Button onClick={() => navigate('/refer')}>
+                <Plus size={19} /> Refer a Patient
+              </Button>
+            ) : undefined
           }
         />
       ) : (
@@ -73,7 +180,7 @@ export function MyReferrals() {
                 </span>
                 <span className="flex shrink-0 flex-col items-end gap-1.5">
                   <StatusBadge status={r.status} />
-                  <span className="text-[13px] text-muted">{shortDate(r.createdAt)}</span>
+                  <span className="text-[13px] text-muted">{searching ? shortDate(r.createdAt) : new Date(r.createdAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</span>
                   <span className={`text-[16px] font-bold ${r.status === 'Cancelled' ? 'text-faint line-through' : r.status === 'Pending' ? 'text-orange' : 'text-good'}`}>
                     {isEstimate(r) && r.status === 'Pending' ? 'Est. ' : ''}
                     {naira(commissionOf(r))}

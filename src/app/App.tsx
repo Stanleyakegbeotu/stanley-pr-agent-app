@@ -11,7 +11,8 @@ import { ServiceCatalogue, ServiceDetails } from '@/screens/Services';
 import { ReferPatient, ReferralSent } from '@/screens/refer/ReferPatient';
 import { MyReferrals, ReferralDetails } from '@/screens/Referrals';
 import { Earnings, Targets } from '@/screens/Earnings';
-import { AiAssistant, Announcements, Article, BranchInfo, Campaigns, HelpCentre, Messages, MessageThread, Notifications, Profile, Training } from '@/screens/More';
+import { AiAssistant, Announcements, Article, BranchInfo, Campaigns, HelpCentre, Messages, Notifications, Profile, Training } from '@/screens/More';
+import { ChatThread } from '@/screens/chat/ChatThread';
 import { useApp } from './store';
 import { ShellCtx } from './shell';
 
@@ -37,7 +38,7 @@ function Screen() {
     case 'branch':
       return <BranchInfo />;
     case 'messages':
-      return b ? <MessageThread id={b} /> : <Messages />;
+      return b ? <ChatThread id={b} /> : <Messages />;
     case 'announcements':
       return <Announcements />;
     case 'notifications':
@@ -60,7 +61,8 @@ export function App() {
   const [menu, setMenu] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
   // The referral flow and chat have their own bottom actions — no tab bar there.
-  const tabs = !(route.parts[0] === 'refer' || (route.parts[0] === 'messages' && route.parts[1]));
+  const chat = route.parts[0] === 'messages' && !!route.parts[1];
+  const tabs = !(route.parts[0] === 'refer' || chat);
 
   // New screen → start at the top, close the menu.
   useEffect(() => {
@@ -79,7 +81,7 @@ export function App() {
         </div>
         {tabs && <BottomNav onMore={() => setMenu((m) => !m)} moreOpen={menu} />}
         {toast && (
-          <div role="status" className="fixed left-1/2 z-60 flex w-[calc(100%-40px)] max-w-md -translate-x-1/2 items-center gap-3 rounded-2xl bg-ink px-4 py-3.5 text-[14px] font-medium text-white shadow-2xl" style={{ bottom: tabs ? 'calc(96px + env(safe-area-inset-bottom))' : 'calc(24px + env(safe-area-inset-bottom))' }}>
+          <div role="status" className="fixed left-1/2 z-60 flex w-[calc(100%-40px)] max-w-md -translate-x-1/2 items-center gap-3 rounded-2xl bg-ink px-4 py-3.5 text-[14px] font-medium text-white shadow-2xl" style={{ bottom: tabs || chat ? 'calc(96px + env(safe-area-inset-bottom))' : 'calc(24px + env(safe-area-inset-bottom))' }}>
             <CheckCircle2 size={19} className="shrink-0 text-[#4ade80]" />
             {toast}
           </div>

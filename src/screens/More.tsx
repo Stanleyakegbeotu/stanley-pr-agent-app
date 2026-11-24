@@ -172,47 +172,6 @@ export function Messages() {
   );
 }
 
-export function MessageThread({ id }: { id: string }) {
-  const c = CONVERSATIONS.find((x) => x.id === id);
-  const [sent, setSent] = useState<{ text: string; time: string }[]>([]);
-  const [text, setText] = useState('');
-  if (!c)
-    return (
-      <>
-        <ScreenHeader title="Messages" />
-        <EmptyState sticker="speech" title="Conversation not found" text="It may have been closed." />
-      </>
-    );
-  const send = () => {
-    if (!text.trim()) return;
-    setSent((s) => [...s, { text: text.trim(), time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) }]);
-    setText('');
-  };
-  return (
-    <>
-      <ScreenHeader title={c.name} />
-      <p className="-mt-2 mb-4 text-[13.5px] text-muted">{c.role}</p>
-      <div className="space-y-3 pb-24">
-        {[...c.messages, ...sent.map((s) => ({ ...s, from: 'me' as const }))].map((m, i) => (
-          <div key={i} className={`flex ${m.from === 'me' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-[15px] leading-snug ${m.from === 'me' ? 'rounded-br-md bg-brand-600 text-white' : 'card rounded-bl-md text-ink'}`}>
-              {m.text}
-              <span className={`mt-1 block text-right text-[11.5px] ${m.from === 'me' ? 'text-white/75' : 'text-muted'}`}>{m.time}</span>
-            </div>
-          </div>
-        ))}
-        {sent.length > 0 && <p className="text-center text-[12px] text-muted">Messages are saved on this phone and delivered when the cloud connection is available.</p>}
-      </div>
-      <form onSubmit={(e) => (e.preventDefault(), send())} className="fixed inset-x-0 bottom-0 z-30 flex gap-2.5 border-t border-line bg-white px-4 pb-[max(12px,env(safe-area-inset-bottom))] pt-3 md:left-[264px]">
-        <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Type a message…" aria-label="Message" className="min-h-12 flex-1 rounded-full border border-line bg-page px-4 text-[15px] outline-none focus:border-brand-400" />
-        <button type="submit" aria-label="Send" className="press grid h-12 w-12 place-items-center rounded-full bg-brand-600 text-white">
-          <Send size={20} />
-        </button>
-      </form>
-    </>
-  );
-}
-
 /* ─────────────── Help & training ─────────────── */
 
 export function HelpCentre() {
