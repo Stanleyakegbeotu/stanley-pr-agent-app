@@ -35,7 +35,7 @@ export function ServiceThumb({ service, className = '' }: { service: Service; cl
 export function ScreenHeader({ title, back = true, right }: { title: string; back?: boolean; right?: ReactNode }) {
   const { back: goBack } = useApp();
   return (
-    <header className="sticky top-0 z-30 -mx-5 flex min-h-16 items-center gap-3 bg-page/95 px-5 pt-[env(safe-area-inset-top)] backdrop-blur-xl md:-mx-8 md:px-8">
+    <header className="sticky top-0 z-30 -mx-5 flex min-h-16 items-center gap-3 bg-page px-5 pt-[env(safe-area-inset-top)] md:-mx-8 md:px-8">
       {back && (
         <button type="button" onClick={goBack} aria-label="Back" className="press -ml-2 grid h-11 w-11 place-items-center rounded-full text-ink hover:bg-white">
           <ArrowLeft size={24} strokeWidth={2} />

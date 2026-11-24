@@ -105,6 +105,29 @@ export const SERVICES: Service[] = (CATALOGUE.services as [number, string, strin
   return { id: String(id), name: name.trim(), category, price, description: info.description, preparation: info.preparation, procedure: info.procedure, ...visualFor(name, category) };
 });
 
+/** Picture for a whole category (category cards). */
+const CATEGORY_VISUAL: Record<string, Pick<Service, 'photo' | 'sticker'>> = {
+  LAB: { photo: 'lab' },
+  'X-RAY': { photo: 'xray' },
+  MRI: { photo: 'mri' },
+  SCAN: { photo: 'ultrasound' },
+  'CT SCAN': { photo: 'ct' },
+  PHARYNGOSCOPY: { sticker: 'lungs' },
+  DNA: { sticker: 'dna' },
+  ECHO: { sticker: 'heart' },
+  CARDIOLOGY: { sticker: 'stethoscope' },
+  ECG: { sticker: 'heartPulse' },
+  EEG: { sticker: 'brain' },
+  'HOLTER ECG': { sticker: 'watch' },
+  'MEDICAL EXAMINATION': { sticker: 'stethoscope' },
+};
+export const categoryVisual = (key: string) => CATEGORY_VISUAL[key] ?? { sticker: 'microscope' as StickerKey };
+/** Lowest recorded price in a category ("from ₦3,500"). */
+export const categoryFrom = (key: string) => {
+  const prices = SERVICES.filter((s) => s.category === key && s.price != null).map((s) => s.price!);
+  return prices.length ? Math.min(...prices) : null;
+};
+
 export const serviceById = (id: string) => SERVICES.find((s) => s.id === id);
 /** First service recorded under this exact name (some names are recorded twice on purpose). */
 export const serviceByName = (name: string) => SERVICES.find((s) => s.name === name);

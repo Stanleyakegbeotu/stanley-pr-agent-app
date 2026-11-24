@@ -8,7 +8,8 @@
 import { useRef, useState } from 'react';
 import { ArrowRight, CalendarDays, Check, ChevronDown, Copy, Hash, Pencil, Phone, Send, UserRound, Wallet } from 'lucide-react';
 import { BRANCH, RULES } from '@/config/org';
-import { CATEGORIES, categoryInfo, searchServices } from '@/data/services';
+import { CATEGORIES, categoryInfo } from '@/data/services';
+import { smartSearch } from '@/domain/testSearch';
 import { shareOnWhatsApp } from '@/domain/whatsapp';
 import { priceText } from '@/screens/Services';
 import { displayPhone, formatPersonName, isValidNgPhone, naira } from '@/domain/format';
@@ -146,7 +147,7 @@ function ServicesStep() {
   const [cat, setCat] = useState<string>('All');
   const [error, setError] = useState('');
   const [shown, setShown] = useState(40);
-  const list = searchServices(q, cat);
+  const list = smartSearch(q, cat).hits.map((h) => h.service);
   const chosen = draft.serviceIds;
   const total = billOf(draft);
   const toggle = (id: string) => {
@@ -164,7 +165,7 @@ function ServicesStep() {
       <ScreenHeader title="Select Services" />
       <Subtitle>Choose the tests the doctor requested for {draft.patient.name}.</Subtitle>
       <Stepper steps={STEPS} current={1} />
-      <SearchField className="mb-4" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search for a test or service..." aria-label="Search for a test or service" />
+      <SearchField className="mb-4" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search or describe a test…" aria-label="Search for a test, or describe what the doctor is checking for" />
       <ChipRow>
         <Chip active={cat === 'All'} onClick={() => (setCat('All'), setShown(40))}>
           All
