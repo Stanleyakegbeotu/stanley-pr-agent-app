@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 type IconName = 'home' | 'users' | 'plus' | 'grid' | 'wallet' | 'target' | 'gift' | 'message' | 'bell' | 'help' | 'book' | 'user' | 'settings' | 'pin' | 'search' | 'arrow' | 'chevron' | 'menu' | 'close' | 'check' | 'clock' | 'file' | 'logout' | 'send' | 'download' | 'shield' | 'activity';
 function Icon({ name, className = 'w-5 h-5' }: { name: IconName; className?: string }) {
@@ -87,6 +87,8 @@ function MedicalArt({ small = false }: { small?: boolean }) {
 }
 
 export default function App() {
+  // The page itself never scrolls (no browser scroll indicator); only this content area does — like a native app screen.
+  const scroller = useRef<HTMLDivElement>(null);
   const [page, setPage] = useState('Dashboard');
   const [drawer, setDrawer] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -109,7 +111,7 @@ export default function App() {
   const [profileName, setProfileName] = useState('Stanley Adewale');
   const [ticket, setTicket] = useState(false);
   const [article, setArticle] = useState('');
-  const go = (p: string) => { setPage(p); setDrawer(false); setQuery(''); setFilter('All'); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+  const go = (p: string) => { setPage(p); setDrawer(false); setQuery(''); setFilter('All'); scroller.current?.scrollTo({ top: 0, behavior: 'smooth' }); };
   const notify = (text: string) => { setToast(text); window.setTimeout(() => setToast(''), 4000); };
   const today = initialReferrals.filter(r => r.date === '18 Jun 2025');
   const completed = initialReferrals.filter(r => r.status === 'Completed');
@@ -133,7 +135,7 @@ export default function App() {
   const referralRows = (rows: Referral[]) => <div className="divide-y divide-slate-100">{rows.length ? rows.map(r => <button key={r.ref} onClick={() => { setSelectedReferral(r); go('Referral Details'); }} className="grid min-h-21 w-full grid-cols-[1fr_auto] items-center gap-3 px-5 py-4 text-left hover:bg-slate-50 lg:grid-cols-[1.4fr_1.1fr_.8fr_.9fr]"><span className="flex min-w-0 items-center gap-3"><span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${r.color}`}>{r.initials}</span><span className="min-w-0"><span className="block truncate text-sm font-semibold">{r.name}</span><span className="mt-1 block text-xs text-slate-500">{r.ref}</span></span></span><span className="hidden text-sm text-slate-600 lg:block">{r.service}</span><span className="hidden text-xs text-slate-500 lg:block">{r.date}</span><span><Badge status={r.status} /></span><span className="col-span-2 -mt-1 pl-13 text-xs text-slate-600 lg:hidden">{r.service} · {r.date}</span></button>) : <div className="p-12 text-center text-sm text-slate-600">No referrals match these filters.</div>}</div>;
   const pageTitle: Record<string, string> = { Dashboard: 'Your partner in better care', 'Service Catalogue': 'Explore Services', 'Make a Referral': 'Make a Referral' };
 
-  return <div className={`min-h-screen overflow-x-clip font-sans text-slate-800 selection:bg-blue-100 ${page === 'Dashboard' ? 'bg-[radial-gradient(ellipse_at_70%_0%,#dceaff_0%,#f4f8ff_40%,#fafcff_80%)]' : 'bg-[#f7f9fc]'}`}>
+  return <div className={`h-dvh overflow-hidden font-sans text-slate-800 selection:bg-blue-100 ${page === 'Dashboard' ? 'bg-[radial-gradient(ellipse_at_70%_0%,#dceaff_0%,#f4f8ff_40%,#fafcff_80%)]' : 'bg-[#f7f9fc]'}`}>
     {drawer && <button aria-label="Close navigation overlay" className="fixed inset-0 z-40 bg-slate-900/30 md:hidden" onClick={() => setDrawer(false)} />}
     <aside aria-label="Main navigation" className={`fixed inset-y-0 left-0 z-50 flex w-66 flex-col border-r border-slate-200 bg-[#fcfdff] transition-transform ${drawer ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 ${collapsed ? 'md:w-20' : 'md:w-20 lg:w-61'}`}>
       <div className={`flex min-h-0 flex-1 flex-col ${!collapsed ? 'md:max-lg:[&>div:first-child]:px-5 md:max-lg:[&>div:first-child_span>span]:hidden' : ''}`}>
@@ -141,7 +143,7 @@ export default function App() {
         <div className="hidden min-h-0 flex-1 flex-col items-center gap-3 overflow-y-auto py-6 md:max-lg:flex"><button onClick={() => go('Dashboard')} className="mb-4 rounded-xl bg-blue-600 p-2 text-white" aria-label="Stanley home"><Icon name="plus" className="w-7 h-7" /></button>{navGroups.flatMap(g => g.items).map(([label, icon]) => <button title={label} aria-label={label} key={label} onClick={() => go(label)} className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${page === label ? 'bg-blue-100 text-blue-700' : 'text-slate-600 hover:bg-blue-50'}`}><Icon name={icon} /></button>)}<button onClick={() => go('Profile')} title="Profile" className="mt-auto min-h-11 text-sm font-bold text-blue-700">SA</button></div>
       </div>
     </aside>
-    <div className={`transition-[margin] md:ml-20 ${collapsed ? 'lg:ml-20' : 'lg:ml-61'}`}>
+    <div ref={scroller} className={`app-scroll h-dvh overflow-y-auto overscroll-contain transition-[margin] md:ml-20 ${collapsed ? 'lg:ml-20' : 'lg:ml-61'}`}>
       <header className={`sticky top-0 z-30 flex min-h-20 items-center justify-between gap-4 px-5 pt-[env(safe-area-inset-top)] md:px-8 ${page === 'Dashboard' ? 'bg-[#eef4ff] shadow-[0_5px_25px_#dce6f533]' : 'border-b border-slate-200/80 bg-white shadow-[0_5px_25px_#dce6f533]'}`}>
         <div className="flex items-center gap-3"><button aria-label="Open navigation" onClick={() => setDrawer(true)} className="min-h-11 md:hidden"><Icon name="menu" /></button><button aria-label="Toggle navigation rail" onClick={() => setCollapsed(!collapsed)} className="hidden min-h-11 text-slate-500 lg:block"><Icon name="menu" /></button><span className="text-sm font-semibold text-slate-700">{page === 'Dashboard' ? 'Overview' : page}</span></div>
         <div className="flex items-center gap-3 md:gap-5"><span className="hidden items-center gap-2 text-xs text-slate-600 md:flex"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />Active partner</span><span className="hidden h-6 w-px bg-slate-200 md:block" /><button onClick={() => go('Notifications')} aria-label="Notifications, 3 unread" className="relative flex h-11 w-11 items-center justify-center rounded-full text-slate-900 focus-visible:ring-2 focus-visible:ring-blue-500"><Icon name="bell" className="w-6 h-6" /><span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white" /></button>{page !== 'Dashboard' && <button aria-label="My profile" onClick={() => go('Profile')} className="flex h-11 w-11 items-center justify-center rounded-full bg-[#e5d8c9] text-sm font-semibold text-[#67503e]">SA</button>}</div>

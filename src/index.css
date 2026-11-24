@@ -8,12 +8,41 @@
   --breakpoint-md: 800px;
 }
 
-/* App feel (owner, 2026-11-23): no visible scrollbars anywhere — pages still scroll by touch, wheel and keyboard. */
+/*
+ * Native app feel (owner, 2026-11-23):
+ *  • The page itself never scrolls — html/body are locked to the screen, so the
+ *    phone browser has no page scroll indicator to show and no rubber-band
+ *    bounce of the whole app. Only the content area (and the sidebar list)
+ *    scroll, inside the fixed header and bottom bar.
+ *  • No visible scrollbars anywhere (every browser's way of hiding them);
+ *    scrolling by finger, mouse wheel and keyboard still works.
+ *  • No grey flash when tapping buttons.
+ */
 @layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+  body {
+    -webkit-tap-highlight-color: transparent;
+  }
   * {
     scrollbar-width: none;
+    -ms-overflow-style: none;
   }
   *::-webkit-scrollbar {
     display: none;
+    width: 0 !important;
+    height: 0 !important;
+    background: transparent;
+  }
+  .overflow-y-auto,
+  .overflow-x-auto,
+  .overflow-auto {
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
   }
 }
