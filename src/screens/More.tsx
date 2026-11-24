@@ -12,6 +12,7 @@ import { CATEGORIES, SERVICES, serviceByName, type Service } from '@/data/servic
 import { priceText } from '@/screens/Services';
 import { naira, shortDate } from '@/domain/format';
 import { useApp } from '@/app/store';
+import { monthName, monthStatements } from '@/domain/payouts';
 import { Button, Card, EmptyState, InitialsAvatar, ScreenHeader, ServiceThumb, Sticker, Subtitle } from '@/ui/kit';
 
 /* ─────────────── Branch ─────────────── */
@@ -123,12 +124,16 @@ export function Announcements() {
 }
 
 export function Notifications() {
-  const { navigate } = useApp();
+  const { navigate, referrals } = useApp();
+  // A notification for every monthly payout (owner, 2026-11-24), newest first, before the others.
+  const payouts = monthStatements(referrals)
+    .filter((m) => m.state === 'paid')
+    .map((m) => ({ id: `paid-${m.month}`, title: 'Commission paid', text: `Your commission for ${monthName(m.month)} (${naira(m.amount)}) has been paid into your bank account. Check My Earnings for details.`, when: shortDate(m.paidAt!), sticker: 'moneyBag' as const, to: '/earnings' as const }));
   return (
     <>
       <ScreenHeader title="Notifications" />
       <ul className="space-y-3">
-        {NOTIFICATIONS.map((n) => (
+        {[...payouts, ...NOTIFICATIONS].map((n) => (
           <li key={n.id}>
             <button type="button" onClick={() => n.to && navigate(n.to)} className="card press flex w-full items-start gap-3.5 p-4 text-left">
               <Sticker name={n.sticker} size={42} />

@@ -59,8 +59,9 @@ export function sampleReferrals(now = new Date()): Referral[] {
     // Never in the future, and a "today" sample stays today (even just after midnight).
     if (d > now) d.setTime(Math.max(now.getTime() - (i + 1) * 9 * 60_000, daysAgo === 0 ? new Date(now).setHours(0, 0, 0, 0) : -Infinity));
     const createdAt = d.toISOString();
-    // Commission for completed referrals from earlier months was paid on the 1st of this month.
-    const paidAt = status === 'Completed' && d < monthStart ? monthStart.toISOString() : undefined;
+    // Commission is paid monthly: a completed referral from an earlier month was paid on the 1st of the following month.
+    const payday = new Date(d.getFullYear(), d.getMonth() + 1, 1, 10, 0, 0);
+    const paidAt = status === 'Completed' && d < monthStart && payday <= now ? payday.toISOString() : undefined;
     const ids = (names: string[]) => names.map((n) => serviceByName(n)?.id).filter((x): x is string => !!x);
     const serviceIds = ids(services);
     // Billing done: the branch billed what was referred, unless the sample says otherwise.

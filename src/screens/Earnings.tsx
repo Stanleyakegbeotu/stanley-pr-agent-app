@@ -7,6 +7,7 @@ import { PERIOD_LABEL, commissionOf, inPeriod, statsFor, type Period } from '@/d
 import { useApp } from '@/app/store';
 import { BankRequiredCard } from '@/screens/BankDetails';
 import { EarnedPatients } from '@/screens/EarnedPatients';
+import { PaymentHistory } from '@/screens/PaymentHistory';
 import { Card, ProgressBar, ScreenHeader, Segmented, Sticker, Subtitle } from '@/ui/kit';
 
 export function Earnings() {
@@ -16,9 +17,6 @@ export function Earnings() {
   const label = PERIOD_LABEL[period];
   const paidLabel = period === 'today' ? 'Paid Today' : `Paid ${label}`;
   const completedMonth = referrals.filter((r) => r.status === 'Completed' && inPeriod(r.createdAt, 'month')).length;
-  const payouts = referrals
-    .filter((r) => r.paidAt)
-    .reduce<Record<string, number>>((m, r) => ((m[r.paidAt!.slice(0, 10)] = (m[r.paidAt!.slice(0, 10)] ?? 0) + commissionOf(r)), m), {});
 
   return (
     <>
@@ -89,24 +87,8 @@ export function Earnings() {
         <ChevronRight size={20} className="mt-1 shrink-0 text-ink-2" />
       </button>
 
-      <h2 className="mb-2.5 text-[17px] font-bold text-ink">Payment history</h2>
-      {Object.keys(payouts).length === 0 ? (
-        <p className="text-[14px] text-muted">No payouts yet. Confirmed commission is paid at the start of each month.</p>
-      ) : (
-        <Card className="divide-y divide-line">
-          {Object.entries(payouts)
-            .sort(([a], [b]) => b.localeCompare(a))
-            .map(([d, v]) => (
-              <div key={d} className="flex items-center justify-between p-4">
-                <span>
-                  <span className="block text-[15px] font-semibold text-ink">Commission payout</span>
-                  <span className="block text-[13px] text-muted">{shortDate(d)}</span>
-                </span>
-                <span className="text-[16px] font-bold text-good">{naira(v)}</span>
-              </div>
-            ))}
-        </Card>
-      )}
+      {/* Monthly statements: paid / not paid yet, report an issue (owner, 2026-11-24) */}
+      <PaymentHistory />
     </>
   );
 }
