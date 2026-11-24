@@ -5,8 +5,13 @@
  *
  * Each service gets a picture that matches what it is: a photo where we have
  * one (MRI, CT, ultrasound, leg X-ray, blood and lab tests), otherwise a 3D
- * icon chosen from its category and name. Descriptions and preparation notes
- * are general guidance per category — the branch confirms the details.
+ * icon chosen from its category and name.
+ *
+ * Every service carries its GUIDE — what it is, what it is used for, how it is
+ * done step by step, how to prepare, the sample, the usual time and the words
+ * people use for it. The guide is written once in the dashboard
+ * (src/data/serviceGuide) and copied here with the catalogue, so both apps
+ * explain every test the same way.
  */
 import type { PhotoKey, StickerKey } from '@/assets';
 import CATALOGUE from './catalogue.generated.json';
@@ -41,6 +46,16 @@ const fallbackInfo = (key: string) => ({ label: key.charAt(0) + key.slice(1).toL
 export const CATEGORIES: CategoryInfo[] = CATALOGUE.categories.map((c) => ({ key: c.key, count: c.count, ...(INFO[c.key] ?? fallbackInfo(c.key)) }));
 export const categoryInfo = (key: string): CategoryInfo => CATEGORIES.find((c) => c.key === key) ?? { key, count: 0, ...fallbackInfo(key) };
 
+type GuideRow = [family: string, about: string, usedFor: string, keywords: string[], preparation: string];
+interface FamilyGuide {
+  sample: string;
+  procedure: string[];
+  preparation: string;
+  duration: string;
+}
+const GUIDE = CATALOGUE.guide as unknown as { sources: string[]; families: Record<string, FamilyGuide>; byId: Record<string, GuideRow> };
+export const GUIDE_SOURCES = GUIDE.sources;
+
 export interface Service {
   /** The desktop catalogue's item id (as text). */
   id: string;
@@ -50,9 +65,19 @@ export interface Service {
   category: string;
   /** null = no price recorded yet (can't be referred until the branch sets one — same as Billing). */
   price: number | null;
-  description: string;
+  /** What the test is (one sentence). */
+  about: string;
+  /** What doctors use it for. */
+  usedFor: string;
+  /** Step by step, from arrival to leaving. */
+  procedure: string[];
   preparation: string;
-  procedure: string;
+  sample: string;
+  duration: string;
+  /** Words people use for it — used by the describe-a-test search. */
+  keywords: string[];
+  /** Same as about (short line under the name). */
+  description: string;
   photo?: PhotoKey;
   sticker?: StickerKey;
 }
@@ -102,7 +127,10 @@ function visualFor(name: string, category: string): Pick<Service, 'photo' | 'sti
 
 export const SERVICES: Service[] = (CATALOGUE.services as [number, string, string, number | null][]).map(([id, name, category, price]) => {
   const info = categoryInfo(category);
-  return { id: String(id), name: name.trim(), category, price, description: info.description, preparation: info.preparation, procedure: info.procedure, ...visualFor(name, category) };
+  const g = GUIDE.byId[String(id)];
+  const fam = (g && GUIDE.families[g[0]]) || { sample: info.procedure, procedure: [info.procedure], preparation: info.preparation, duration: '' };
+  const about = g?.[1] ?? info.description;
+  return { id: String(id), name: name.trim(), category, price, about, description: about, usedFor: g?.[2] ?? '', procedure: fam.procedure, preparation: g?.[4] ?? info.preparation, sample: fam.sample, duration: fam.duration, keywords: g?.[3] ?? [], ...visualFor(name, category) };
 });
 
 /** Picture for a whole category (category cards). */

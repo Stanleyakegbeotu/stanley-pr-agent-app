@@ -138,7 +138,16 @@ export function smartSearch(query: string, category = 'All'): SearchResult {
   SERVICES.filter((s) => label(s).includes(t)).forEach((s) => add(s));
   if (words.length > 1) SERVICES.filter((s) => words.every((w) => label(s).includes(w))).forEach((s) => add(s));
 
-  // 2. Health topics described in the query. A kind of test ("scan", "MRI") plus a topic ("pregnancy")
+  // 2. Each test's own words from the service guide ("knee pain", "palpitations", "missed period").
+  const ids0 = conceptsIn(q);
+  const kindCats0 = new Set(ids0.filter((i) => CONCEPTS[i]!.categories && !CONCEPTS[i]!.names).flatMap((i) => CONCEPTS[i]!.categories!));
+  const padded = ` ${t} `;
+  const byKeyword = SERVICES.map((s) => ({ s, words: s.keywords.filter((k) => k.length > 2 && padded.includes(` ${norm(k)} `)) }))
+    .filter((x) => x.words.length && (!kindCats0.size || kindCats0.has(x.s.category)))
+    .sort((a, b) => b.words.length - a.words.length || b.words.join(' ').length - a.words.join(' ').length);
+  byKeyword.forEach((x) => add(x.s, x.words.join(', ')));
+
+  // 3. Health topics described in the query. A kind of test ("scan", "MRI") plus a topic ("pregnancy")
   //    means that kind for that topic — otherwise everything related to each topic.
   const ids = conceptsIn(q);
   const kinds = ids.filter((i) => CONCEPTS[i]!.categories && !CONCEPTS[i]!.names);
@@ -154,12 +163,15 @@ export function smartSearch(query: string, category = 'All'): SearchResult {
   }
   // Only a kind of test was named ("mri knee") and its exact tests were found → don't add the whole category.
   const onlyKindAndFound = !topics.length && hits.length > 0;
-  if (!narrowed && !onlyKindAndFound) for (const i of ids) servicesFor(CONCEPTS[i]!).forEach((s) => add(s, CONCEPTS[i]!.label));
+  // A whole phrase matched tests' own words ("blocked tubes", "yellow eyes", "heart attack") — that's
+  // specific enough; don't widen it with everything loosely related.
+  const specificPhrase = byKeyword.some((x) => x.words.some((w) => w.includes(' ')));
+  if (!narrowed && !onlyKindAndFound && !specificPhrase) for (const i of ids) servicesFor(CONCEPTS[i]!).forEach((s) => add(s, CONCEPTS[i]!.label));
 
-  // 3. Near-spellings of a test name ("lipd profile", "ultrsound").
+  // 4. Near-spellings of a test name ("lipd profile", "ultrsound").
   if (hits.length < 8) nameFuse.search(q, { limit: 12 }).forEach((r) => (r.score ?? 1) < 0.32 && add(r.item));
 
-  return { hits, topics: ids.map((i) => CONCEPTS[i]!.label) };
+  return { hits, topics: specificPhrase && !narrowed ? [] : ids.map((i) => CONCEPTS[i]!.label) };
 }
 
 /** Example descriptions shown under the search box. */
