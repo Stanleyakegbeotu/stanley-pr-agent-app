@@ -95,7 +95,7 @@ export function ChatThread({ id }: { id: string }) {
   return (
     <div className="-mx-5 md:-mx-8">
       {/* Fixed header */}
-      <header className="sticky top-0 z-30 flex min-h-16 items-center gap-2 border-b border-line bg-white/95 px-2 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
+      <header className="sticky top-0 z-30 flex min-h-16 items-center gap-2 border-b border-line bg-white/95 px-2 pt-[var(--safe-top)] backdrop-blur-xl">
         <button type="button" onClick={back} aria-label="Back" className="press grid h-11 w-11 place-items-center rounded-full text-ink">
           <ArrowLeft size={23} />
         </button>
@@ -227,10 +227,21 @@ function Bubble({ m, onReply, onMenu, onOpenImage }: { m: ChatMsg; onReply: () =
   };
 
   return (
-    <div className={`relative mb-1.5 flex ${mine ? 'justify-end' : 'justify-start'}`}>
+    <div className={`relative mb-1.5 flex items-start gap-1 ${mine ? 'justify-end' : 'justify-start'}`}>
       <span className="pointer-events-none absolute left-1 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full bg-white text-brand-600 shadow" style={{ opacity: Math.min(1, dx / 56), transform: `translateY(-50%) scale(${0.6 + Math.min(0.4, dx / 140)})` }}>
         <Reply size={16} />
       </span>
+      {/* Always-visible actions button (owner): Reply · Copy · Download · Delete without needing a long press. */}
+      <button
+        type="button"
+        onClick={onMenu}
+        aria-label="Message actions"
+        title="Reply, copy, download or delete"
+        className={`press mt-1 grid h-8 w-8 shrink-0 place-items-center rounded-full text-ink-2/70 transition hover:bg-white hover:text-ink hover:shadow-sm active:bg-white ${mine ? 'order-first' : 'order-last'}`}
+        style={{ opacity: dx ? 0 : 1 }}
+      >
+        <MoreVertical size={17} />
+      </button>
       <div
         onPointerDown={down}
         onPointerMove={move}
@@ -452,7 +463,7 @@ function Composer({ reply, onCancelReply, onSend, onHeight, onError }: { reply: 
   };
 
   return (
-    <div ref={bar} className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-[#f7f9fd]/97 pb-[max(10px,env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl md:left-[264px]">
+    <div ref={bar} className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-[#f7f9fd]/97 pb-[max(10px,var(--safe-bottom))] pt-2 backdrop-blur-xl md:left-[264px]">
       {/* Reply preview */}
       {reply && rec.state === 'idle' && (
         <div className="mx-3 mb-2 flex items-start gap-2 rounded-xl border-l-4 border-brand-600 bg-white px-3 py-2 shadow-sm">
@@ -592,7 +603,7 @@ function FileChip({ f, onRemove }: { f: File; onRemove: () => void }) {
 function Sheet({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-[70] flex items-end justify-center bg-[#0b1730]/40 md:items-center" onClick={onClose}>
-      <div className="w-full max-w-md rounded-t-[26px] bg-white p-3 pb-[max(14px,env(safe-area-inset-bottom))] shadow-2xl md:rounded-[26px]" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-md rounded-t-[26px] bg-white p-3 pb-[max(14px,var(--safe-bottom))] shadow-2xl md:rounded-[26px]" onClick={(e) => e.stopPropagation()}>
         <span className="mx-auto mb-2 block h-1.5 w-10 rounded-full bg-line md:hidden" />
         {children}
       </div>
@@ -633,7 +644,7 @@ function ImageViewer({ m, onClose }: { m: ChatMsg; onClose: () => void }) {
   const url = useBlobUrl(m.blob);
   return (
     <div className="fixed inset-0 z-[80] flex flex-col bg-black">
-      <div className="flex items-center justify-between px-2 pt-[max(8px,env(safe-area-inset-top))] text-white">
+      <div className="flex items-center justify-between px-2 pt-[max(8px,var(--safe-top))] text-white">
         <button type="button" onClick={onClose} aria-label="Close" className="grid h-11 w-11 place-items-center">
           <X size={24} />
         </button>
@@ -645,7 +656,7 @@ function ImageViewer({ m, onClose }: { m: ChatMsg; onClose: () => void }) {
       <div className="flex flex-1 items-center justify-center p-2" onClick={onClose}>
         {url && <img src={url} alt="" className="max-h-full max-w-full object-contain" />}
       </div>
-      {m.text && <p className="px-4 pb-[max(16px,env(safe-area-inset-bottom))] text-center text-[15px] text-white/90">{m.text}</p>}
+      {m.text && <p className="px-4 pb-[max(16px,var(--safe-bottom))] text-center text-[15px] text-white/90">{m.text}</p>}
     </div>
   );
 }

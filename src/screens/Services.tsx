@@ -79,7 +79,7 @@ export function ServiceCatalogue() {
       <ScreenHeader title="Service Catalogue" />
       <Subtitle>Explore all diagnostic tests and services offered at your branch.</Subtitle>
 
-      <div className="sticky top-[calc(4rem+env(safe-area-inset-top))] z-20 -mx-5 mb-4 bg-page px-5 pb-3 pt-1 md:-mx-8 md:px-8">
+      <div className="sticky top-[calc(4rem+var(--safe-top))] z-20 -mx-5 mb-4 bg-page px-5 pb-3 pt-1 md:-mx-8 md:px-8">
         <SearchField
           value={q}
           onChange={(e) => {

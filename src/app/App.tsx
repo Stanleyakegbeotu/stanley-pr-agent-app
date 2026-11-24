@@ -81,7 +81,7 @@ export function App() {
         </div>
         {tabs && <BottomNav onMore={() => setMenu((m) => !m)} moreOpen={menu} />}
         {toast && (
-          <div role="status" className="fixed left-1/2 z-60 flex w-[calc(100%-40px)] max-w-md -translate-x-1/2 items-center gap-3 rounded-2xl bg-ink px-4 py-3.5 text-[14px] font-medium text-white shadow-2xl" style={{ bottom: tabs || chat ? 'calc(96px + env(safe-area-inset-bottom))' : 'calc(24px + env(safe-area-inset-bottom))' }}>
+          <div role="status" className="fixed left-1/2 z-60 flex w-[calc(100%-40px)] max-w-md -translate-x-1/2 items-center gap-3 rounded-2xl bg-ink px-4 py-3.5 text-[14px] font-medium text-white shadow-2xl" style={{ bottom: tabs || chat ? 'calc(96px + var(--safe-bottom))' : 'calc(24px + var(--safe-bottom))' }}>
             <CheckCircle2 size={19} className="shrink-0 text-[#4ade80]" />
             {toast}
           </div>

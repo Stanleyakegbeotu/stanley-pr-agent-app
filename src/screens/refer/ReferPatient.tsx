@@ -31,7 +31,7 @@ function BottomAction({ children }: { children: React.ReactNode }) {
   return (
     <>
       <div className="h-24" aria-hidden="true" />
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line/70 bg-page/95 px-5 pb-[max(16px,env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl md:left-[264px]">
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line/70 bg-page/95 px-5 pb-[max(16px,var(--safe-bottom))] pt-3 backdrop-blur-xl md:left-[264px]">
         <div className="mx-auto max-w-[700px]">{children}</div>
       </div>
     </>
@@ -334,7 +334,7 @@ export function ReferralSent({ id }: { id: string }) {
     }
   };
   return (
-    <div className="flex min-h-[80dvh] flex-col items-center pt-[max(40px,env(safe-area-inset-top))] text-center">
+    <div className="flex min-h-[80dvh] flex-col items-center pt-[max(40px,var(--safe-top))] text-center">
       <div className="relative">
         <Sticker name="party" size={120} />
         <Sticker name="check" size={52} className="absolute -bottom-1 -right-2" />

@@ -25,7 +25,7 @@ export function BottomNav({ onMore, moreOpen }: { onMore: () => void; moreOpen: 
     );
   };
   return (
-    <nav aria-label="Tabs" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-white/97 px-1 pb-[max(8px,env(safe-area-inset-bottom))] pt-1.5 shadow-[0_-8px_28px_rgba(30,74,160,0.08)] backdrop-blur-xl md:hidden">
+    <nav aria-label="Tabs" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-white px-1 pb-[max(8px,var(--safe-bottom))] pt-1.5 shadow-[0_-8px_28px_rgba(30,74,160,0.08)] backdrop-blur-xl md:hidden">
       {item('home', 'Home', Home, '/')}
       {item('referrals', 'Referrals', ClipboardList, '/referrals')}
       <button type="button" onClick={() => navigate('/refer')} aria-label="Refer a patient" className="press flex flex-col items-center">

@@ -56,7 +56,7 @@ export function Dashboard() {
       <div aria-hidden="true" className="pointer-events-none absolute -inset-x-5 -top-0 -z-0 h-[460px] bg-[radial-gradient(120%_70%_at_75%_0%,#d6e6ff_0%,#e9f1ff_45%,rgba(244,248,254,0)_100%)] md:-inset-x-8" />
 
       <div ref={sentinel} className="absolute top-0 h-px w-px" aria-hidden="true" />
-      <header className={`sticky top-0 z-30 -mx-5 flex min-h-16 items-center justify-between px-5 pt-[env(safe-area-inset-top)] transition-[background-color,box-shadow] duration-300 md:-mx-8 md:px-8 ${scrolled ? 'bg-[#eef4fe]/90 shadow-[0_6px_20px_rgba(30,74,160,0.08)] backdrop-blur-xl' : 'bg-transparent'}`}>
+      <header className={`sticky top-0 z-30 -mx-5 flex min-h-16 items-center justify-between px-5 pt-[var(--safe-top)] transition-[background-color,box-shadow] duration-300 md:-mx-8 md:px-8 ${scrolled ? 'bg-[#eef4fe]/90 shadow-[0_6px_20px_rgba(30,74,160,0.08)] backdrop-blur-xl' : 'bg-transparent'}`}>
         <button type="button" onClick={openMenu} aria-label="Menu" className="press -ml-2 grid h-11 w-11 place-items-center rounded-full text-ink md:invisible">
           <Menu size={26} strokeWidth={2} />
         </button>
