@@ -1,5 +1,6 @@
 /**
- * Chat (owner, 2026-11-23) — WhatsApp-style conversation with the branch.
+ * Chat (owner, 2026-11-23): WhatsApp-style conversation with the branch team
+ * (the Front Desk person on duty, the Branch Manager, or the Admin).
  *  • Fixed header: who you're chatting with, their role, chat info/settings.
  *  • Fixed typing bar: Enter makes a NEW LINE (sending is the send button),
  *    emojis, attachments (photos/videos, camera, receipts/documents), and
@@ -11,11 +12,12 @@
  * when the cloud connection is available.
  */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
-import { ArrowLeft, BellOff, Camera, Check, ChevronDown, Copy, Download, FileText, Image as ImageIcon, Info, Mic, MoreVertical, Pause, Play, Paperclip, Reply, Send, Smile, Trash2, X } from 'lucide-react';
-import { CONVERSATIONS } from '@/data/content';
-import { chatSettings, fmtDuration, fmtSize, previewOf, saveChatSettings, useChat, type ChatMsg, type MsgKind, type ReplyRef } from '@/domain/chat';
+import { ArrowLeft, BellOff, Users, Camera, Check, ChevronDown, Copy, Download, FileText, Image as ImageIcon, Info, Mic, MoreVertical, Pause, Play, Paperclip, Reply, Send, Smile, Trash2, X } from 'lucide-react';
+import { conversationById, type Conversation } from '@/data/team';
+import { chatSettings, fmtDuration, fmtSize, markRead, previewOf, saveChatSettings, useChat, type ChatMsg, type MsgKind, type ReplyRef } from '@/domain/chat';
 import { useApp } from '@/app/store';
-import { EmptyState, InitialsAvatar, ScreenHeader } from '@/ui/kit';
+import { EmptyState, ScreenHeader } from '@/ui/kit';
+import { ConvAvatar, PersonAvatar } from '@/ui/avatars';
 import { useVoiceRecorder } from './useVoiceRecorder';
 
 /* ─────────────── helpers ─────────────── */
@@ -67,7 +69,7 @@ const EMOJI: { label: string; list: string[] }[] = [
 
 export function ChatThread({ id }: { id: string }) {
   const { back, showToast } = useApp();
-  const conv = CONVERSATIONS.find((c) => c.id === id);
+  const conv = conversationById(id);
   const { messages, send, remove, clear } = useChat(id);
   const [reply, setReply] = useState<ReplyRef | null>(null);
   const [menuFor, setMenuFor] = useState<ChatMsg | null>(null);
@@ -81,6 +83,10 @@ export function ChatThread({ id }: { id: string }) {
   useLayoutEffect(() => {
     end.current?.scrollIntoView({ block: 'end' });
   }, [messages.length]);
+  // Opening the chat reads it (clears its unread count on the Inbox icon).
+  useEffect(() => {
+    markRead(id);
+  }, [id, messages.length]);
 
   if (!conv)
     return (
@@ -90,7 +96,7 @@ export function ChatThread({ id }: { id: string }) {
       </>
     );
 
-  const replyRef = (m: ChatMsg): ReplyRef => ({ id: m.id, from: m.from, kind: m.kind, preview: previewOf(m).slice(0, 90) });
+  const replyRef = (m: ChatMsg): ReplyRef => ({ id: m.id, from: m.from, sender: m.from === 'them' ? (m.sender ?? conv.name) : undefined, kind: m.kind, preview: previewOf(m).slice(0, 90) });
 
   return (
     <div className="-mx-5 md:-mx-8">
@@ -100,12 +106,12 @@ export function ChatThread({ id }: { id: string }) {
           <ArrowLeft size={23} />
         </button>
         <button type="button" onClick={() => setInfo(true)} className="flex min-w-0 flex-1 items-center gap-3 text-left" aria-label="Chat info">
-          <InitialsAvatar name={conv.name} size={42} />
+          <ConvAvatar conv={conv} size={42} />
           <span className="min-w-0">
             <span className="block truncate text-[16px] font-bold text-ink">{conv.name}</span>
-            <span className="flex items-center gap-1.5 text-[12.5px] text-muted">
-              {muted && <BellOff size={12} />}
-              {conv.role} · tap for chat info
+            <span className="flex min-w-0 items-center gap-1.5 text-[12.5px] text-muted">
+              {muted && <BellOff size={12} className="shrink-0" />}
+              <span className="truncate">{conv.role}</span>
             </span>
           </span>
         </button>
@@ -117,6 +123,13 @@ export function ChatThread({ id }: { id: string }) {
       {/* Messages */}
       <div className="min-h-[calc(100dvh-4rem)] bg-[radial-gradient(circle_at_1px_1px,#dfe7f3_1px,transparent_0)] bg-[length:22px_22px] px-3 pt-3" style={{ paddingBottom: barH + 16 }}>
         <p className="mx-auto mb-3 max-w-xs rounded-xl bg-[#fff6dc] px-3 py-2 text-center text-[12px] leading-snug text-[#7a5b12] shadow-sm">🔒 Messages are saved on this phone and delivered when the cloud connection is available.</p>
+        {messages.length === 0 && (
+          <div className="mx-auto mt-10 flex max-w-xs flex-col items-center rounded-3xl bg-white/90 px-5 py-6 text-center shadow-sm">
+            <ConvAvatar conv={conv} size={64} />
+            <p className="mt-3 text-[16px] font-bold text-ink">Say hello to {conv.shared ? 'the front desk' : conv.name.split(' ')[0]}</p>
+            <p className="mt-1 text-[13.5px] leading-snug text-muted">{conv.shared ? 'Whoever is on shift at the front desk will reply here.' : 'Send a message, photo, document or voice note.'}</p>
+          </div>
+        )}
         {messages.map((m, i) => {
           const showDay = i === 0 || dayOf(messages[i - 1]!.at) !== dayOf(m.at);
           return (
@@ -126,7 +139,7 @@ export function ChatThread({ id }: { id: string }) {
                   <span className="rounded-lg bg-white/90 px-3 py-1 text-[12px] font-medium text-ink-2 shadow-sm">{dayOf(m.at)}</span>
                 </div>
               )}
-              <Bubble m={m} onReply={() => setReply(replyRef(m))} onMenu={() => setMenuFor(m)} onOpenImage={() => setViewer(m)} />
+              <Bubble m={m} convName={conv.name} showSender={conv.shared} onReply={() => setReply(replyRef(m))} onMenu={() => setMenuFor(m)} onOpenImage={() => setViewer(m)} />
             </div>
           );
         })}
@@ -135,6 +148,7 @@ export function ChatThread({ id }: { id: string }) {
 
       <Composer
         reply={reply}
+        convName={conv.name}
         onCancelReply={() => setReply(null)}
         onHeight={setBarH}
         onSend={async (m) => {
@@ -172,8 +186,7 @@ export function ChatThread({ id }: { id: string }) {
       {viewer && <ImageViewer m={viewer} onClose={() => setViewer(null)} />}
       {info && (
         <ChatInfo
-          name={conv.name}
-          role={conv.role}
+          conv={conv}
           muted={muted}
           media={messages.filter((m) => !m.deleted && m.blob && (m.kind === 'image' || m.kind === 'video')).length}
           onMute={(v) => {
@@ -195,7 +208,10 @@ export function ChatThread({ id }: { id: string }) {
 
 /* ─────────────── message bubble ─────────────── */
 
-function Bubble({ m, onReply, onMenu, onOpenImage }: { m: ChatMsg; onReply: () => void; onMenu: () => void; onOpenImage: () => void }) {
+const SENDER_TINTS = ['text-[#d6336c]', 'text-[#0c8599]', 'text-[#7048e8]', 'text-[#e8590c]', 'text-[#2f9e44]'];
+const senderTint = (name: string) => SENDER_TINTS[[...name].reduce((a, c) => a + c.charCodeAt(0), 0) % SENDER_TINTS.length];
+
+function Bubble({ m, convName, showSender, onReply, onMenu, onOpenImage }: { m: ChatMsg; convName: string; showSender: boolean; onReply: () => void; onMenu: () => void; onOpenImage: () => void }) {
   const mine = m.from === 'me';
   const [dx, setDx] = useState(0);
   const start = useRef<{ x: number; y: number } | null>(null);
@@ -251,9 +267,10 @@ function Bubble({ m, onReply, onMenu, onOpenImage }: { m: ChatMsg; onReply: () =
         className={`relative max-w-[82%] select-none rounded-[18px] px-2.5 pb-1.5 pt-1.5 text-[15px] leading-snug shadow-[0_1px_2px_rgba(11,23,48,0.12)] ${mine ? 'rounded-br-[6px] bg-[#d9eaff] text-ink' : 'rounded-bl-[6px] bg-white text-ink'}`}
         style={{ transform: `translateX(${dx}px)`, transition: dx ? 'none' : 'transform 200ms ease', touchAction: 'pan-y' }}
       >
+        {showSender && !mine && m.sender && <p className={`px-1 pb-0.5 text-[12.5px] font-semibold ${senderTint(m.sender)}`}>{m.sender}</p>}
         {m.replyTo && !m.deleted && (
           <div className={`mb-1.5 rounded-lg border-l-4 px-2.5 py-1.5 text-[13px] ${m.replyTo.from === 'me' ? 'border-brand-600 bg-brand-600/10' : 'border-violet bg-violet/10'}`}>
-            <p className={`text-[12px] font-semibold ${m.replyTo.from === 'me' ? 'text-brand-700' : 'text-violet'}`}>{m.replyTo.from === 'me' ? 'You' : 'Them'}</p>
+            <p className={`text-[12px] font-semibold ${m.replyTo.from === 'me' ? 'text-brand-700' : 'text-violet'}`}>{m.replyTo.from === 'me' ? 'You' : (m.replyTo.sender ?? convName)}</p>
             <p className="line-clamp-2 text-ink-2">{m.replyTo.preview}</p>
           </div>
         )}
@@ -389,7 +406,7 @@ interface Outgoing {
   duration?: number;
 }
 
-function Composer({ reply, onCancelReply, onSend, onHeight, onError }: { reply: ReplyRef | null; onCancelReply: () => void; onSend: (m: Outgoing) => Promise<void>; onHeight: (h: number) => void; onError: (t: string) => void }) {
+function Composer({ reply, convName, onCancelReply, onSend, onHeight, onError }: { reply: ReplyRef | null; convName: string; onCancelReply: () => void; onSend: (m: Outgoing) => Promise<void>; onHeight: (h: number) => void; onError: (t: string) => void }) {
   const [text, setText] = useState('');
   const [files, setFiles] = useState<File[]>([]);
   const [emoji, setEmoji] = useState(false);
@@ -469,7 +486,7 @@ function Composer({ reply, onCancelReply, onSend, onHeight, onError }: { reply: 
         <div className="mx-3 mb-2 flex items-start gap-2 rounded-xl border-l-4 border-brand-600 bg-white px-3 py-2 shadow-sm">
           <Reply size={16} className="mt-0.5 shrink-0 text-brand-600" />
           <div className="min-w-0 flex-1">
-            <p className="text-[12px] font-semibold text-brand-700">Replying to {reply.from === 'me' ? 'yourself' : 'them'}</p>
+            <p className="text-[12px] font-semibold text-brand-700">Replying to {reply.from === 'me' ? 'yourself' : (reply.sender ?? convName)}</p>
             <p className="truncate text-[13px] text-ink-2">{reply.preview}</p>
           </div>
           <button type="button" onClick={onCancelReply} aria-label="Cancel reply" className="text-muted">
@@ -661,15 +678,44 @@ function ImageViewer({ m, onClose }: { m: ChatMsg; onClose: () => void }) {
   );
 }
 
-function ChatInfo({ name, role, muted, media, onMute, onClear, onClose }: { name: string; role: string; muted: boolean; media: number; onMute: (v: boolean) => void; onClear: () => void; onClose: () => void }) {
+function ChatInfo({ conv, muted, media, onMute, onClear, onClose }: { conv: Conversation; muted: boolean; media: number; onMute: (v: boolean) => void; onClear: () => void; onClose: () => void }) {
   const [confirm, setConfirm] = useState(false);
   return (
     <Sheet onClose={onClose}>
       <div className="flex flex-col items-center px-3 pb-3 pt-2 text-center">
-        <InitialsAvatar name={name} size={72} />
-        <p className="mt-2 text-[19px] font-bold text-ink">{name}</p>
-        <p className="text-[13.5px] text-muted">{role}</p>
+        <ConvAvatar conv={conv} size={72} />
+        <p className="mt-2 text-[19px] font-bold text-ink">{conv.name}</p>
+        <p className="text-[13.5px] text-muted">{conv.role}</p>
       </div>
+      {conv.shared && (
+        <div className="mb-3 rounded-2xl bg-page p-3">
+          <p className="flex items-center gap-2 px-1 text-[13px] font-semibold text-ink-2">
+            <Users size={16} /> Front desk team, shared inbox
+          </p>
+          <p className="px-1 pb-1 text-[12.5px] leading-snug text-muted">They work in shifts. Your messages go to whoever is on duty, and every reply shows who sent it.</p>
+          <ul>
+            {conv.members.map((p) => {
+              const on = conv.face?.id === p.id;
+              return (
+                <li key={p.id} className="flex items-center gap-3 rounded-xl px-1 py-2">
+                  <PersonAvatar person={p} size={40} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[14.5px] font-semibold text-ink">{p.name}</span>
+                    <span className="text-[12.5px] text-muted">{p.role}{p.employment ? `, ${p.employment}` : ''}</span>
+                  </span>
+                  {on ? (
+                    <span className="flex items-center gap-1.5 rounded-full bg-[#e6f7ee] px-2.5 py-1 text-[12px] font-semibold text-[#16794a]">
+                      <span className="h-2 w-2 rounded-full bg-[#22c55e]" /> On duty
+                    </span>
+                  ) : (
+                    <span className="text-[12px] text-muted">Off shift</span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
       <div className="divide-y divide-line rounded-2xl bg-page">
         <label className="flex items-center justify-between gap-3 px-4 py-3.5">
           <span className="flex items-center gap-3 text-[15px] text-ink">

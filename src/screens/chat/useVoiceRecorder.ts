@@ -33,7 +33,7 @@ export function useVoiceRecorder() {
 
   /** Start recording at once. Throws a plain-words error if the mic can't be used. */
   const start = useCallback(async () => {
-    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') throw new Error('Voice notes need a secure connection (HTTPS) or the installed app — the microphone isn’t available here.');
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') throw new Error('Voice notes need a secure connection (HTTPS) or the installed app. The microphone isn’t available here.');
     let s: MediaStream;
     try {
       s = await navigator.mediaDevices.getUserMedia({ audio: true });

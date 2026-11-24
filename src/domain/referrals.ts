@@ -35,7 +35,7 @@ export const commissionOf = (r: Pick<Referral, 'serviceIds'>, rate = RULES.commi
 /** Short service label for lists: the service's name, or its categories when there are several ("X-Ray, MRI"). */
 export const serviceSummary = (r: Pick<Referral, 'serviceIds'>) => {
   const s = servicesOf(r);
-  if (!s.length) return '—';
+  if (!s.length) return 'No services';
   if (s.length === 1) return s[0]!.name;
   return Array.from(new Set(s.map((x) => categoryInfo(x.category).label))).join(', ');
 };

@@ -42,7 +42,7 @@ function tagsOf(s: Service): { icon: React.ReactNode; text: string; tone: string
   const p = s.preparation.toLowerCase();
   if (/\bfast(ing)?\b|no food/.test(p)) out.push({ icon: <Utensils size={12} />, text: 'Fasting', tone: 'bg-[#fff1e0] text-[#b45309]' });
   else if (p.includes('full bladder')) out.push({ icon: <Droplets size={12} />, text: 'Full bladder', tone: 'bg-[#e6f6ff] text-[#0369a1]' });
-  const d = s.duration.match(/about ([\d–-]+ (?:minutes|hours))/i);
+  const d = s.duration.match(/about (\d+(?: to \d+)? (?:minutes|hours))/i);
   if (d) out.push({ icon: <Clock3 size={12} />, text: d[1]!.replace('minutes', 'min').replace('hours', 'h'), tone: 'bg-[#f1f4f9] text-ink-2' });
   return out;
 }
@@ -288,7 +288,7 @@ function SearchResults({ q, result, shown, more, inCategory, onClearCategory, on
   if (!result.hits.length)
     return (
       <>
-        <EmptyState sticker="microscope" title="No matching test" text={`Nothing matches “${q}”${inCategory ? ` in ${inCategory}` : ''}. Try the test’s name, or describe it — for example:`} />
+        <EmptyState sticker="microscope" title="No matching test" text={`Nothing matches “${q}”${inCategory ? ` in ${inCategory}` : ''}. Try the test’s name, or describe it, for example:`} />
         <div className="-mt-4 flex flex-wrap justify-center gap-2">
           {inCategory && (
             <Chip active={false} onClick={onClearCategory}>
@@ -330,7 +330,7 @@ function SearchResults({ q, result, shown, more, inCategory, onClearCategory, on
           Show more ({result.hits.length - shown} more)
         </Button>
       )}
-      <p className="mt-4 text-[12.5px] leading-relaxed text-muted">Suggestions come from the service guide — the doctor decides which tests the patient needs.</p>
+      <p className="mt-4 text-[12.5px] leading-relaxed text-muted">Suggestions come from the service guide. The doctor decides which tests the patient needs.</p>
     </>
   );
 }
@@ -353,7 +353,7 @@ export function ServiceDetails({ id }: { id: string }) {
     navigate('/refer');
   };
   const shareGuide = () => {
-    const text = [`*${s.name}* — ${BRANCH.label}`, '', s.about, '', `*What it’s for:* ${s.usedFor}`, '', '*How it’s done:*', ...s.procedure.map((p, i) => `${i + 1}. ${p}`), '', `*How to prepare:* ${s.preparation}`, `*Time:* ${s.duration}`, ...(s.price != null ? [`*Price:* ${naira(s.price)}`] : [])].join('\n');
+    const text = [`*${s.name}*, ${BRANCH.label}`, '', s.about, '', `*What it’s for:* ${s.usedFor}`, '', '*How it’s done:*', ...s.procedure.map((p, i) => `${i + 1}. ${p}`), '', `*How to prepare:* ${s.preparation}`, `*Time:* ${s.duration}`, ...(s.price != null ? [`*Price:* ${naira(s.price)}`] : [])].join('\n');
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
   };
   return (

@@ -32,7 +32,7 @@ export const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
   {
     label: 'STAY CONNECTED',
     items: [
-      { label: 'Messages', to: '/messages', icon: MessageCircle, badge: 2 },
+      { label: 'Inbox', to: '/messages', icon: MessageCircle },
       { label: 'Announcements', to: '/announcements', icon: Bell },
     ],
   },

@@ -102,7 +102,7 @@ export function MyReferrals() {
         }
       />
       <input ref={picker} type="date" max={today} value={day} onChange={(e) => e.target.value && pick(e.target.value)} className="sr-only" aria-label="Pick a day" tabIndex={-1} />
-      <Subtitle>Your daily referral report — pick a day to see that day’s work.</Subtitle>
+      <Subtitle>Your daily referral report. Pick a day to see that day’s work.</Subtitle>
 
       {/* Day strip */}
       <div ref={strip} className="-mx-5 mb-4 flex gap-2 overflow-x-auto px-5 pb-1 md:-mx-8 md:px-8">
@@ -140,7 +140,7 @@ export function MyReferrals() {
 
       <div className="mb-4 flex gap-3">
         <SearchField value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search all days by name, phone or ID..." aria-label="Search referrals" />
-        <FilterButton onClick={() => setNewestFirst((v) => !v)} label={newestFirst ? 'Showing newest first — tap for oldest first' : 'Showing oldest first — tap for newest first'} icon={<Filter size={21} />} />
+        <FilterButton onClick={() => setNewestFirst((v) => !v)} label={newestFirst ? 'Showing newest first, tap for oldest first' : 'Showing oldest first, tap for newest first'} icon={<Filter size={21} />} />
       </div>
       <ChipRow>
         {FILTERS.filter((x) => x === 'All' || counts[x]).map((x) => (
@@ -197,9 +197,9 @@ export function MyReferrals() {
 
 const STAGES: ReferralStatus[] = ['Pending', 'Arrived', 'Completed'];
 const STAGE_TEXT: Record<string, string> = {
-  Pending: 'Referral sent — waiting for the patient to visit',
+  Pending: 'Referral sent, waiting for the patient to visit',
   Arrived: 'Patient arrived at the branch',
-  Completed: 'Tests completed and paid — commission confirmed',
+  Completed: 'Tests completed and paid, commission confirmed',
 };
 
 export function ReferralDetails({ id }: { id: string }) {
@@ -288,7 +288,7 @@ export function ReferralDetails({ id }: { id: string }) {
         <span className={`text-[15px] font-medium ${r.status === 'Completed' ? 'text-good-ink' : 'text-warn-ink'}`}>{r.status === 'Completed' ? (r.paidAt ? 'Commission paid' : 'Commission confirmed') : r.status === 'Cancelled' ? 'No commission' : 'Estimated commission'}</span>
         <span className={`text-[22px] font-bold ${r.status === 'Completed' ? 'text-good-ink' : 'text-warn-ink'}`}>{naira(r.status === 'Cancelled' ? 0 : commissionOf(r))}</span>
       </div>
-      {r.queued && <p className="mt-3 text-[12.5px] text-muted">Saved on this phone — sent to the branch automatically when the cloud connection is available.</p>}
+      {r.queued && <p className="mt-3 text-[12.5px] text-muted">Saved on this phone, sent to the branch automatically when the cloud connection is available.</p>}
       {r.status === 'Pending' && (
         <div className="mt-4">
           <WhatsAppButton onClick={() => shareOnWhatsApp(r)}>Send referral to patient on WhatsApp</WhatsAppButton>

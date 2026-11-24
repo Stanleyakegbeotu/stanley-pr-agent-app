@@ -5,6 +5,7 @@ import { RULES } from '@/config/org';
 import { naira, shortDate } from '@/domain/format';
 import { PERIOD_LABEL, commissionOf, inPeriod, statsFor, type Period } from '@/domain/referrals';
 import { useApp } from '@/app/store';
+import { BankRequiredCard } from '@/screens/BankDetails';
 import { Card, ProgressBar, ScreenHeader, Segmented, Sticker, Subtitle } from '@/ui/kit';
 
 export function Earnings() {
@@ -21,6 +22,7 @@ export function Earnings() {
   return (
     <>
       <ScreenHeader title="My Earnings" />
+      <BankRequiredCard />
       <Subtitle>Your commissions, payments and incentives.</Subtitle>
       <Segmented<Period>
         value={period}
@@ -138,7 +140,7 @@ export function Targets() {
       <ScreenHeader title="Targets & Incentives" />
       <Subtitle>Your goals this month and the rewards that come with them.</Subtitle>
       <Goal sticker="target" title="Referral target" value={month.length} max={RULES.monthlyReferralTarget} note={`${Math.max(0, RULES.monthlyReferralTarget - month.length)} more referrals to reach this month’s target.`} />
-      <Goal sticker="trophy" title="Completed referrals bonus" value={completed} max={RULES.monthlyCompletedTarget} note={left ? `${left} more completed referrals to unlock a ${naira(RULES.completedBonus)} bonus.` : `Bonus unlocked — ${naira(RULES.completedBonus)} will be added to your next payout.`} />
+      <Goal sticker="trophy" title="Completed referrals bonus" value={completed} max={RULES.monthlyCompletedTarget} note={left ? `${left} more completed referrals to unlock a ${naira(RULES.completedBonus)} bonus.` : `Bonus unlocked, ${naira(RULES.completedBonus)} will be added to your next payout.`} />
       <Card className="p-5">
         <h2 className="text-[17px] font-bold text-ink">How it works</h2>
         <ul className="mt-2.5 space-y-2 text-[14.5px] leading-relaxed text-ink-2">

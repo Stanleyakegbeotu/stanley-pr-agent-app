@@ -11,9 +11,12 @@ import { ServiceCatalogue, ServiceDetails } from '@/screens/Services';
 import { ReferPatient, ReferralSent } from '@/screens/refer/ReferPatient';
 import { MyReferrals, ReferralDetails } from '@/screens/Referrals';
 import { Earnings, Targets } from '@/screens/Earnings';
-import { AiAssistant, Announcements, Article, BranchInfo, Campaigns, HelpCentre, Messages, Notifications, Profile, Training } from '@/screens/More';
+import { AiAssistant, Announcements, Article, BranchInfo, Campaigns, HelpCentre, Notifications, Training } from '@/screens/More';
 import { ChatThread } from '@/screens/chat/ChatThread';
+import { Inbox } from '@/screens/chat/Inbox';
 import { useApp } from './store';
+import { Profile, ProfilePatients } from '@/screens/Profile';
+import { BankDetailsScreen } from '@/screens/BankDetails';
 import { ShellCtx } from './shell';
 
 
@@ -38,7 +41,7 @@ function Screen() {
     case 'branch':
       return <BranchInfo />;
     case 'messages':
-      return b ? <ChatThread id={b} /> : <Messages />;
+      return b ? <ChatThread id={b} /> : <Inbox />;
     case 'announcements':
       return <Announcements />;
     case 'notifications':
@@ -48,7 +51,7 @@ function Screen() {
     case 'training':
       return b ? <Article slug={b} /> : <Training />;
     case 'profile':
-      return <Profile />;
+      return b === 'patients' ? <ProfilePatients /> : b === 'bank' ? <BankDetailsScreen /> : <Profile />;
     case 'assistant':
       return <AiAssistant />;
     default:

@@ -3,10 +3,11 @@
  * — text, photos, videos, documents/receipts and voice notes — is saved on the
  * phone (IndexedDB, which can hold files) and shows a single tick until the
  * cloud connection delivers it. Opening messages from the branch come from the
- * sample conversations (data/content).
+ * branch inboxes (data/team). Each conversation remembers when it was last
+ * read on this phone, for the unread counts on the Inbox icon and list.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CONVERSATIONS } from '@/data/content';
+import { INBOXES, conversationById } from '@/data/team';
 
 export type MsgKind = 'text' | 'image' | 'video' | 'file' | 'audio';
 
@@ -15,12 +16,16 @@ export interface ReplyRef {
   from: 'me' | 'them';
   preview: string;
   kind: MsgKind;
+  /** Who wrote it (team member's name), when known. */
+  sender?: string;
 }
 
 export interface ChatMsg {
   id: string;
   convId: string;
   from: 'me' | 'them';
+  /** Team member who wrote it (shared front desk inbox). */
+  sender?: string;
   at: string;
   kind: MsgKind;
   text?: string;
@@ -43,10 +48,24 @@ let dbp: Promise<IDBDatabase> | null = null;
 function db() {
   if (!dbp)
     dbp = new Promise((res, rej) => {
-      const r = indexedDB.open(DB, 1);
-      r.onupgradeneeded = () => {
-        const s = r.result.createObjectStore('messages', { keyPath: 'id' });
-        s.createIndex('convId', 'convId');
+      const r = indexedDB.open(DB, 2);
+      r.onupgradeneeded = (e) => {
+        if (e.oldVersion < 1) {
+          const s = r.result.createObjectStore('messages', { keyPath: 'id' });
+          s.createIndex('convId', 'convId');
+        }
+        // v2 (2026-11-24): the old sample chats became the branch inboxes.
+        if (e.oldVersion === 1) {
+          const MOVE: Record<string, string> = { branch: 'frontdesk', payments: 'admin', support: 'admin' };
+          const cur = r.transaction!.objectStore('messages').openCursor();
+          cur.onsuccess = () => {
+            const c = cur.result;
+            if (!c) return;
+            const m = c.value as ChatMsg;
+            if (MOVE[m.convId]) c.update({ ...m, convId: MOVE[m.convId] });
+            c.continue();
+          };
+        }
       };
       r.onsuccess = () => res(r.result);
       r.onerror = () => rej(r.error);
@@ -73,7 +92,7 @@ const deletedSeeds = (): string[] => {
   }
 };
 function seedMessages(convId: string): ChatMsg[] {
-  const c = CONVERSATIONS.find((x) => x.id === convId);
+  const c = conversationById(convId);
   if (!c) return [];
   const gone = new Set(deletedSeeds());
   const base = new Date();
@@ -83,7 +102,7 @@ function seedMessages(convId: string): ChatMsg[] {
     else if (/^\d\d:\d\d$/.test(m.time)) at.setHours(Number(m.time.slice(0, 2)), Number(m.time.slice(3)), 0, 0);
     else at.setDate(at.getDate() - 3);
     const id = `seed-${convId}-${i}`;
-    return { id, convId, from: m.from, at: at.toISOString(), kind: 'text', text: m.text, status: 'delivered', deleted: gone.has(id) };
+    return { id, convId, from: m.from, sender: m.sender, at: at.toISOString(), kind: 'text' as const, text: m.text, status: 'delivered' as const, deleted: gone.has(id) };
   });
 }
 
@@ -129,6 +148,7 @@ export function useChat(convId: string) {
       const msg: ChatMsg = { ...m, id: uid(), convId, from: 'me', at: new Date().toISOString(), status: 'saved' };
       setMine((x) => [...x, msg]);
       await tx('readwrite', (s) => s.put(msg)).catch(() => undefined);
+      changed();
       return msg;
     },
     [convId],
@@ -139,6 +159,7 @@ export function useChat(convId: string) {
     if (id.startsWith('seed-')) {
       localStorage.setItem(DELETED_KEY, JSON.stringify([...deletedSeeds(), id]));
       setSeedTick((t) => t + 1);
+      changed();
       return;
     }
     let updated: ChatMsg | undefined;
@@ -150,6 +171,7 @@ export function useChat(convId: string) {
       }),
     );
     if (updated) await tx('readwrite', (s) => s.put(updated!)).catch(() => undefined);
+    changed();
   }, []);
 
   const clear = useCallback(async () => {
@@ -157,9 +179,74 @@ export function useChat(convId: string) {
     localStorage.setItem(DELETED_KEY, JSON.stringify([...deletedSeeds(), ...seedMessages(convId).map((m) => m.id)]));
     setMine([]);
     setSeedTick((t) => t + 1);
+    changed();
   }, [mine, convId]);
 
   return { messages, send, remove, clear };
+}
+
+/* ─────────────── read / unread and the inbox list ─────────────── */
+
+const READ_KEY = 'stanley.pr.chat.read';
+const EVENT = 'stanley-chat-changed';
+const changed = () => window.dispatchEvent(new Event(EVENT));
+const readAll = (): Record<string, string> => {
+  try {
+    return JSON.parse(localStorage.getItem(READ_KEY) ?? '{}') as Record<string, string>;
+  } catch {
+    return {};
+  }
+};
+/** Mark a conversation as read up to now. */
+export function markRead(convId: string) {
+  try {
+    localStorage.setItem(READ_KEY, JSON.stringify({ ...readAll(), [convId]: new Date().toISOString() }));
+  } catch {
+    /* this session only */
+  }
+  changed();
+}
+
+export interface InboxRow {
+  id: string;
+  last?: ChatMsg;
+  unread: number;
+}
+
+/** Every conversation for the inbox: the branch inboxes plus direct chats already started, newest first. */
+export function useInbox() {
+  const [stored, setStored] = useState<ChatMsg[]>([]);
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    const load = () => {
+      tx<ChatMsg[]>('readonly', (s) => s.getAll() as IDBRequest<ChatMsg[]>)
+        .then((r) => alive && setStored(r ?? []))
+        .catch(() => undefined);
+      setTick((t) => t + 1);
+    };
+    load();
+    window.addEventListener(EVENT, load);
+    window.addEventListener('storage', load);
+    return () => {
+      alive = false;
+      window.removeEventListener(EVENT, load);
+      window.removeEventListener('storage', load);
+    };
+  }, []);
+  return useMemo(() => {
+    const read = readAll();
+    const ids = [...INBOXES.map((c) => c.id), ...new Set(stored.map((m) => m.convId).filter((id) => id.startsWith('dm-') && conversationById(id)))];
+    const rows: InboxRow[] = ids.map((id) => {
+      const all = [...seedMessages(id), ...stored.filter((m) => m.convId === id)].sort((a, b) => a.at.localeCompare(b.at));
+      const lastMine = [...all].reverse().find((m) => m.from === 'me')?.at ?? '';
+      const since = [read[id] ?? '', lastMine].sort().pop()!; // replying counts as reading
+      return { id, last: all[all.length - 1], unread: all.filter((m) => m.from === 'them' && !m.deleted && m.at > since).length };
+    });
+    const fixed = rows.slice(0, INBOXES.length);
+    const direct = rows.slice(INBOXES.length).sort((a, b) => (b.last?.at ?? '').localeCompare(a.last?.at ?? ''));
+    return { inboxes: fixed, direct, unread: rows.reduce((s, r) => s + r.unread, 0) };
+  }, [stored, tick]); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
 export const previewOf = (m: Pick<ChatMsg, 'kind' | 'text' | 'fileName' | 'duration'>) =>

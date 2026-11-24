@@ -27,8 +27,8 @@ export const BRANCH = {
   code: b.code,
   name: b.name,
   city: b.city,
-  /** "Silhouette – Abuja Branch" */
-  label: `${CATALOGUE.company.shortName} – ${b.name} Branch`,
+  /** "Silhouette, Abuja Branch" */
+  label: `${CATALOGUE.company.shortName}, ${b.name} Branch`,
   /** Prefix of referral IDs — the dashboard's Billing reads "ABJ-R" + 6 digits. */
   idCode: b.idCode,
   /** null = the dashboard has no record of it yet. */

@@ -4,7 +4,7 @@
  * is worked out from the referrals (domain/referrals.ts) — nothing typed in.
  */
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Bell, Building2, Check, ChevronRight, Database, FlaskConical, Gift, Menu, Sparkles, Star, Target, UserPlus, Users } from 'lucide-react';
+import { Bell, Building2, Check, ChevronRight, Database, FlaskConical, Gift, Menu, MessageCircle, Sparkles, Star, Target, UserPlus, Users } from 'lucide-react';
 import { PHOTOS } from '@/assets';
 import { AGENT, BRANCH, RULES, agentName } from '@/config/org';
 import { naira, timeOfDay } from '@/domain/format';
@@ -12,10 +12,15 @@ import { inPeriod, statsFor } from '@/domain/referrals';
 import { useApp } from '@/app/store';
 import { useShell } from '@/app/shell';
 import { FilterButton, ProgressBar, SearchField, SectionTitle } from '@/ui/kit';
+import { useInbox } from '@/domain/chat';
+import { useProfile } from '@/domain/profile';
+import { BankRequiredCard } from '@/screens/BankDetails';
 import { AnnouncementCarousel } from './AnnouncementCarousel';
 
 export function Dashboard() {
   const { referrals, navigate, showToast } = useApp();
+  const inbox = useInbox();
+  const me = useProfile();
   const { openMenu } = useShell();
   const [q, setQ] = useState('');
   // The top bar is see-through at the top and frosts once content scrolls under it.
@@ -43,7 +48,7 @@ export function Dashboard() {
       if (navigator.share) await navigator.share({ title: 'Become a Stanley PR Agent', text });
       else {
         await navigator.clipboard.writeText(text);
-        showToast('Invitation copied — paste it into WhatsApp or SMS');
+        showToast('Invitation copied, paste it into WhatsApp or SMS');
       }
     } catch {
       /* cancelled */
@@ -60,10 +65,16 @@ export function Dashboard() {
         <button type="button" onClick={openMenu} aria-label="Menu" className="press -ml-2 grid h-11 w-11 place-items-center rounded-full text-ink md:invisible">
           <Menu size={26} strokeWidth={2} />
         </button>
-        <button type="button" onClick={() => navigate('/notifications')} aria-label="Notifications, 3 new" className="press relative -mr-2 grid h-11 w-11 place-items-center rounded-full text-ink">
-          <Bell size={26} strokeWidth={1.9} />
-          <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-[#ef4444] ring-2 ring-[#e9f1ff]" />
-        </button>
+        <span className="-mr-2 flex items-center gap-1">
+          <button type="button" onClick={() => navigate('/messages')} aria-label={inbox.unread ? `Inbox, ${inbox.unread} unread` : 'Inbox'} className="press relative grid h-11 w-11 place-items-center rounded-full text-ink">
+            <MessageCircle size={25} strokeWidth={1.9} />
+            {inbox.unread > 0 && <span className="absolute right-0.5 top-1 grid h-[19px] min-w-[19px] place-items-center rounded-full bg-brand-600 px-1 text-[11px] font-bold leading-none text-white ring-2 ring-[#e9f1ff]">{inbox.unread > 9 ? '9+' : inbox.unread}</span>}
+          </button>
+          <button type="button" onClick={() => navigate('/notifications')} aria-label="Notifications, 3 new" className="press relative grid h-11 w-11 place-items-center rounded-full text-ink">
+            <Bell size={26} strokeWidth={1.9} />
+            <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-[#ef4444] ring-2 ring-[#e9f1ff]" />
+          </button>
+        </span>
       </header>
 
       <div className="relative">
@@ -87,9 +98,12 @@ export function Dashboard() {
             </button>
           </div>
           <button type="button" onClick={() => navigate('/profile')} aria-label="My profile" className="press h-[96px] w-[96px] shrink-0 overflow-hidden rounded-full bg-linear-to-b from-[#cfe2ff] to-[#9cc3ff] p-[3px] shadow-[0_14px_30px_rgba(31,111,232,0.22)]">
-            <img src={PHOTOS.agentAvatar} alt="" className="h-full w-full rounded-full object-cover" />
+            <img src={me.photo} alt="" className="h-full w-full rounded-full object-cover" />
           </button>
         </section>
+
+        {/* Required settings (owner): bank details until added */}
+        <BankRequiredCard />
 
         {/* Search */}
         <form onSubmit={search} className="mb-5 flex gap-3" role="search">

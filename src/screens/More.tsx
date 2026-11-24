@@ -7,7 +7,7 @@ import { useState } from 'react';
 import { Building2, ChevronDown, ChevronRight, Hash, Layers, MapPin, Phone, Send, Sparkles, UserRound } from 'lucide-react';
 import { PHOTOS } from '@/assets';
 import { AGENT, BRANCH, COMPANY, RULES, agentName } from '@/config/org';
-import { ANNOUNCEMENTS, CAMPAIGNS, CONVERSATIONS, FAQS, NOTIFICATIONS, RESOURCES } from '@/data/content';
+import { ANNOUNCEMENTS, CAMPAIGNS, FAQS, NOTIFICATIONS, RESOURCES } from '@/data/content';
 import { CATEGORIES, SERVICES, serviceByName, type Service } from '@/data/services';
 import { priceText } from '@/screens/Services';
 import { naira, shortDate } from '@/domain/format';
@@ -54,7 +54,7 @@ export function BranchInfo() {
       </Card>
       {(!BRANCH.address || !BRANCH.phone) && <p className="mb-3.5 text-[12.5px] leading-relaxed text-muted">Details marked “Not on record yet” are added by the branch in the STANLEY dashboard and appear here automatically once the cloud connection is on.</p>}
       <div className="grid grid-cols-2 gap-3">
-        <Button variant="secondary" onClick={() => navigate('/messages/branch')}>
+        <Button variant="secondary" onClick={() => navigate('/messages/frontdesk')}>
           Message
         </Button>
         <Button onClick={() => navigate('/services')}>Services</Button>
@@ -145,33 +145,6 @@ export function Notifications() {
   );
 }
 
-/* ─────────────── Messages ─────────────── */
-
-export function Messages() {
-  const { navigate } = useApp();
-  return (
-    <>
-      <ScreenHeader title="Messages" />
-      <Subtitle>Talk to your branch and the Stanley team.</Subtitle>
-      <Card className="divide-y divide-line">
-        {CONVERSATIONS.map((c) => (
-          <button key={c.id} type="button" onClick={() => navigate(`/messages/${c.id}`)} className="press flex w-full items-center gap-3.5 p-4 text-left">
-            <InitialsAvatar name={c.name} size={48} />
-            <span className="min-w-0 flex-1">
-              <span className="flex items-center justify-between gap-2">
-                <span className="truncate text-[15.5px] font-bold text-ink">{c.name}</span>
-                <span className="shrink-0 text-[12.5px] text-muted">{c.messages[c.messages.length - 1]!.time}</span>
-              </span>
-              <span className="block truncate text-[14px] text-ink-2">{c.messages[c.messages.length - 1]!.text}</span>
-            </span>
-            {c.unread > 0 && <span className="grid h-5.5 min-w-5.5 place-items-center rounded-full bg-brand-600 px-1.5 text-[12px] font-bold text-white">{c.unread}</span>}
-          </button>
-        ))}
-      </Card>
-    </>
-  );
-}
-
 /* ─────────────── Help & training ─────────────── */
 
 export function HelpCentre() {
@@ -198,8 +171,8 @@ export function HelpCentre() {
           </div>
         ))}
       </Card>
-      <Button block onClick={() => navigate('/messages/support')}>
-        Message Stanley Support
+      <Button block onClick={() => navigate('/messages/admin')}>
+        Message the Admin
       </Button>
     </>
   );
@@ -263,48 +236,6 @@ export function Article({ slug }: { slug: string }) {
 
 /* ─────────────── Profile ─────────────── */
 
-export function Profile() {
-  const { referrals } = useApp();
-  const completed = referrals.filter((r) => r.status === 'Completed').length;
-  const rows: [string, string][] = [
-    ['Partner ID', AGENT.id],
-    ['Phone', AGENT.phone],
-    ['Email', AGENT.email],
-    ['Branch', BRANCH.label],
-    ['Commission rate', `${Math.round(RULES.commissionRate * 100)}%`],
-    ['Member since', shortDate(AGENT.memberSince)],
-  ];
-  return (
-    <>
-      <ScreenHeader title="My Profile" />
-      <div className="mb-5 flex flex-col items-center text-center">
-        <img src={PHOTOS.agentAvatar} alt="" className="h-28 w-28 rounded-full object-cover shadow-[0_14px_30px_rgba(31,111,232,0.22)] ring-4 ring-white" />
-        <p className="mt-3 text-[21px] font-bold text-ink">{agentName()}</p>
-        <p className="text-[14.5px] text-muted">{AGENT.role}</p>
-      </div>
-      <div className="mb-4 grid grid-cols-2 gap-3">
-        <Card className="p-4 text-center">
-          <p className="text-[24px] font-bold text-brand-700">{referrals.length}</p>
-          <p className="text-[13px] text-muted">Referrals</p>
-        </Card>
-        <Card className="p-4 text-center">
-          <p className="text-[24px] font-bold text-good">{completed}</p>
-          <p className="text-[13px] text-muted">Completed</p>
-        </Card>
-      </div>
-      <Card className="divide-y divide-line">
-        {rows.map(([l, v]) => (
-          <div key={l} className="flex items-center justify-between gap-4 p-4">
-            <span className="text-[14px] text-muted">{l}</span>
-            <span className="text-right text-[15px] font-medium text-ink">{v}</span>
-          </div>
-        ))}
-      </Card>
-      <p className="mt-3 text-[12.5px] text-muted">To change your details, contact your branch. Sign-in and account editing arrive with the cloud connection.</p>
-    </>
-  );
-}
-
 /* ─────────────── AI Test Assistant ─────────────── */
 
 /** Symptom/need → services, from the catalogue's own guide (no AI model is connected yet). */
@@ -331,7 +262,7 @@ export function AiAssistant() {
         <Sticker name="sparkles" size={58} />
         <div>
           <p className="text-[17px] font-bold text-ink">Which test does the patient need?</p>
-          <p className="mt-0.5 text-[13.5px] text-ink-2">Pick what the doctor is checking for. Suggestions come from Stanley’s service guide — the AI assistant isn’t connected yet. The doctor always decides.</p>
+          <p className="mt-0.5 text-[13.5px] text-ink-2">Pick what the doctor is checking for. Suggestions come from Stanley’s service guide. The AI assistant isn’t connected yet. The doctor always decides.</p>
         </div>
       </Card>
       <div className="mb-5 flex flex-wrap gap-2.5">

@@ -26,6 +26,7 @@ export type RoutePath =
   | '/training'
   | `/training/${string}`
   | '/profile'
+  | `/profile/${string}`
   | '/assistant';
 
 export interface Route {
@@ -54,6 +55,7 @@ export function parentOf(r: Route): RoutePath {
   if (a === 'referrals' && b) return '/referrals';
   if (a === 'messages' && b) return '/messages';
   if (a === 'training' && b) return '/training';
+  if (a === 'profile' && b) return '/profile';
   if (a === 'refer' && b === 'summary') return '/refer/services';
   if (a === 'refer' && b === 'services') return '/refer';
   return '/';

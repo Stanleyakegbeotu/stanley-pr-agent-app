@@ -27,17 +27,17 @@ export interface CategoryInfo {
 }
 
 const INFO: Record<string, Omit<CategoryInfo, 'key' | 'count'>> = {
-  LAB: { label: 'Laboratory', description: 'Laboratory test — the sample is collected at the branch.', preparation: 'Some blood tests need fasting for 8–12 hours. Confirm with the branch before the visit.', procedure: 'Sample collected at the branch' },
-  'X-RAY': { label: 'X-Ray', description: 'X-ray imaging to look at bones, the chest and other structures.', preparation: 'Remove metal items around the area. Tell staff if the patient may be pregnant.', procedure: 'Quick imaging · about 10–15 minutes' },
-  MRI: { label: 'MRI', description: 'Magnetic resonance imaging — detailed pictures without radiation.', preparation: 'Remove all metal. Tell staff about pacemakers, implants or pregnancy.', procedure: 'Non-invasive scan · about 30–60 minutes' },
-  SCAN: { label: 'Ultrasound', description: 'Ultrasound scan — uses sound waves, no radiation.', preparation: 'Abdominal scans may need fasting; pelvic scans usually need a full bladder. Confirm with the branch.', procedure: 'Non-invasive scan · about 20–30 minutes' },
-  'CT SCAN': { label: 'CT Scan', description: 'CT (computed tomography) — cross-sectional imaging of the body.', preparation: 'Some CT scans need fasting or contrast. Confirm with the branch before the visit.', procedure: 'Imaging · about 15–30 minutes' },
-  PHARYNGOSCOPY: { label: 'Pharyngoscopy', description: 'Endoscopic examination with a thin camera (throat, stomach or colon).', preparation: 'Usually needs fasting — the branch gives the patient full instructions.', procedure: 'Procedure at the branch' },
+  LAB: { label: 'Laboratory', description: 'Laboratory test, the sample is collected at the branch.', preparation: 'Some blood tests need fasting for 8 to 12 hours. Confirm with the branch before the visit.', procedure: 'Sample collected at the branch' },
+  'X-RAY': { label: 'X-Ray', description: 'X-ray imaging to look at bones, the chest and other structures.', preparation: 'Remove metal items around the area. Tell staff if the patient may be pregnant.', procedure: 'Quick imaging · about 10 to 15 minutes' },
+  MRI: { label: 'MRI', description: 'Magnetic resonance imaging, detailed pictures without radiation.', preparation: 'Remove all metal. Tell staff about pacemakers, implants or pregnancy.', procedure: 'Non-invasive scan · about 30 to 60 minutes' },
+  SCAN: { label: 'Ultrasound', description: 'Ultrasound scan, uses sound waves, no radiation.', preparation: 'Abdominal scans may need fasting; pelvic scans usually need a full bladder. Confirm with the branch.', procedure: 'Non-invasive scan · about 20 to 30 minutes' },
+  'CT SCAN': { label: 'CT Scan', description: 'CT (computed tomography), cross-sectional imaging of the body.', preparation: 'Some CT scans need fasting or contrast. Confirm with the branch before the visit.', procedure: 'Imaging · about 15 to 30 minutes' },
+  PHARYNGOSCOPY: { label: 'Pharyngoscopy', description: 'Endoscopic examination with a thin camera (throat, stomach or colon).', preparation: 'Usually needs fasting, the branch gives the patient full instructions.', procedure: 'Procedure at the branch' },
   DNA: { label: 'DNA', description: 'DNA relationship test.', preparation: 'Each person tested gives a cheek-swab sample at the branch.', procedure: 'Cheek swab' },
-  ECHO: { label: 'Echo', description: 'Echocardiography — an ultrasound of the heart.', preparation: 'No special preparation.', procedure: 'Non-invasive scan · about 30 minutes' },
+  ECHO: { label: 'Echo', description: 'Echocardiography, an ultrasound of the heart.', preparation: 'No special preparation.', procedure: 'Non-invasive scan · about 30 minutes' },
   CARDIOLOGY: { label: 'Cardiology', description: 'Consultation with the heart specialist.', preparation: 'Bring previous results and a list of medicines.', procedure: 'Consultation' },
-  ECG: { label: 'ECG', description: 'Electrocardiogram — records the heart’s rhythm.', preparation: 'Avoid lotions on the chest before the visit.', procedure: 'Non-invasive recording · about 10 minutes' },
-  EEG: { label: 'EEG', description: 'Electroencephalogram — records the brain’s electrical activity.', preparation: 'Wash hair the night before; no oils or gels.', procedure: 'Non-invasive recording · about 45 minutes' },
+  ECG: { label: 'ECG', description: 'Electrocardiogram, records the heart’s rhythm.', preparation: 'Avoid lotions on the chest before the visit.', procedure: 'Non-invasive recording · about 10 minutes' },
+  EEG: { label: 'EEG', description: 'Electroencephalogram, records the brain’s electrical activity.', preparation: 'Wash hair the night before; no oils or gels.', procedure: 'Non-invasive recording · about 45 minutes' },
   'HOLTER ECG': { label: 'Holter ECG', description: 'Heart rhythm recorded for 24 hours with a small portable monitor.', preparation: 'Wear loose clothing; the patient returns the monitor the next day.', procedure: 'Portable monitor · 24 hours' },
   'MEDICAL EXAMINATION': { label: 'Medical Exam', description: 'General medical examination.', preparation: 'Bring a valid ID and any previous results.', procedure: 'Examination at the branch' },
 };
@@ -53,7 +53,15 @@ interface FamilyGuide {
   preparation: string;
   duration: string;
 }
-const GUIDE = CATALOGUE.guide as unknown as { sources: string[]; families: Record<string, FamilyGuide>; byId: Record<string, GuideRow> };
+/** Owner (2026-11-24): no dashes in text the agent reads. Sentence breaks become commas, ranges "to". */
+const plainText = (t: string) =>
+  t
+    .replace(/(\d)\s*[\u2013\u2014]\s*(\d)/g, '$1 to $2')
+    .replace(/\b([A-Z])[\u2013\u2014]([A-Z])\b/g, '$1 to $2')
+    .replace(/\s+[\u2013\u2014]\s+/g, ', ')
+    .replace(/[\u2013\u2014]/g, ', ');
+const plainAll = <T,>(v: T): T => (typeof v === 'string' ? (plainText(v) as T) : Array.isArray(v) ? (v.map(plainAll) as T) : v && typeof v === 'object' ? (Object.fromEntries(Object.entries(v).map(([k, x]) => [k, plainAll(x)])) as T) : v);
+const GUIDE = plainAll(CATALOGUE.guide as unknown as { sources: string[]; families: Record<string, FamilyGuide>; byId: Record<string, GuideRow> });
 export const GUIDE_SOURCES = GUIDE.sources;
 
 export interface Service {

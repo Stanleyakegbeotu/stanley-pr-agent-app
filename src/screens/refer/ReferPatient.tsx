@@ -185,7 +185,7 @@ function ServicesStep() {
             const unpriced = s.price == null;
             return (
               <li key={s.id}>
-                <button type="button" role="option" aria-selected={on} aria-disabled={unpriced} onClick={() => (unpriced ? setError(`${s.name} has no price recorded yet — ask the branch.`) : toggle(s.id))} className={`card press flex w-full items-center gap-3.5 p-3 text-left ${on ? 'border-brand-500 ring-1 ring-brand-500' : ''} ${unpriced ? 'opacity-60' : ''}`}>
+                <button type="button" role="option" aria-selected={on} aria-disabled={unpriced} onClick={() => (unpriced ? setError(`${s.name} has no price recorded yet. Ask the branch.`) : toggle(s.id))} className={`card press flex w-full items-center gap-3.5 p-3 text-left ${on ? 'border-brand-500 ring-1 ring-brand-500' : ''} ${unpriced ? 'opacity-60' : ''}`}>
                   <ServiceThumb service={s} className="h-[72px] w-[80px] shrink-0 rounded-2xl" />
                   <span className="min-w-0 flex-1">
                     <span className="block text-[16px] font-bold text-ink">{s.name}</span>
