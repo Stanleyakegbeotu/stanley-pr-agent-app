@@ -1,0 +1,10 @@
+{
+  "description": "Helps healthcare referral agents manage patient referrals, discover diagnostic services, track commissions and targets, and stay connected with their branches.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
