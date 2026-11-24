@@ -15,7 +15,7 @@ import { priceText } from '@/screens/Services';
 import { displayPhone, formatPersonName, isValidNgPhone, naira } from '@/domain/format';
 import { billOf, commissionOf, servicesOf } from '@/domain/referrals';
 import { useApp } from '@/app/store';
-import { Button, Card, Chip, ChipRow, EmptyState, Field, ScreenHeader, SearchField, ServiceThumb, Stepper, Sticker, Subtitle, WhatsAppButton, inputClass } from '@/ui/kit';
+import { Button, Card, Chip, ChipRow, EmptyState, Field, ScreenHeader, SearchField, ServiceThumb, Stepper, Sticker, Subtitle, WhatsAppButton, FIELD_ON, inputClass } from '@/ui/kit';
 
 const STEPS = ['Patient', 'Services', 'Summary'];
 const PATH = ['/refer', '/refer/services', '/refer/summary'] as const;
@@ -90,7 +90,7 @@ function PatientStep() {
           </Field>
           <Field label="Phone Number" required error={errors.phone} id="pt-phone">
             <div className="flex gap-2.5">
-              <span className={`flex min-h-13 shrink-0 items-center gap-1.5 rounded-2xl border bg-white px-3 text-[15px] text-ink ${errors.phone ? 'border-[#e5484d]' : 'border-line'}`}>
+              <span className={`flex min-h-13 shrink-0 items-center gap-1.5 rounded-2xl border-[1.5px] bg-white px-3 text-[15px] text-ink ${errors.phone ? 'border-[#e5484d] ring-4 ring-[#fde3e3]' : FIELD_ON}`}>
                 <NigeriaFlag /> +234 <ChevronDown size={16} className="text-muted" />
               </span>
               <input id="pt-phone" name="phone" type="tel" inputMode="tel" autoComplete="tel-national" value={p.phone} onChange={(e) => set({ phone: e.target.value.replace(/[^\d ]/g, '').slice(0, 13) })} placeholder="Enter phone number" className={`${inputClass(errors.phone)} min-w-0`} />
@@ -99,7 +99,7 @@ function PatientStep() {
           <Field label="Gender" optional>
             <div className="grid grid-cols-2 gap-3" role="radiogroup" aria-label="Gender">
               {(['Male', 'Female'] as const).map((g) => (
-                <button key={g} type="button" role="radio" aria-checked={p.gender === g} onClick={() => set({ gender: p.gender === g ? '' : g })} className={`press flex min-h-13 items-center gap-3 rounded-2xl border px-4 text-[15px] ${p.gender === g ? 'border-brand-500 bg-brand-50 text-ink ring-1 ring-brand-500' : 'border-line bg-white text-ink-2'}`}>
+                <button key={g} type="button" role="radio" aria-checked={p.gender === g} onClick={() => set({ gender: p.gender === g ? '' : g })} className={`press flex min-h-13 items-center gap-3 rounded-2xl border-[1.5px] px-4 text-[15px] ${FIELD_ON} ${p.gender === g ? 'bg-brand-50 font-semibold text-ink' : 'bg-white text-ink-2'}`}>
                   <span className={`grid h-5.5 w-5.5 place-items-center rounded-full border-2 ${p.gender === g ? 'border-brand-600' : 'border-[#b6c2d4]'}`}>{p.gender === g && <span className="h-2.5 w-2.5 rounded-full bg-brand-600" />}</span>
                   {g}
                 </button>
@@ -165,7 +165,7 @@ function ServicesStep() {
       <ScreenHeader title="Select Services" />
       <Subtitle>Choose the tests the doctor requested for {draft.patient.name}.</Subtitle>
       <Stepper steps={STEPS} current={1} />
-      <SearchField className="mb-4" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search or describe a test…" aria-label="Search for a test, or describe what the doctor is checking for" />
+      <SearchField active className="mb-4" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search or describe a test…" aria-label="Search for a test, or describe what the doctor is checking for" />
       <ChipRow>
         <Chip active={cat === 'All'} onClick={() => (setCat('All'), setShown(40))}>
           All

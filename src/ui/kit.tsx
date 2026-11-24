@@ -112,10 +112,10 @@ export function ChipRow({ children }: { children: ReactNode }) {
   return <div className="-mx-5 mb-4 flex gap-2.5 overflow-x-auto px-5 pb-1 md:-mx-8 md:px-8">{children}</div>;
 }
 
-export const SearchField = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(function SearchField({ className = '', ...rest }, ref) {
+export const SearchField = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement> & { active?: boolean }>(function SearchField({ className = '', active, ...rest }, ref) {
   return (
-    <label className={cx('flex min-h-13 flex-1 items-center gap-3 rounded-full border border-line bg-white px-5 shadow-[0_6px_18px_rgba(30,74,160,0.06)] focus-within:border-brand-400', className)}>
-      <Search size={21} className="shrink-0 text-ink-2" />
+    <label className={cx('flex min-h-13 flex-1 items-center gap-3 rounded-full bg-white px-5 transition', active ? `border-[1.5px] ${FIELD_ON} focus-within:border-brand-600 focus-within:ring-brand-200` : 'border border-line shadow-[0_6px_18px_rgba(30,74,160,0.06)] focus-within:border-brand-400', className)}>
+      <Search size={21} className={active ? 'shrink-0 text-brand-600' : 'shrink-0 text-ink-2'} />
       <input ref={ref} type="search" {...rest} className="min-w-0 flex-1 bg-transparent text-[15px] text-ink outline-none" />
     </label>
   );
@@ -221,7 +221,9 @@ export function Field({ label, required, optional, error, children, id }: { labe
   );
 }
 
-export const inputClass = (error?: string) => cx('min-h-13 w-full rounded-2xl border bg-white px-4 text-[15px] text-ink outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-100', error ? 'border-[#e5484d]' : 'border-line');
+/** Form fields (owner, 2026-11-24): the blue focus look is ALWAYS on, not only when tapped; a little stronger while typing; red with an error. */
+export const FIELD_ON = 'border-brand-500 ring-4 ring-brand-100';
+export const inputClass = (error?: string) => cx('min-h-13 w-full rounded-2xl border-[1.5px] bg-white px-4 text-[15px] text-ink outline-none transition', error ? 'border-[#e5484d] ring-4 ring-[#fde3e3] focus:ring-[#fbd0d0]' : `${FIELD_ON} focus:border-brand-600 focus:ring-brand-200`);
 
 export function EmptyState({ sticker, title, text, action }: { sticker: StickerKey; title: string; text: string; action?: ReactNode }) {
   return (
