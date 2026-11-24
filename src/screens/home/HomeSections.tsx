@@ -1,14 +1,14 @@
 /**
  * Home sections (owner, 2026-11-24).
- *  • Updates from your branch: shown in the "required" area at the top of
- *    Home, under the bank details card. A patient completed their tests
+ *  • Updates from your branch: a carousel directly under Quick Actions, one
+ *    update at a time (owner, 2026-11-24). A patient completed their tests
  *    (billing done), cancelled (before visiting, or at the branch), or
  *    removed/added tests at billing (and how that moved the commission).
  *    Each update can be dismissed. There is no "Arrived" status.
  *  • Today's referred patients: below Quick Actions, every patient referred
  *    today with their status; "No patient referred today" when there are none.
  */
-import { useState } from 'react';
+import { useEffect, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
 import { ArrowDownRight, ArrowUpRight, Ban, CheckCircle2, ChevronRight, Plus, Send, X } from 'lucide-react';
 import { useApp } from '@/app/store';
 import { naira } from '@/domain/format';
@@ -49,9 +49,10 @@ export function ChangeNote({ r, className = '' }: { r: Referral; className?: str
   );
 }
 
-/* ─────────────── Updates from your branch ─────────────── */
+/* ─────────────── Updates from your branch (carousel) ─────────────── */
 
 const DISMISSED_KEY = 'stanley.pr.updates.dismissed';
+const AUTOPLAY_MS = 4500;
 const readDismissed = (): string[] => {
   try {
     return JSON.parse(localStorage.getItem(DISMISSED_KEY) ?? '[]') as string[];
@@ -60,16 +61,35 @@ const readDismissed = (): string[] => {
   }
 };
 
+/** Owner (2026-11-24): a carousel directly under Quick Actions, showing the updates one by one. */
 export function BranchUpdates() {
   const { referrals, navigate } = useApp();
   const [gone, setGone] = useState(readDismissed);
+  const [index, setIndex] = useState(0);
+  const [drag, setDrag] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const start = useRef<{ x: number; y: number; t: number } | null>(null);
+  const width = useRef(1);
+  const moved = useRef(false);
+
   const since = Date.now() - 2 * 86_400_000; // the last 2 days
   const updates = referrals
     .filter((r) => r.status !== 'Pending' && r.updatedAt && new Date(r.updatedAt).getTime() >= since)
     .map((r) => ({ key: `${r.id}:${r.status}`, r }))
     .filter((u) => !gone.includes(u.key))
     .sort((a, b) => b.r.updatedAt!.localeCompare(a.r.updatedAt!));
-  if (!updates.length) return null;
+  const n = updates.length;
+  const at = n ? Math.min(index, n - 1) : 0;
+
+  useEffect(() => {
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (paused || reduce || n < 2) return;
+    const t = window.setInterval(() => !document.hidden && setIndex((i) => (i + 1) % n), AUTOPLAY_MS);
+    return () => window.clearInterval(t);
+  }, [paused, n]);
+
+  if (!n) return null;
+
   const dismiss = (key: string) => {
     const next = [...gone, key].slice(-200);
     setGone(next);
@@ -79,50 +99,82 @@ export function BranchUpdates() {
       /* this session only */
     }
   };
-  const shown = updates.slice(0, 4);
+  const down = (e: RPointerEvent<HTMLDivElement>) => {
+    start.current = { x: e.clientX, y: e.clientY, t: Date.now() };
+    width.current = e.currentTarget.clientWidth || 1;
+    moved.current = false;
+    setPaused(true);
+  };
+  const move = (e: RPointerEvent<HTMLDivElement>) => {
+    if (!start.current) return;
+    const dx = e.clientX - start.current.x;
+    if (!moved.current && Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(e.clientY - start.current.y)) {
+      moved.current = true;
+      e.currentTarget.setPointerCapture(e.pointerId);
+    }
+    if (moved.current) setDrag(dx);
+  };
+  const up = () => {
+    if (start.current && moved.current) {
+      const fast = Date.now() - start.current.t < 300;
+      const limit = fast ? 25 : width.current * 0.22;
+      if (drag < -limit) setIndex((at + 1) % n);
+      else if (drag > limit) setIndex((at - 1 + n) % n);
+    }
+    start.current = null;
+    setDrag(0);
+    window.setTimeout(() => setPaused(false), 1500);
+  };
+
   return (
-    <section className="mb-5">
-      <div className="mb-2.5 flex items-center justify-between px-0.5">
-        <h2 className="flex items-center gap-2 text-[17px] font-bold text-ink">
-          Updates from your branch
-          <span className="grid h-5.5 min-w-5.5 place-items-center rounded-full bg-brand-600 px-1.5 text-[12px] font-bold text-white">{updates.length}</span>
-        </h2>
-        {updates.length > shown.length && (
-          <button type="button" onClick={() => navigate('/referrals')} className="text-[14px] font-semibold text-brand-600">
-            See all
-          </button>
-        )}
+    <section aria-roledescription="carousel" aria-label="Updates from your branch" className="mt-6">
+      <SectionTitle title={`Updates from your branch (${n})`} action="See all" onAction={() => navigate('/referrals')} />
+      <div className="overflow-hidden rounded-[22px]" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onMouseEnter={() => setPaused(true)} onMouseLeave={() => !start.current && setPaused(false)} style={{ touchAction: 'pan-y' }}>
+        <div className="flex items-stretch" style={{ transform: `translateX(calc(${-at * 100}% + ${drag}px))`, transition: drag ? 'none' : 'transform 520ms cubic-bezier(.22,.8,.24,1)' }}>
+          {updates.map(({ key, r }, i) => (
+            <div key={key} className="w-full shrink-0" aria-hidden={i !== at} aria-roledescription="slide" aria-label={`Update ${i + 1} of ${n}`}>
+              <Update r={r} onOpen={() => !moved.current && navigate(`/referrals/${r.id}`)} onDismiss={() => dismiss(key)} />
+            </div>
+          ))}
+        </div>
       </div>
-      <ul className="space-y-2.5">
-        {shown.map(({ key, r }) => (
-          <li key={key}>
-            <Update r={r} onOpen={() => navigate(`/referrals/${r.id}`)} onDismiss={() => dismiss(key)} />
-          </li>
-        ))}
-      </ul>
+      {n > 1 && (
+        <div className="mt-3 flex justify-center gap-2">
+          {updates.map(({ key }, i) => (
+            <button key={key} type="button" onClick={() => setIndex(i)} aria-label={`Show update ${i + 1} of ${n}`} aria-current={i === at} className="grid h-6 place-items-center">
+              <span className={`block h-2 rounded-full transition-all duration-300 ${i === at ? 'w-5 bg-brand-600' : 'w-2 bg-[#cfd8e6]'}`} />
+            </button>
+          ))}
+        </div>
+      )}
     </section>
   );
 }
 
 function Update({ r, onOpen, onDismiss }: { r: Referral; onOpen: () => void; onDismiss: () => void }) {
-  const kind =
-    r.status === 'Completed'
-      ? { icon: <CheckCircle2 size={20} />, tone: 'bg-tint-green text-good', title: `${r.patient.name} completed at the branch`, text: `Billing is done. Your commission of ${naira(commissionOf(r))} is confirmed.` }
-      : { icon: <Ban size={20} />, tone: 'bg-[#fdecec] text-[#d93036]', title: `${r.patient.name}: ${cancelTitle(r).toLowerCase()}`, text: `${cancelSummary(r)} No commission for this referral.` };
+  const done = r.status === 'Completed';
+  const kind = done
+    ? { icon: <CheckCircle2 size={22} />, badge: 'Completed', card: 'from-[#ecfbf2] to-white border-[#c8ecd7]', tone: 'bg-good text-white', title: `${r.patient.name} completed at the branch`, text: `Billing is done. Your commission of ${naira(commissionOf(r))} is confirmed.` }
+    : { icon: <Ban size={22} />, badge: 'Cancelled', card: 'from-[#fff0f0] to-white border-[#f6cfcf]', tone: 'bg-[#e5484d] text-white', title: `${r.patient.name}: ${cancelTitle(r).toLowerCase()}`, text: `${cancelSummary(r)} No commission for this referral.` };
   return (
-    <div className="card relative flex items-start gap-3 p-3.5 pr-10">
-      <button type="button" onClick={onOpen} className="press flex min-w-0 flex-1 items-start gap-3 text-left">
-        <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${kind.tone}`}>{kind.icon}</span>
+    <div className={`relative flex h-full select-none flex-col rounded-[22px] border bg-linear-to-br p-4 pr-11 shadow-[0_10px_26px_rgba(30,74,160,0.10)] ${kind.card}`}>
+      <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 items-start gap-3 text-left">
+        <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl shadow-sm ${kind.tone}`}>{kind.icon}</span>
         <span className="min-w-0 flex-1">
-          <span className="block text-[14.5px] font-bold leading-snug text-ink">{kind.title}</span>
-          <span className="mt-0.5 block text-[13px] leading-snug text-ink-2">{kind.text}</span>
+          <span className="block text-[15px] font-bold leading-snug text-ink">{kind.title}</span>
+          <span className="mt-1 block text-[13.5px] leading-snug text-ink-2">{kind.text}</span>
           <ChangeNote r={r} className="mt-2" />
-          <span className="mt-1 block text-[12px] text-muted">
-            {r.id}, {isToday(r.updatedAt!) ? `today ${timeOf(r.updatedAt!)}` : `yesterday ${timeOf(r.updatedAt!)}`}
+          <span className="mt-2 flex items-center justify-between gap-2 text-[12px] text-muted">
+            <span>
+              {r.id}, {isToday(r.updatedAt!) ? `today ${timeOf(r.updatedAt!)}` : `yesterday ${timeOf(r.updatedAt!)}`}
+            </span>
+            <span className="flex items-center gap-0.5 font-semibold text-brand-600">
+              View <ChevronRight size={14} />
+            </span>
           </span>
         </span>
       </button>
-      <button type="button" onClick={onDismiss} aria-label="Dismiss update" className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-full text-faint hover:bg-page">
+      <button type="button" onClick={onDismiss} aria-label="Dismiss update" className="absolute right-2.5 top-2.5 grid h-8 w-8 place-items-center rounded-full text-faint hover:bg-white">
         <X size={16} />
       </button>
     </div>

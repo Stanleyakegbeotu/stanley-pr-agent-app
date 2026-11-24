@@ -105,7 +105,6 @@ export function Dashboard() {
 
         {/* Required settings (owner): bank details until added */}
         <BankRequiredCard />
-        <BranchUpdates />
 
         {/* Search */}
         <form onSubmit={search} className="mb-5 flex gap-3" role="search">
@@ -165,6 +164,9 @@ export function Dashboard() {
             <Action tint="bg-tint-orange border-[#ffe2c6]" icon={<Users size={30} className="text-orange" fill="currentColor" strokeWidth={1.4} />} label={'Invite a\nColleague'} onClick={invite} />
           </div>
         </section>
+
+        {/* Updates from your branch: a carousel under Quick Actions (owner, 2026-11-24) */}
+        <BranchUpdates />
 
         {/* Today's referred patients (owner, 2026-11-24) */}
         <TodayPatients />
