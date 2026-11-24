@@ -6,12 +6,12 @@
  * or a refresh loses nothing. Errors are shown on the field itself.
  */
 import { useRef, useState } from 'react';
-import { ArrowRight, CalendarDays, Check, ChevronDown, Copy, Hash, Pencil, Phone, Send, UserRound, Wallet } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CalendarDays, Check, ChevronDown, Copy, Hash, Pencil, Phone, Send, UserRound, Wallet, X } from 'lucide-react';
 import { BRANCH, RULES } from '@/config/org';
 import { CATEGORIES, categoryInfo } from '@/data/services';
 import { smartSearch } from '@/domain/testSearch';
 import { shareOnWhatsApp } from '@/domain/whatsapp';
-import { priceText } from '@/screens/Services';
+import { CategoryHeader, CategoryHome, priceText } from '@/screens/Services';
 import { displayPhone, formatPersonName, isValidNgPhone, naira } from '@/domain/format';
 import { billOf, commissionOf, servicesOf } from '@/domain/referrals';
 import { useApp } from '@/app/store';
@@ -148,63 +148,111 @@ function ServicesStep() {
   const [cat, setCat] = useState<string>('All');
   const [error, setError] = useState('');
   const [shown, setShown] = useState(40);
-  const list = smartSearch(q, cat).hits.map((h) => h.service);
+  const searching = q.trim().length > 0;
+  const result = smartSearch(q, cat);
+  const list = result.hits.map((h) => h.service);
   const chosen = draft.serviceIds;
   const total = billOf(draft);
   const toggle = (id: string) => {
     setDraft((d) => ({ ...d, serviceIds: d.serviceIds.includes(id) ? d.serviceIds.filter((x) => x !== id) : [...d.serviceIds, id] }));
     setError('');
   };
+  const open = (c: string) => {
+    setCat(c);
+    setShown(40);
+    document.querySelector('.h-dvh.overflow-y-auto')?.scrollTo({ top: 0 });
+  };
+  const current = cat === 'All' ? null : categoryInfo(cat);
 
   if (!draft.patient.name) {
-    // Arrived here without a patient (e.g. from a link) — start at step 1.
+    // Arrived here without a patient (e.g. from a link): start at step 1.
     return <PatientStep />;
   }
 
   return (
     <>
       <ScreenHeader title="Select Services" />
-      <Subtitle>Choose the tests the doctor requested for {draft.patient.name}.</Subtitle>
+      <Subtitle>Choose the tests the doctor requested for {draft.patient.name}. Pick a category, or search or describe the test.</Subtitle>
       <Stepper steps={STEPS} current={1} />
-      <SearchField active className="mb-4" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search or describe a test…" aria-label="Search for a test, or describe what the doctor is checking for" />
-      <ChipRow>
-        <Chip active={cat === 'All'} onClick={() => (setCat('All'), setShown(40))}>
-          All
-        </Chip>
-        {CATEGORIES.map((c) => (
-          <Chip key={c.key} active={cat === c.key} onClick={() => (setCat(c.key), setShown(40))}>
-            {c.label} ({c.count})
+
+      {/* Search and categories stay pinned while the list scrolls (as in Branch Inventory). */}
+      <div className="sticky top-[calc(4rem+var(--safe-top))] z-20 -mx-5 mb-4 bg-page px-5 pb-3 pt-1 md:-mx-8 md:px-8">
+        <SearchField active value={q} onChange={(e) => (setQ(e.target.value), setShown(40))} placeholder="Search or describe a test…" aria-label="Search for a test, or describe what the doctor is checking for" />
+        <ChipRow>
+          <Chip active={cat === 'All'} onClick={() => open('All')}>
+            All categories
           </Chip>
-        ))}
-      </ChipRow>
-      {list.length === 0 ? (
-        <EmptyState sticker="microscope" title="No matching service" text="Try another name, e.g. “MRI” or “blood count”." />
+          {CATEGORIES.map((c) => (
+            <Chip key={c.key} active={cat === c.key} onClick={() => open(c.key)}>
+              {c.label} ({c.count})
+            </Chip>
+          ))}
+        </ChipRow>
+      </div>
+
+      {/* What's been picked so far, removable from any category. */}
+      {chosen.length > 0 && (
+        <div className="mb-4 rounded-2xl bg-white p-3 ring-1 ring-line">
+          <p className="mb-2 px-1 text-[13px] font-semibold text-ink-2">Selected ({chosen.length})</p>
+          <div className="flex flex-wrap gap-2">
+            {servicesOf(draft).map((s) => (
+              <button key={s.id} type="button" onClick={() => toggle(s.id)} aria-label={`Remove ${s.name}`} className="press inline-flex max-w-full items-center gap-1.5 rounded-full bg-brand-50 py-1 pl-3 pr-2 text-[13px] font-medium text-brand-700">
+                <span className="truncate">{s.name}</span>
+                <X size={14} className="shrink-0" />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {current && !searching && (
+        <button type="button" onClick={() => open('All')} className="press mb-4 inline-flex items-center gap-2 rounded-full bg-ink px-4 py-2 text-[14px] font-semibold text-white shadow-[0_8px_18px_rgba(11,23,48,0.18)]">
+          <ArrowLeft size={17} /> Back to categories
+        </button>
+      )}
+
+      {!searching && !current ? (
+        <CategoryHome onOpen={open} onExample={(x) => (setQ(x), setShown(40))} />
       ) : (
-        <ul className="space-y-3" role="listbox" aria-multiselectable="true" aria-label="Services">
-          {list.slice(0, shown).map((s) => {
-            const on = chosen.includes(s.id);
-            const unpriced = s.price == null;
-            return (
-              <li key={s.id}>
-                <button type="button" role="option" aria-selected={on} aria-disabled={unpriced} onClick={() => (unpriced ? setError(`${s.name} has no price recorded yet. Ask the branch.`) : toggle(s.id))} className={`card press flex w-full items-center gap-3.5 p-3 text-left ${on ? 'border-brand-500 ring-1 ring-brand-500' : ''} ${unpriced ? 'opacity-60' : ''}`}>
-                  <ServiceThumb service={s} className="h-[72px] w-[80px] shrink-0 rounded-2xl" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-[16px] font-bold text-ink">{s.name}</span>
-                    <span className={`mt-0.5 block font-bold ${unpriced ? 'text-[14px] text-muted' : 'text-[17px] text-brand-600'}`}>{priceText(s.price)}</span>
-                    <span className="block truncate text-[13px] text-muted">{categoryInfo(s.category).label}</span>
-                  </span>
-                  <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-full border-2 ${on ? 'border-brand-600 bg-brand-600 text-white' : 'border-[#c4cfdf]'}`}>{on && <Check size={16} strokeWidth={3} />}</span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+        <>
+          {current && !searching && <CategoryHeader keyName={current.key} />}
+          {searching && (
+            <p className="mb-3 px-1 text-[13.5px] text-ink-2">
+              <b className="text-ink">{list.length}</b> test{list.length === 1 ? '' : 's'} for “{q.trim()}”{current ? ` in ${current.label}` : ''}
+              {result.topics.length > 0 && <span className="text-muted">. Understood as {result.topics.join(', ')}</span>}
+            </p>
+          )}
+          {list.length === 0 ? (
+            <EmptyState sticker="microscope" title="No matching service" text="Try another name, e.g. “MRI” or “blood count”, or describe what the doctor is checking for." />
+          ) : (
+            <ul className="space-y-3" role="listbox" aria-multiselectable="true" aria-label="Services">
+              {list.slice(0, shown).map((s) => {
+                const on = chosen.includes(s.id);
+                const unpriced = s.price == null;
+                return (
+                  <li key={s.id}>
+                    <button type="button" role="option" aria-selected={on} aria-disabled={unpriced} onClick={() => (unpriced ? setError(`${s.name} has no price recorded yet. Ask the branch.`) : toggle(s.id))} className={`card press flex w-full items-center gap-3.5 p-3 text-left ${on ? 'border-brand-500 ring-1 ring-brand-500' : ''} ${unpriced ? 'opacity-60' : ''}`}>
+                      <ServiceThumb service={s} className="h-[72px] w-[80px] shrink-0 rounded-2xl" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[16px] font-bold text-ink">{s.name}</span>
+                        <span className={`mt-0.5 block font-bold ${unpriced ? 'text-[14px] text-muted' : 'text-[17px] text-brand-600'}`}>{priceText(s.price)}</span>
+                        <span className="block truncate text-[13px] text-muted">{s.about || categoryInfo(s.category).label}</span>
+                      </span>
+                      <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-full border-2 ${on ? 'border-brand-600 bg-brand-600 text-white' : 'border-[#c4cfdf]'}`}>{on && <Check size={16} strokeWidth={3} />}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {shown < list.length && (
+            <Button variant="secondary" block className="mt-4" onClick={() => setShown((n) => n + 40)}>
+              Show more ({list.length - shown} more)
+            </Button>
+          )}
+        </>
       )}
-      {shown < list.length && (
-        <Button variant="secondary" block className="mt-4" onClick={() => setShown((n) => n + 40)}>
-          Show more ({list.length - shown} more)
-        </Button>
-      )}
+
       <BottomAction>
         {error && (
           <p className="mb-2 text-center text-[13.5px] font-medium text-[#d93036]" role="alert">
@@ -217,11 +265,23 @@ function ServicesStep() {
           </span>
           <span className="font-bold text-ink">{naira(total)}</span>
         </div>
-        <Button block onClick={() => (chosen.length ? navigate(PATH[2]) : setError('Select at least one service to continue.'))}>
-          Next: Review Summary <ArrowRight size={20} />
-        </Button>
+        <div className="grid grid-cols-[auto_1fr] gap-3">
+          <BackButton onClick={() => navigate(PATH[0])} label="Back to patient details" />
+          <Button block onClick={() => (chosen.length ? navigate(PATH[2]) : setError('Select at least one service to continue.'))}>
+            Next: Summary <ArrowRight size={20} />
+          </Button>
+        </div>
       </BottomAction>
     </>
+  );
+}
+
+/** Go back one step to correct something (owner, 2026-11-24). Nothing typed is lost. */
+function BackButton({ onClick, label }: { onClick: () => void; label: string }) {
+  return (
+    <Button variant="secondary" onClick={onClick} aria-label={label} className="px-5">
+      <ArrowLeft size={19} /> Back
+    </Button>
   );
 }
 
@@ -295,6 +355,8 @@ function SummaryStep() {
       </p>
 
       <BottomAction>
+        <div className="grid grid-cols-[auto_1fr] gap-3">
+        <BackButton onClick={() => navigate(PATH[1])} label="Back to services" />
         <Button
           block
           onClick={() => {
@@ -304,6 +366,7 @@ function SummaryStep() {
         >
           <Send size={20} /> Send Referral
         </Button>
+        </div>
       </BottomAction>
     </>
   );

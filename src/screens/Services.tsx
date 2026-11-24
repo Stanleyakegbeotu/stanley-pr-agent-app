@@ -123,7 +123,7 @@ export function ServiceCatalogue() {
 
 /* ─────────────── Category home ─────────────── */
 
-function CategoryHome({ onOpen, onExample }: { onOpen: (k: string) => void; onExample: (q: string) => void }) {
+export function CategoryHome({ onOpen, onExample }: { onOpen: (k: string) => void; onExample: (q: string) => void }) {
   const featured = FEATURED.map((k) => CATEGORIES.find((c) => c.key === k)).filter(Boolean) as typeof CATEGORIES;
   const specialist = CATEGORIES.filter((c) => !FEATURED.includes(c.key));
   const [hero, ...rest] = featured;
@@ -214,7 +214,7 @@ function SpecialistTile({ keyName, onOpen }: { keyName: string; onOpen: () => vo
   );
 }
 
-function CategoryHeader({ keyName }: { keyName: string }) {
+export function CategoryHeader({ keyName }: { keyName: string }) {
   const c = categoryInfo(keyName);
   const v = categoryVisual(keyName);
   const from = categoryFrom(keyName);
