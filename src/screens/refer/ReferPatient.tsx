@@ -5,7 +5,7 @@
  * Everything typed is kept in the draft (app/store), so leaving the screen
  * or a refresh loses nothing. Errors are shown on the field itself.
  */
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, CalendarDays, Check, ChevronDown, Copy, Hash, Pencil, Phone, Send, UserRound, Wallet, X } from 'lucide-react';
 import { BRANCH, RULES } from '@/config/org';
 import { CATEGORIES, categoryInfo } from '@/data/services';
@@ -14,7 +14,8 @@ import { shareOnWhatsApp } from '@/domain/whatsapp';
 import { CategoryHeader, CategoryHome, priceText } from '@/screens/Services';
 import { displayPhone, formatPersonName, isValidNgPhone, naira } from '@/domain/format';
 import { billOf, commissionOf, servicesOf } from '@/domain/referrals';
-import { useApp } from '@/app/store';
+import { hasDraftContent, useApp } from '@/app/store';
+import { ResumedBanner } from '@/screens/refer/ResumeDraft';
 import { ReferralNoteEditor } from './ReferralNote';
 import { Button, Card, Chip, ChipRow, EmptyState, Field, ScreenHeader, SearchField, ServiceThumb, Stepper, Sticker, Subtitle, WhatsAppButton, FIELD_ON, inputClass } from '@/ui/kit';
 
@@ -22,6 +23,11 @@ const STEPS = ['Patient', 'Services', 'Summary'];
 const PATH = ['/refer', '/refer/services', '/refer/summary'] as const;
 
 export function ReferPatient({ step }: { step: 0 | 1 | 2 }) {
+  const { draft, setDraft } = useApp();
+  // Remember where the agent is, so a restart brings them back to the same step.
+  useEffect(() => {
+    if (hasDraftContent(draft) && draft.step !== step) setDraft((d) => ({ ...d, step }));
+  }, [step]); // eslint-disable-line react-hooks/exhaustive-deps
   if (step === 1) return <ServicesStep />;
   if (step === 2) return <SummaryStep />;
   return <PatientStep />;
@@ -80,6 +86,7 @@ function PatientStep() {
         <ReferIllustration />
       </div>
       <Stepper steps={STEPS} current={0} />
+      <ResumedBanner />
 
       <form ref={form} noValidate onSubmit={(e) => (e.preventDefault(), next())}>
         <Card className="p-5">
@@ -174,10 +181,12 @@ function ServicesStep() {
       <ScreenHeader title="Select Services" />
       <Subtitle>Choose the tests the doctor requested for {draft.patient.name}. Pick a category, or search or describe the test.</Subtitle>
       <Stepper steps={STEPS} current={1} />
+      <ResumedBanner />
 
       {/* Search and categories stay pinned while the list scrolls (as in Branch Inventory). */}
-      <div className="sticky top-[calc(4rem+var(--safe-top))] z-20 -mx-5 mb-4 bg-page px-5 pb-3 pt-1 md:-mx-8 md:px-8">
+      <div className="sticky top-[calc(4rem+var(--safe-top))] z-20 -mx-5 mb-4 bg-page px-5 pb-1 pt-2 md:-mx-8 md:px-8">
         <SearchField active value={q} onChange={(e) => (setQ(e.target.value), setShown(40))} placeholder="Search or describe a test…" aria-label="Search for a test, or describe what the doctor is checking for" />
+        <div className="h-4" aria-hidden="true" />
         <ChipRow>
           <Chip active={cat === 'All'} onClick={() => open('All')}>
             All categories
@@ -301,6 +310,7 @@ function SummaryStep() {
       <ScreenHeader title="Referral Summary" />
       <Subtitle>Review the referral details before sending.</Subtitle>
       <Stepper steps={STEPS} current={2} />
+      <ResumedBanner />
 
       <Card className="mb-3.5 p-5">
         <CardHead icon={<UserRound size={22} className="text-brand-600" fill="currentColor" strokeWidth={1.5} />} title="Patient Information" onEdit={() => navigate(PATH[0])} />

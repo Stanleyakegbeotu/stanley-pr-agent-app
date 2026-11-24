@@ -16,7 +16,7 @@ import { sampleReferrals } from '@/data/referrals';
 import { serviceById } from '@/data/services';
 import { nextReferralNumber, referralId, type Referral } from '@/domain/referrals';
 import { useRouter } from './router';
-import { DRAFT_VOICE, moveVoice } from '@/domain/referralVoice';
+import { DRAFT_VOICE, deleteVoice, moveVoice } from '@/domain/referralVoice';
 import type { Route, RoutePath } from './routes';
 
 export interface Draft {
@@ -25,7 +25,21 @@ export interface Draft {
   /** Optional note and voice note for the branch. */
   note?: string;
   voiceNote?: { duration: number };
+  /** Last step the agent was on (0 patient, 1 services, 2 summary) and when it was last saved. */
+  step?: 0 | 1 | 2;
+  savedAt?: string;
 }
+
+/** Anything typed or chosen yet? (An empty form isn't an unfinished referral.) */
+export const hasDraftContent = (d: Draft) => !!(d.patient.name.trim() || d.patient.phone.trim() || d.patient.age || d.patient.gender || d.serviceIds.length || d.note?.trim() || d.voiceNote);
+
+/**
+ * Unfinished referral when the app was opened (owner, 2026-11-24): the phone
+ * may have been switched off or the app closed mid-form. Everything typed is
+ * saved on every change, so on the next launch the agent can continue, start
+ * a new referral, or discard it.
+ */
+export let draftAtLaunch = false;
 export const EMPTY_DRAFT: Draft = { patient: { name: '', phone: '', gender: '', age: '' }, serviceIds: [] };
 
 interface Saved {
@@ -41,6 +55,7 @@ function load(): Saved {
     const draft = s.draft && typeof s.draft === 'object' ? { ...EMPTY_DRAFT, ...s.draft, patient: { ...EMPTY_DRAFT.patient, ...s.draft.patient } } : EMPTY_DRAFT;
     // Keep only services still in the catalogue (the catalogue comes from the dashboard and can change).
     draft.serviceIds = (draft.serviceIds ?? []).filter((id) => serviceById(id));
+    draftAtLaunch = hasDraftContent(draft);
     return { mine: Array.isArray(s.mine) ? s.mine : [], draft };
   } catch {
     return { mine: [], draft: EMPTY_DRAFT };
@@ -54,6 +69,8 @@ interface Store {
   referrals: Referral[];
   draft: Draft;
   setDraft: (d: Draft | ((d: Draft) => Draft)) => void;
+  /** Throw away the unfinished referral (and its voice note). */
+  clearDraft: () => void;
   /** Save the draft as a referral (on this phone) and clear the draft. */
   sendReferral: () => Referral;
   toast: string | null;
@@ -78,7 +95,11 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   const referrals = useMemo(() => [...saved.mine, ...samples].sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [saved.mine, samples]);
 
-  const setDraft = useCallback((d: Draft | ((d: Draft) => Draft)) => setSaved((s) => ({ ...s, draft: typeof d === 'function' ? d(s.draft) : d })), []);
+  const setDraft = useCallback((d: Draft | ((d: Draft) => Draft)) => setSaved((s) => ({ ...s, draft: { ...(typeof d === 'function' ? d(s.draft) : d), savedAt: new Date().toISOString() } })), []);
+  const clearDraft = useCallback(() => {
+    setSaved((s) => ({ ...s, draft: EMPTY_DRAFT }));
+    void deleteVoice(DRAFT_VOICE).catch(() => undefined);
+  }, []);
 
   const sendReferral = useCallback(() => {
     // Next number after everything already issued (samples included), so IDs never repeat.
@@ -94,7 +115,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     window.setTimeout(() => setToast((cur) => (cur === t ? null : cur)), 3500);
   }, []);
 
-  const value = useMemo<Store>(() => ({ route, navigate, back, referrals, draft: saved.draft, setDraft, sendReferral, toast, showToast }), [route, navigate, back, referrals, saved.draft, setDraft, sendReferral, toast, showToast]);
+  const value = useMemo<Store>(() => ({ route, navigate, back, referrals, draft: saved.draft, setDraft, clearDraft, sendReferral, toast, showToast }), [route, navigate, back, referrals, saved.draft, setDraft, clearDraft, sendReferral, toast, showToast]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 

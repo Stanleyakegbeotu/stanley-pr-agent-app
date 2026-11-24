@@ -17,6 +17,7 @@ import { Inbox } from '@/screens/chat/Inbox';
 import { useApp } from './store';
 import { Profile, ProfilePatients } from '@/screens/Profile';
 import { BankDetailsScreen } from '@/screens/BankDetails';
+import { ResumeDraftPrompt } from '@/screens/refer/ResumeDraft';
 import { ShellCtx } from './shell';
 
 
@@ -83,6 +84,7 @@ export function App() {
           </main>
         </div>
         {tabs && <BottomNav onMore={() => setMenu((m) => !m)} moreOpen={menu} />}
+        <ResumeDraftPrompt />
         {toast && (
           <div role="status" className="fixed left-1/2 z-60 flex w-[calc(100%-40px)] max-w-md -translate-x-1/2 items-center gap-3 rounded-2xl bg-ink px-4 py-3.5 text-[14px] font-medium text-white shadow-2xl" style={{ bottom: tabs || chat ? 'calc(96px + var(--safe-bottom))' : 'calc(24px + var(--safe-bottom))' }}>
             <CheckCircle2 size={19} className="shrink-0 text-[#4ade80]" />
