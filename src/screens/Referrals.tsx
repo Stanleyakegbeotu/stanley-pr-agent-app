@@ -8,6 +8,7 @@ import { useApp } from '@/app/store';
 import { Button, Card, Chip, ChipRow, EmptyState, FilterButton, InitialsAvatar, ScreenHeader, SearchField, StatusBadge, Subtitle, WhatsAppButton } from '@/ui/kit';
 import { shareOnWhatsApp } from '@/domain/whatsapp';
 import { ChangeNote } from '@/screens/home/HomeSections';
+import { ReferralNoteView } from '@/screens/refer/ReferralNote';
 import { priceText } from '@/screens/Services';
 
 type FilterKey = 'All' | ReferralStatus;
@@ -247,6 +248,8 @@ export function ReferralDetails({ id }: { id: string }) {
           </p>
         </div>
       </Card>
+
+      <ReferralNoteView id={r.id} note={r.note} voiceNote={r.voiceNote} />
 
       {r.status === 'Cancelled' && (
         <div className="mb-3.5 rounded-[20px] border border-[#f6c9c9] bg-[#fdecec] p-4">

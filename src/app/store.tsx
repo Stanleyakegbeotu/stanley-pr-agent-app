@@ -16,11 +16,15 @@ import { sampleReferrals } from '@/data/referrals';
 import { serviceById } from '@/data/services';
 import { nextReferralNumber, referralId, type Referral } from '@/domain/referrals';
 import { useRouter } from './router';
+import { DRAFT_VOICE, moveVoice } from '@/domain/referralVoice';
 import type { Route, RoutePath } from './routes';
 
 export interface Draft {
   patient: Referral['patient'];
   serviceIds: string[];
+  /** Optional note and voice note for the branch. */
+  note?: string;
+  voiceNote?: { duration: number };
 }
 export const EMPTY_DRAFT: Draft = { patient: { name: '', phone: '', gender: '', age: '' }, serviceIds: [] };
 
@@ -78,7 +82,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   const sendReferral = useCallback(() => {
     // Next number after everything already issued (samples included), so IDs never repeat.
-    const created: Referral = { id: referralId(nextReferralNumber([...saved.mine, ...samples])), patient: saved.draft.patient, serviceIds: saved.draft.serviceIds, status: 'Pending', createdAt: new Date().toISOString(), queued: true };
+    const created: Referral = { id: referralId(nextReferralNumber([...saved.mine, ...samples])), patient: saved.draft.patient, serviceIds: saved.draft.serviceIds, status: 'Pending', createdAt: new Date().toISOString(), queued: true, note: saved.draft.note?.trim() || undefined, voiceNote: saved.draft.voiceNote };
+    // The voice note recorded for this referral moves from the draft to the referral.
+    if (saved.draft.voiceNote) void moveVoice(DRAFT_VOICE, created.id).catch(() => undefined);
     setSaved((s) => ({ mine: [created, ...s.mine], draft: EMPTY_DRAFT }));
     return created;
   }, [samples, saved]);

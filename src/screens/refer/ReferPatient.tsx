@@ -15,6 +15,7 @@ import { priceText } from '@/screens/Services';
 import { displayPhone, formatPersonName, isValidNgPhone, naira } from '@/domain/format';
 import { billOf, commissionOf, servicesOf } from '@/domain/referrals';
 import { useApp } from '@/app/store';
+import { ReferralNoteEditor } from './ReferralNote';
 import { Button, Card, Chip, ChipRow, EmptyState, Field, ScreenHeader, SearchField, ServiceThumb, Stepper, Sticker, Subtitle, WhatsAppButton, FIELD_ON, inputClass } from '@/ui/kit';
 
 const STEPS = ['Patient', 'Services', 'Summary'];
@@ -278,6 +279,9 @@ function SummaryStep() {
           <span className="font-semibold text-ink">{Math.round(RULES.commissionRate * 100)}%</span>
         </div>
       </Card>
+
+      {/* Optional note and voice note for the branch (owner, 2026-11-24) */}
+      <ReferralNoteEditor />
 
       <div className="mb-3 flex items-center gap-3.5 rounded-[20px] border border-[#c8ecd7] bg-tint-green p-4">
         <Wallet size={30} className="shrink-0 text-good" strokeWidth={2} />

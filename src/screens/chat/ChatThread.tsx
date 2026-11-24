@@ -21,7 +21,7 @@ import { ConvAvatar, PersonAvatar } from '@/ui/avatars';
 import { useVoiceRecorder } from './useVoiceRecorder';
 
 /* ─────────────── helpers ─────────────── */
-function useBlobUrl(blob?: Blob) {
+export function useBlobUrl(blob?: Blob) {
   // Created inside the effect so a remount (React dev double-mount) never keeps a revoked link.
   const [url, setUrl] = useState<string>();
   useEffect(() => {
@@ -55,7 +55,8 @@ const kindOf = (f: File): MsgKind => (f.type.startsWith('image/') ? 'image' : f.
 function bars(seed: string, n = 34) {
   let h = 0;
   for (const c of seed) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-  return Array.from({ length: n }, (_, i) => 0.25 + (((h >> i % 24) ^ (i * 7919)) % 100) / 140);
+  // Unsigned maths so every bar has a positive height (signed shifts made some notes look flat).
+  return Array.from({ length: n }, (_, i) => 0.25 + ((((h >>> i % 24) ^ (i * 7919)) >>> 0) % 100) / 140);
 }
 
 const EMOJI: { label: string; list: string[] }[] = [
@@ -331,7 +332,7 @@ function Body({ m, onOpenImage }: { m: ChatMsg; onOpenImage: () => void }) {
 }
 
 /** Voice-note player: play/pause, waveform progress, time, speed. */
-function AudioNote({ url, seed, duration }: { url: string; seed: string; duration: number }) {
+export function AudioNote({ url, seed, duration }: { url: string; seed: string; duration: number }) {
   const audio = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [t, setT] = useState(0);

@@ -38,6 +38,10 @@ export interface Referral {
   cancelStage?: 'before-visit' | 'at-branch';
   /** Anything else the branch recorded about the cancellation. */
   cancelReason?: string;
+  /** Optional note from the agent to the branch (owner, 2026-11-24). */
+  note?: string;
+  /** A voice note is attached (the recording itself is in domain/referralVoice). */
+  voiceNote?: { duration: number };
 }
 
 /** What the agent sees for each status. */
