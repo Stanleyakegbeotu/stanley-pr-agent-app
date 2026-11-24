@@ -6,6 +6,7 @@ import { naira, shortDate } from '@/domain/format';
 import { PERIOD_LABEL, commissionOf, inPeriod, statsFor, type Period } from '@/domain/referrals';
 import { useApp } from '@/app/store';
 import { BankRequiredCard } from '@/screens/BankDetails';
+import { EarnedPatients } from '@/screens/EarnedPatients';
 import { Card, ProgressBar, ScreenHeader, Segmented, Sticker, Subtitle } from '@/ui/kit';
 
 export function Earnings() {
@@ -66,6 +67,9 @@ export function Earnings() {
         <Line label={paidLabel} value={naira(s.paid)} />
         <Line label="Outstanding" value={naira(s.outstanding)} />
       </Card>
+
+      {/* The patients behind the money (owner, 2026-11-24) */}
+      <EarnedPatients />
 
       <button type="button" onClick={() => navigate('/targets')} className="card press mb-5 flex w-full items-start gap-3.5 p-4 text-left">
         <Sticker name="target" size={46} className="mt-0.5" />
