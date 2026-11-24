@@ -9,10 +9,10 @@
  *    today with their status; "No patient referred today" when there are none.
  */
 import { useEffect, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
-import { ArrowDownRight, ArrowUpRight, Ban, CheckCircle2, ChevronRight, Plus, Send, X } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, Ban, CheckCircle2, ChevronRight, Clock3, Plus, Send, X } from 'lucide-react';
 import { useApp } from '@/app/store';
 import { naira } from '@/domain/format';
-import { STATUS_NOTE, cancelSummary, cancelTitle, commissionOf, serviceSummary, testChanges, type Referral } from '@/domain/referrals';
+import { STATUS_LABEL, STATUS_NOTE, cancelSummary, cancelTitle, commissionOf, serviceSummary, testChanges, type Referral } from '@/domain/referrals';
 import { Button, InitialsAvatar, SectionTitle, StatusBadge } from '@/ui/kit';
 
 const timeOf = (iso: string) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
@@ -203,34 +203,75 @@ export function TodayPatients() {
           </div>
         </div>
       ) : (
-        <ul className="card divide-y divide-line overflow-hidden">
+        /* One card per patient, laid out like the service cards in Branch Inventory (owner, 2026-11-24). */
+        <ul className="space-y-2.5">
           {today.map((r) => (
             <li key={r.id}>
-              <button type="button" onClick={() => navigate(`/referrals/${r.id}`)} className="press flex w-full items-start gap-3 px-4 py-3.5 text-left">
-                <InitialsAvatar name={r.patient.name} size={44} />
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-start justify-between gap-2">
-                    <span className="truncate text-[15.5px] font-bold text-ink">{r.patient.name}</span>
-                    <StatusBadge status={r.status} />
-                  </span>
-                  <span className="block truncate text-[12.5px] text-muted">
-                    {r.id}, {timeOf(r.createdAt)}, {serviceSummary(r)}
-                  </span>
-                  <span className={`mt-1 block text-[13px] font-medium ${r.status === 'Completed' ? 'text-good-ink' : r.status === 'Cancelled' ? 'text-[#d93036]' : 'text-orange'}`}>
-                    {r.status === 'Cancelled' ? cancelSummary(r) : STATUS_NOTE[r.status]}
-                  </span>
-                  <ChangeNote r={r} className="mt-1.5" />
-                  <span className="mt-1 flex items-center justify-between text-[13px]">
-                    <span className="text-muted">{r.status === 'Completed' ? 'Commission confirmed' : r.status === 'Cancelled' ? 'No commission' : 'Estimated commission'}</span>
-                    <span className={`font-bold ${r.status === 'Cancelled' ? 'text-faint line-through' : r.status === 'Completed' ? 'text-good' : 'text-orange'}`}>{naira(commissionOf(r))}</span>
-                  </span>
-                </span>
-                <ChevronRight size={17} className="mt-1 shrink-0 text-faint" />
-              </button>
+              <PatientCard r={r} onOpen={() => navigate(`/referrals/${r.id}`)} />
             </li>
           ))}
         </ul>
       )}
     </section>
   );
+}
+
+const STATUS_TAG: Record<Referral['status'], string> = { Pending: 'bg-[#fff1e0] text-[#c2410c]', Completed: 'bg-tint-green text-good-ink', Cancelled: 'bg-[#fdecec] text-[#b42318]' };
+
+/** Tile colours by status (the 64px square, like a service's picture). */
+const TILE: Record<Referral['status'], string> = {
+  Pending: 'from-[#fff3e2] to-[#ffe2bf] text-[#c2410c]',
+  Completed: 'from-[#e3f8ec] to-[#c9efd9] text-good-ink',
+  Cancelled: 'from-[#fdecec] to-[#f9d4d4] text-[#b42318]',
+};
+const initialsOf = (n: string) =>
+  n
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]!.toUpperCase())
+    .join('');
+
+function PatientCard({ r, onOpen }: { r: Referral; onOpen: () => void }) {
+  const c = testChanges(r);
+  const tests = r.billedServiceIds ?? r.serviceIds;
+  return (
+    <button type="button" onClick={onOpen} className="press flex w-full items-start gap-3.5 rounded-[20px] bg-white p-3 text-left shadow-[0_6px_20px_rgba(30,74,160,0.07)] ring-1 ring-line/70">
+      <span className={`relative grid h-[64px] w-[64px] shrink-0 place-items-center rounded-[16px] bg-linear-to-br text-[20px] font-bold ${TILE[r.status]}`}>
+        {initialsOf(r.patient.name)}
+        <span className="absolute -bottom-1 -right-1 grid h-6 w-6 place-items-center rounded-full bg-white shadow-sm">
+          {r.status === 'Completed' ? <CheckCircle2 size={15} className="text-good" /> : r.status === 'Cancelled' ? <Ban size={14} className="text-[#d93036]" /> : <Send size={13} className="text-orange" />}
+        </span>
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="flex items-start justify-between gap-2">
+          <span className="truncate text-[15px] font-semibold leading-snug text-ink">{r.patient.name}</span>
+          <span className={`shrink-0 whitespace-nowrap text-[15px] font-bold ${r.status === 'Cancelled' ? 'text-faint line-through' : r.status === 'Completed' ? 'text-good' : 'text-orange'}`}>{naira(commissionOf(r))}</span>
+        </span>
+        <span className="mt-0.5 line-clamp-1 text-[12.5px] text-muted">
+          {r.status === 'Cancelled' ? cancelSummary(r) : `${serviceSummary(r)}, ${STATUS_NOTE[r.status].toLowerCase()}`}
+        </span>
+        <span className="mt-2 flex flex-wrap gap-1.5">
+          <Tag tone={`font-semibold ${STATUS_TAG[r.status]}`}>{STATUS_LABEL[r.status]}</Tag>
+          <Tag tone="bg-[#f1f4f9] text-ink-2">
+            <Clock3 size={11} /> {timeOf(r.createdAt)}
+          </Tag>
+          <Tag tone="bg-brand-50 text-brand-700">
+            {tests.length} test{tests.length === 1 ? '' : 's'}
+          </Tag>
+          {c && c.removed.length > 0 && <Tag tone="bg-[#fdecec] text-[#b42318]">{c.removed.length} removed by patient</Tag>}
+          {c && c.added.length > 0 && <Tag tone="bg-[#e8f8ef] text-good-ink">{c.added.length} added</Tag>}
+          {c && (
+            <Tag tone={c.delta >= 0 ? 'bg-[#e8f8ef] text-good-ink' : 'bg-[#fdecec] text-[#b42318]'}>
+              {c.delta >= 0 ? <ArrowUpRight size={11} /> : <ArrowDownRight size={11} />} {naira(Math.abs(c.delta))}
+            </Tag>
+          )}
+        </span>
+      </span>
+    </button>
+  );
+}
+
+function Tag({ tone, children }: { tone: string; children: React.ReactNode }) {
+  return <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11.5px] font-medium ${tone}`}>{children}</span>;
 }

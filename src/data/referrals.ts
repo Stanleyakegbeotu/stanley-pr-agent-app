@@ -56,7 +56,8 @@ export function sampleReferrals(now = new Date()): Referral[] {
     // Spread the day's referrals over the morning, newest first, never in the future.
     d.setHours(Math.min(now.getHours(), 16), 0, 0, 0);
     d.setMinutes(Math.max(0, 50 - i * 7));
-    if (d > now) d.setTime(now.getTime() - (i + 1) * 9 * 60_000);
+    // Never in the future, and a "today" sample stays today (even just after midnight).
+    if (d > now) d.setTime(Math.max(now.getTime() - (i + 1) * 9 * 60_000, daysAgo === 0 ? new Date(now).setHours(0, 0, 0, 0) : -Infinity));
     const createdAt = d.toISOString();
     // Commission for completed referrals from earlier months was paid on the 1st of this month.
     const paidAt = status === 'Completed' && d < monthStart ? monthStart.toISOString() : undefined;

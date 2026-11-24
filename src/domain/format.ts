@@ -6,7 +6,7 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 /** "Nov 20, 2025" — the reference's date style. */
 export const shortDate = (iso: string) => {
   // A date on its own ("2026-11-01") is that calendar day here, not midnight UTC.
-  const d = new Date(/^d{4}-d{2}-d{2}$/.test(iso) ? `${iso}T12:00:00` : iso);
+  const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso}T12:00:00` : iso);
   return `${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
 };
 
