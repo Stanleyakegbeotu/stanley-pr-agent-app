@@ -1,11 +1,14 @@
 /**
- * Organisation settings for the PR agent app — the ONE place for company,
- * branch and agent facts and the business rules the app follows.
+ * Organisation settings for the Referrer Portal: the ONE place for company
+ * and branch facts.
  *
  * Company and branch come from the STANLEY desktop app (the same data the
- * dashboard uses): the agent is assigned to the real Abuja branch, BR001.
- * Details the dashboard has no record of yet stay "Not on record" — never
- * invented. The agent profile is a sample until sign-in is connected.
+ * dashboard uses): the real Abuja branch, BR001. Details the dashboard has no
+ * record of yet stay "Not on record", never invented.
+ *
+ * Compliance (2026-11-24): this app is an e-request and results portal for
+ * verified, licensed clinicians. It has NO referral payments of any kind
+ * (MDCN Code: no fee-splitting), so there are no commission rules here.
  */
 import CATALOGUE from '@/data/catalogue.generated.json';
 
@@ -17,7 +20,9 @@ export const COMPANY = {
   name: CATALOGUE.company.name,
   shortName: CATALOGUE.company.shortName,
   appName: 'STANLEY',
-  appTagline: 'PR AGENT PORTAL',
+  appTagline: 'REFERRER PORTAL',
+  /** Placeholders the company fills in (privacy notices, DPO). */
+  dpo: { name: 'Data Protection Officer (to be appointed)', email: 'dpo@silhouette.example', phone: 'Not on record yet', address: 'Not on record yet' },
 };
 
 const b = CATALOGUE.branch;
@@ -29,7 +34,7 @@ export const BRANCH = {
   city: b.city,
   /** "Silhouette, Abuja Branch" */
   label: `${CATALOGUE.company.shortName}, ${b.name} Branch`,
-  /** Prefix of referral IDs — the dashboard's Billing reads "ABJ-R" + 6 digits. */
+  /** Prefix of request IDs: the dashboard's Billing reads "ABJ-R" + 6 digits. */
   idCode: b.idCode,
   /** null = the dashboard has no record of it yet. */
   address: known(b.address),
@@ -37,28 +42,5 @@ export const BRANCH = {
   manager: known(b.manager),
 };
 
-export const AGENT = {
-  id: 'PR-00842',
-  title: 'Dr.',
-  firstName: 'Stanley',
-  lastName: 'Okafor',
-  role: 'PR Agent Partner',
-  phone: '+234 803 456 7890',
-  email: 'stanley.okafor@example.com',
-  memberSince: '2025-01-12',
-};
-
-export const agentName = (a = AGENT) => `${a.title} ${a.firstName} ${a.lastName}`;
-export const agentShortName = (a = AGENT) => `${a.title} ${a.firstName}`;
-
-export const RULES = {
-  /**
-   * Company commission rate (owner rule): commission = the referred patient's
-   * FULL bill × rate. ₦103,000 × 15% = ₦15,450.
-   */
-  commissionRate: 0.15,
-  /** Monthly goals. */
-  monthlyReferralTarget: 20,
-  monthlyCompletedTarget: 15,
-  completedBonus: 10_000,
-};
+/** What users see for their role. */
+export const ROLE_LABEL = 'Referring clinician';

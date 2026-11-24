@@ -1,5 +1,5 @@
 /** Menu groups (drawer / tablet rail). */
-import { Bell, BookOpen, Building2, CircleHelp, ClipboardList, Gift, Home, LayoutGrid, MessageCircle, Plus, Sparkles, Target, Wallet, type LucideIcon } from 'lucide-react';
+import { Bell, BookOpen, Building2, CircleHelp, ClipboardList, FileText, HeartPulse, Home, LayoutGrid, MessageCircle, Plus, ShieldCheck, type LucideIcon } from 'lucide-react';
 import type { RoutePath } from '@/app/routes';
 
 export interface NavItem {
@@ -14,19 +14,11 @@ export const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     label: 'WORKSPACE',
     items: [
       { label: 'Dashboard', to: '/', icon: Home },
-      { label: 'My Referrals', to: '/referrals', icon: ClipboardList },
-      { label: 'Refer a Patient', to: '/refer', icon: Plus },
-      { label: 'Service Catalogue', to: '/services', icon: LayoutGrid },
-      { label: 'AI Test Assistant', to: '/assistant', icon: Sparkles },
+      { label: 'My Patients', to: '/referrals', icon: ClipboardList },
+      { label: 'New Request', to: '/refer', icon: Plus },
+      { label: 'Results', to: '/results', icon: FileText },
+      { label: 'Test Catalogue', to: '/services', icon: LayoutGrid },
       { label: 'Branch Information', to: '/branch', icon: Building2 },
-    ],
-  },
-  {
-    label: 'FINANCE & GROWTH',
-    items: [
-      { label: 'My Earnings', to: '/earnings', icon: Wallet },
-      { label: 'Targets & Incentives', to: '/targets', icon: Target },
-      { label: 'Campaigns', to: '/campaigns', icon: Gift },
     ],
   },
   {
@@ -34,6 +26,7 @@ export const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     items: [
       { label: 'Inbox', to: '/messages', icon: MessageCircle },
       { label: 'Announcements', to: '/announcements', icon: Bell },
+      { label: 'Health Campaigns', to: '/campaigns', icon: HeartPulse },
     ],
   },
   {
@@ -41,6 +34,7 @@ export const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     items: [
       { label: 'Help Centre', to: '/help', icon: CircleHelp },
       { label: 'Training & Resources', to: '/training', icon: BookOpen },
+      { label: 'Privacy & Terms', to: '/privacy', icon: ShieldCheck },
     ],
   },
 ];

@@ -1,7 +1,8 @@
 /**
  * Note for the branch (owner, 2026-11-24): while referring, the agent can
  * OPTIONALLY type a short note and/or record a voice note, so the front desk
- * or manager knows the situation (an emergency, the patient is on the way...).
+ * or manager knows the situation (the patient is on the way, needs help...).
+ * Compliance (2026-11-24): no "Emergency" quick note: emergencies go to emergency care first.
  * Both are attached to the referral and shown on its details.
  */
 import { useEffect, useState } from 'react';
@@ -14,8 +15,8 @@ import { useVoiceRecorder } from '@/screens/chat/useVoiceRecorder';
 import { Card, inputClass } from '@/ui/kit';
 
 const MAX = 300;
-const QUICK = ['Emergency, please attend to the patient quickly.', 'The patient is on the way now.', 'The patient is coming tomorrow.', 'Elderly patient, may need help moving around.', 'Please call me when the patient arrives.'];
-const QUICK_LABEL = ['🚨 Emergency', '🚗 On the way now', '📅 Coming tomorrow', '🧓 Elderly patient', '📞 Call me on arrival'];
+const QUICK = ['The patient is on the way now.', 'The patient is coming tomorrow.', 'Elderly patient, may need help moving around.', 'Please call me when the patient arrives.'];
+const QUICK_LABEL = ['🚗 On the way now', '📅 Coming tomorrow', '🧓 Elderly patient', '📞 Call me on arrival'];
 
 /** Summary step: type a note, tap a quick phrase, or record a voice note. */
 export function ReferralNoteEditor() {
@@ -54,7 +55,7 @@ export function ReferralNoteEditor() {
         <StickyNote size={21} className="text-brand-600" /> Note for the branch
         <span className="text-[14px] font-normal text-muted">(optional)</span>
       </h2>
-      <p className="mb-3 mt-1 text-[13.5px] leading-snug text-muted">Tell the front desk or manager anything they should know, like an emergency or that the patient is on the way.</p>
+      <p className="mb-3 mt-1 text-[13.5px] leading-snug text-muted">Tell the front desk or manager anything they should know, like when the patient is coming or if they need help.</p>
 
       <div className="mb-2.5 flex flex-wrap gap-2">
         {QUICK.map((q, i) => (

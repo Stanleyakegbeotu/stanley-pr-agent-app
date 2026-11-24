@@ -1,74 +1,59 @@
 /**
- * The agent's own editable details (owner, 2026-11-24): profile photo, phone
- * number, email, NAME (title, first, last) and BANK DETAILS (required:
- * commission can't be paid without them). Partner ID and branch are set by the branch.
- * Saved on this phone; sent to the desktop app once the cloud connection is on.
+ * The clinician's own editable details: photo, title, name, phone and email.
+ * Profession, regulator, licence number and workplace are read-only in the
+ * app (the company changes them after checking the licence).
+ * Compliance (2026-11-24): no bank details are collected or stored.
  */
 import { useSyncExternalStore } from 'react';
 import { PHOTOS } from '@/assets';
-import { AGENT } from '@/config/org';
+import { getAccount, updateClinician, useAccount } from './account';
 
-/** Where commission is paid (same fields as the desktop app's agent record). */
-export interface BankDetails {
-  bankName: string;
-  accountNumber: string;
-  accountName: string;
-  at: string;
-  /** When the agent confirmed the purpose: used only to pay their monthly PR commission. */
-  agreedAt?: string;
-}
+const PHOTO_KEY = 'stanley.pr.photo.v1';
+const listeners = new Set<() => void>();
+let photo: string | null | undefined;
+const readPhoto = () => {
+  if (photo === undefined) photo = localStorage.getItem(PHOTO_KEY);
+  return photo;
+};
 
 export interface ProfileEdits {
   title?: string;
   firstName?: string;
   lastName?: string;
+  /** Square JPEG data URL, or undefined to remove. */
   photo?: string;
-  bank?: BankDetails;
   phone?: string;
   email?: string;
-  updatedAt?: string;
-}
-
-const KEY = 'stanley.pr.profile.v1';
-const listeners = new Set<() => void>();
-let cache: ProfileEdits | null = null;
-
-function read(): ProfileEdits {
-  if (cache) return cache;
-  try {
-    cache = JSON.parse(localStorage.getItem(KEY) ?? '{}') as ProfileEdits;
-  } catch {
-    cache = {};
-  }
-  return cache;
 }
 
 export function saveProfile(patch: ProfileEdits) {
-  const next = { ...read(), ...patch, updatedAt: new Date().toISOString() };
-  for (const k of Object.keys(next) as (keyof ProfileEdits)[]) if (next[k] === undefined) delete next[k];
-  localStorage.setItem(KEY, JSON.stringify(next)); // throws if the phone's storage is full
-  cache = next;
-  listeners.forEach((l) => l());
+  if ('photo' in patch) {
+    photo = patch.photo ?? null;
+    if (patch.photo) localStorage.setItem(PHOTO_KEY, patch.photo);
+    else localStorage.removeItem(PHOTO_KEY);
+    listeners.forEach((l) => l());
+  }
+  const { photo: _p, ...rest } = patch;
+  if (Object.keys(rest).length) updateClinician(rest);
 }
 
-const subscribe = (l: () => void) => {
-  listeners.add(l);
-  return () => listeners.delete(l);
+const joinName = (n: { title: string; firstName: string; lastName: string }) => [n.title, n.firstName, n.lastName].filter(Boolean).join(' ');
+/** "Dr. Stanley Okafor", outside React. */
+export const displayName = () => {
+  const c = getAccount()?.clinician;
+  return c ? joinName(c) : '';
 };
 
-/** Title (may be empty), first and last name: the agent's edits over the branch record. */
-function nameParts(e: ProfileEdits) {
-  return { title: e.title ?? AGENT.title, firstName: e.firstName ?? AGENT.firstName, lastName: e.lastName ?? AGENT.lastName };
-}
-const joinName = (n: { title: string; firstName: string; lastName: string }) => [n.title, n.firstName, n.lastName].filter(Boolean).join(' ');
-/** The agent's display name ("Dr. Stanley Okafor"), outside React (e.g. WhatsApp messages). */
-export const displayName = () => joinName(nameParts(read()));
-
-/** Current details: the agent's edits over the branch record. */
 export function useProfile() {
-  const e = useSyncExternalStore(subscribe, read, read);
-  const n = nameParts(e);
-  return { ...n, name: joinName(n), photo: e.photo ?? PHOTOS.agentAvatar, customPhoto: !!e.photo, phone: e.phone ?? AGENT.phone, email: e.email ?? AGENT.email, bank: e.bank, updatedAt: e.updatedAt };
+  const { account } = useAccount();
+  const p = useSyncExternalStore(
+    (l) => (listeners.add(l), () => listeners.delete(l)),
+    readPhoto,
+    readPhoto,
+  );
+  const c = account?.clinician;
+  const n = { title: c?.title ?? '', firstName: c?.firstName ?? '', lastName: c?.lastName ?? '' };
+  return { ...n, name: joinName(n), photo: p ?? PHOTOS.agentAvatar, customPhoto: !!p, phone: c?.phone ?? '', email: c?.email ?? '', clinician: c };
 }
 
 /* ─────────────── checks ─────────────── */
@@ -86,7 +71,7 @@ export function tidyName(v: string): string | null {
   if (t.length < 2 || !/^[\p{L}][\p{L}' .-]*$/u.test(t)) return null;
   return t.replace(/(^|[\s'-])(\p{L})/gu, (_, a: string, b: string) => a + b.toUpperCase());
 }
-export const TITLES = ['Dr.', 'Mr.', 'Mrs.', 'Ms.', 'Miss', 'Pharm.', 'Nurse', 'Prof.', ''];
+export const TITLES = ['Dr.', 'Prof.', 'Pharm.', 'Nurse', 'Mr.', 'Mrs.', 'Ms.', 'Miss', ''];
 export const validEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v.trim());
 
 /** Square, small JPEG of a chosen photo (keeps the phone's storage light). */

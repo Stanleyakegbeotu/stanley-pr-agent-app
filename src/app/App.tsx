@@ -1,6 +1,8 @@
 /**
  * App frame: menu (drawer / tablet rail), the one scrolling content area,
- * bottom tabs, toasts — and which screen shows for the current path.
+ * bottom tabs, toasts, and which screen shows for the current path.
+ * Patient screens (requests, patients, results) are wrapped in PatientsOnly:
+ * a Pending or Suspended account sees "being verified" instead.
  */
 import { useEffect, useRef, useState } from 'react';
 import { CheckCircle2 } from 'lucide-react';
@@ -10,13 +12,14 @@ import { Dashboard } from '@/screens/Dashboard';
 import { ServiceCatalogue, ServiceDetails } from '@/screens/Services';
 import { ReferPatient, ReferralSent } from '@/screens/refer/ReferPatient';
 import { MyReferrals, ReferralDetails } from '@/screens/Referrals';
-import { Earnings, Targets } from '@/screens/Earnings';
-import { AiAssistant, Announcements, Article, BranchInfo, Campaigns, HelpCentre, Notifications, Training } from '@/screens/More';
+import { Announcements, Article, BranchInfo, Campaigns, HelpCentre, Notifications, Training } from '@/screens/More';
+import { ResultView, ResultsList } from '@/screens/Results';
+import { LegalPage, PrivacyHub } from '@/screens/Legal';
+import { PatientsOnly } from './Gate';
 import { ChatThread } from '@/screens/chat/ChatThread';
 import { Inbox } from '@/screens/chat/Inbox';
 import { useApp } from './store';
-import { Profile, ProfilePatients } from '@/screens/Profile';
-import { BankDetailsScreen } from '@/screens/BankDetails';
+import { Profile } from '@/screens/Profile';
 import { ResumeDraftPrompt } from '@/screens/refer/ResumeDraft';
 import { ShellCtx } from './shell';
 
@@ -30,13 +33,15 @@ function Screen() {
     case 'services':
       return b ? <ServiceDetails id={b} /> : <ServiceCatalogue />;
     case 'refer':
-      return b === 'done' && c ? <ReferralSent id={c} /> : <ReferPatient step={b === 'services' ? 1 : b === 'summary' ? 2 : 0} />;
+      return <PatientsOnly>{b === 'done' && c ? <ReferralSent id={c} /> : <ReferPatient step={b === 'services' ? 1 : b === 'clinical' ? 2 : b === 'summary' ? 3 : 0} />}</PatientsOnly>;
     case 'referrals':
-      return b ? <ReferralDetails id={b} /> : <MyReferrals />;
-    case 'earnings':
-      return <Earnings />;
-    case 'targets':
-      return <Targets />;
+      return <PatientsOnly>{b ? <ReferralDetails id={b} /> : <MyReferrals />}</PatientsOnly>;
+    case 'results':
+      return <PatientsOnly>{b ? <ResultView id={b} /> : <ResultsList />}</PatientsOnly>;
+    case 'privacy':
+      return <PrivacyHub />;
+    case 'legal':
+      return <LegalPage kind={b ?? 'privacy'} />;
     case 'campaigns':
       return <Campaigns />;
     case 'branch':
@@ -52,9 +57,7 @@ function Screen() {
     case 'training':
       return b ? <Article slug={b} /> : <Training />;
     case 'profile':
-      return b === 'patients' ? <ProfilePatients /> : b === 'bank' ? <BankDetailsScreen /> : <Profile />;
-    case 'assistant':
-      return <AiAssistant />;
+      return <Profile />;
     default:
       return <Dashboard />;
   }
@@ -64,7 +67,7 @@ export function App() {
   const { route, toast } = useApp();
   const [menu, setMenu] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
-  // The referral flow and chat have their own bottom actions — no tab bar there.
+  // The request flow and chat have their own bottom actions, so no tab bar there.
   const chat = route.parts[0] === 'messages' && !!route.parts[1];
   const tabs = !(route.parts[0] === 'refer' || chat);
 

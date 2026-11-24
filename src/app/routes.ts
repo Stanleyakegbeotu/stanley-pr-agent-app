@@ -10,12 +10,15 @@ export type RoutePath =
   | `/services/${string}`
   | '/refer'
   | '/refer/services'
+  | '/refer/clinical'
   | '/refer/summary'
   | `/refer/done/${string}`
   | '/referrals'
   | `/referrals/${string}`
-  | '/earnings'
-  | '/targets'
+  | '/results'
+  | `/results/${string}`
+  | '/privacy'
+  | `/legal/${string}`
   | '/campaigns'
   | '/branch'
   | '/messages'
@@ -26,8 +29,7 @@ export type RoutePath =
   | '/training'
   | `/training/${string}`
   | '/profile'
-  | `/profile/${string}`
-  | '/assistant';
+  | `/profile/${string}`;
 
 export interface Route {
   path: string;
@@ -37,13 +39,13 @@ export interface Route {
 }
 
 /** Bottom-tab a route belongs to (for the highlighted tab). */
-export type Tab = 'home' | 'referrals' | 'refer' | 'earnings' | 'more';
+export type Tab = 'home' | 'referrals' | 'refer' | 'results' | 'more';
 export function tabOf(r: Route): Tab | null {
   const p = r.parts[0] ?? '';
   if (p === '') return 'home';
   if (p === 'referrals') return 'referrals';
   if (p === 'refer') return 'refer';
-  if (p === 'earnings') return 'earnings';
+  if (p === 'results') return 'results';
   return null;
 }
 
@@ -56,7 +58,10 @@ export function parentOf(r: Route): RoutePath {
   if (a === 'messages' && b) return '/messages';
   if (a === 'training' && b) return '/training';
   if (a === 'profile' && b) return '/profile';
-  if (a === 'refer' && b === 'summary') return '/refer/services';
+  if (a === 'results' && b) return '/results';
+  if (a === 'legal') return '/privacy';
+  if (a === 'refer' && b === 'clinical') return '/refer/services';
+  if (a === 'refer' && b === 'summary') return '/refer/clinical';
   if (a === 'refer' && b === 'services') return '/refer';
   return '/';
 }

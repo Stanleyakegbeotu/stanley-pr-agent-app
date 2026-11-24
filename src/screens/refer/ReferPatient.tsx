@@ -1,35 +1,41 @@
 /**
- * Refer a Patient (owner's reference): 1 Patient → 2 Services → 3 Summary,
- * then "Referral sent" with the referral ID the patient shows at the branch.
+ * New request (compliance rebuild, 2026-11-24): an e-request that replaces
+ * the paper request form. 1 Patient → 2 Tests → 3 Clinical details → 4 Review
+ * & send, then the request ID. A clinical reason is required for X-ray / CT;
+ * the clinician confirms the patient has been told; the patient sees the tests
+ * and the quoted price, and Silhouette (not the clinician's WhatsApp) sends
+ * the patient their message. No payments of any kind to the clinician.
  *
  * Everything typed is kept in the draft (app/store), so leaving the screen
  * or a refresh loses nothing. Errors are shown on the field itself.
  */
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, CalendarDays, Check, ChevronDown, Copy, Hash, Pencil, Phone, Send, UserRound, Wallet, X } from 'lucide-react';
-import { BRANCH, RULES } from '@/config/org';
+import { ArrowLeft, ArrowRight, CalendarDays, Check, ChevronDown, Copy, Hash, Pencil, Phone, Send, Siren, Stethoscope, UserRound, X } from 'lucide-react';
+import { BRANCH, COMPANY } from '@/config/org';
+import { isActive, useAccount } from '@/domain/account';
+import { PatientMessageButton } from './PatientMessage';
 import { CATEGORIES, categoryInfo } from '@/data/services';
 import { smartSearch } from '@/domain/testSearch';
-import { shareOnWhatsApp } from '@/domain/whatsapp';
 import { CategoryHeader, CategoryHome, priceText } from '@/screens/Services';
 import { displayPhone, formatPersonName, isValidNgPhone, naira } from '@/domain/format';
-import { billOf, commissionOf, servicesOf } from '@/domain/referrals';
+import { needsIndication, quoteOf, servicesOf } from '@/domain/referrals';
 import { hasDraftContent, useApp } from '@/app/store';
 import { ResumedBanner } from '@/screens/refer/ResumeDraft';
 import { ReferralNoteEditor } from './ReferralNote';
-import { Button, Card, Chip, ChipRow, EmptyState, Field, ScreenHeader, SearchField, ServiceThumb, Stepper, Sticker, Subtitle, WhatsAppButton, FIELD_ON, inputClass } from '@/ui/kit';
+import { Button, Card, Chip, ChipRow, EmptyState, Field, ScreenHeader, SearchField, ServiceThumb, Stepper, Sticker, Subtitle, FIELD_ON, inputClass } from '@/ui/kit';
 
-const STEPS = ['Patient', 'Services', 'Summary'];
-const PATH = ['/refer', '/refer/services', '/refer/summary'] as const;
+const STEPS = ['Patient', 'Tests', 'Clinical', 'Review'];
+const PATH = ['/refer', '/refer/services', '/refer/clinical', '/refer/summary'] as const;
 
-export function ReferPatient({ step }: { step: 0 | 1 | 2 }) {
+export function ReferPatient({ step }: { step: 0 | 1 | 2 | 3 }) {
   const { draft, setDraft } = useApp();
   // Remember where the agent is, so a restart brings them back to the same step.
   useEffect(() => {
     if (hasDraftContent(draft) && draft.step !== step) setDraft((d) => ({ ...d, step }));
   }, [step]); // eslint-disable-line react-hooks/exhaustive-deps
   if (step === 1) return <ServicesStep />;
-  if (step === 2) return <SummaryStep />;
+  if (step === 2) return <ClinicalStep />;
+  if (step === 3) return <SummaryStep />;
   return <PatientStep />;
 }
 
@@ -80,8 +86,8 @@ function PatientStep() {
       <ScreenHeader title="" />
       <div className="-mt-2 mb-6 flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-[27px] font-bold tracking-[-0.02em] text-ink">Refer a Patient</h1>
-          <p className="mt-1 text-[15px] text-muted">Create a new referral for a patient.</p>
+          <h1 className="text-[27px] font-bold tracking-[-0.02em] text-ink">New Request</h1>
+          <p className="mt-1 text-[15px] text-muted">Request tests for your patient at {BRANCH.label}.</p>
         </div>
         <ReferIllustration />
       </div>
@@ -120,7 +126,7 @@ function PatientStep() {
         </Card>
         <BottomAction>
           <Button type="submit" block>
-            Next: Select Services <ArrowRight size={20} />
+            Next: Choose Tests <ArrowRight size={20} />
           </Button>
         </BottomAction>
       </form>
@@ -159,7 +165,7 @@ function ServicesStep() {
   const result = smartSearch(q, cat);
   const list = result.hits.map((h) => h.service);
   const chosen = draft.serviceIds;
-  const total = billOf(draft);
+  const total = quoteOf(draft);
   const toggle = (id: string) => {
     setDraft((d) => ({ ...d, serviceIds: d.serviceIds.includes(id) ? d.serviceIds.filter((x) => x !== id) : [...d.serviceIds, id] }));
     setError('');
@@ -178,14 +184,14 @@ function ServicesStep() {
 
   return (
     <>
-      <ScreenHeader title="Select Services" />
-      <Subtitle>Choose the tests the doctor requested for {draft.patient.name}. Pick a category, or search or describe the test.</Subtitle>
+      <ScreenHeader title="Choose Tests" />
+      <Subtitle>Choose the tests for {draft.patient.name}. Pick a category, or search by name. Search help can suggest tests from a description, but you choose the tests.</Subtitle>
       <Stepper steps={STEPS} current={1} />
       <ResumedBanner />
 
       {/* Search and categories stay pinned while the list scrolls (as in Branch Inventory). */}
       <div className="sticky top-[calc(4rem+var(--safe-top))] z-20 -mx-5 mb-4 bg-page px-5 pb-1 pt-2 md:-mx-8 md:px-8">
-        <SearchField active value={q} onChange={(e) => (setQ(e.target.value), setShown(40))} placeholder="Search or describe a test…" aria-label="Search for a test, or describe what the doctor is checking for" />
+        <SearchField active value={q} onChange={(e) => (setQ(e.target.value), setShown(40))} placeholder="Search help: name or describe a test…" aria-label="Search help: type a test name or a description. You choose the tests." />
         <div className="h-4" aria-hidden="true" />
         <ChipRow>
           <Chip active={cat === 'All'} onClick={() => open('All')}>
@@ -276,8 +282,8 @@ function ServicesStep() {
         </div>
         <div className="grid grid-cols-[auto_1fr] gap-3">
           <BackButton onClick={() => navigate(PATH[0])} label="Back to patient details" />
-          <Button block onClick={() => (chosen.length ? navigate(PATH[2]) : setError('Select at least one service to continue.'))}>
-            Next: Summary <ArrowRight size={20} />
+          <Button block onClick={() => (chosen.length ? navigate(PATH[2]) : setError('Choose at least one test to continue.'))}>
+            Next: Clinical details <ArrowRight size={20} />
           </Button>
         </div>
       </BottomAction>
@@ -294,26 +300,108 @@ function BackButton({ onClick, label }: { onClick: () => void; label: string }) 
   );
 }
 
-/* ─────────────── 3 · Summary ─────────────── */
+/* ─────────────── 3 · Clinical details ─────────────── */
 
-function SummaryStep() {
-  const { draft, navigate, sendReferral } = useApp();
-  const services = servicesOf(draft);
+function ClinicalStep() {
+  const { draft, setDraft, navigate } = useApp();
+  const { account } = useAccount();
+  const [error, setError] = useState('');
   if (!draft.patient.name) return <PatientStep />;
-  if (!services.length) return <ServicesStep />;
-  const bill = billOf(draft);
-  const commission = commissionOf(draft);
-  const p = draft.patient;
-
+  if (!draft.serviceIds.length) return <ServicesStep />;
+  const c = account?.clinician;
+  const required = needsIndication(draft.serviceIds);
+  const next = () => {
+    if (required && (draft.indication?.trim().length ?? 0) < 10) return setError('Give the clinical reason for the X-ray / CT (at least a short sentence). Imaging with radiation must be justified.');
+    navigate(PATH[3]);
+  };
   return (
     <>
-      <ScreenHeader title="Referral Summary" />
-      <Subtitle>Review the referral details before sending.</Subtitle>
+      <ScreenHeader title="Clinical Details" />
+      <Subtitle>Tell the branch why these tests are needed and how soon.</Subtitle>
       <Stepper steps={STEPS} current={2} />
       <ResumedBanner />
 
+      <div className="mb-4 flex items-start gap-3 rounded-2xl border border-[#f6c9c9] bg-[#fdecec] p-3.5 text-[13.5px] leading-snug text-[#7a271a]">
+        <Siren size={18} className="mt-0.5 shrink-0 text-[#d93036]" /> For a medical emergency, send the patient to emergency care first.
+      </div>
+
       <Card className="mb-3.5 p-5">
-        <CardHead icon={<UserRound size={22} className="text-brand-600" fill="currentColor" strokeWidth={1.5} />} title="Patient Information" onEdit={() => navigate(PATH[0])} />
+        <p className="text-[12.5px] font-semibold uppercase tracking-wide text-muted">Requesting clinician</p>
+        <p className="mt-1 text-[16px] font-bold text-ink">
+          {c?.title} {c?.firstName} {c?.lastName}
+        </p>
+        <p className="text-[13.5px] text-ink-2">
+          {c?.profession}, {c?.regulator} {c?.licence}
+        </p>
+        <p className="text-[13px] text-muted">{c?.facility}</p>
+      </Card>
+
+      <Card className="mb-3.5 p-5">
+        <Field label="Urgency" id="cl-urg">
+          <div className="grid grid-cols-2 gap-3" role="radiogroup" aria-label="Urgency">
+            {(['Routine', 'Urgent'] as const).map((u) => (
+              <button key={u} type="button" role="radio" aria-checked={draft.urgency === u} onClick={() => setDraft((d) => ({ ...d, urgency: u }))} className={`press flex min-h-13 items-center gap-3 rounded-2xl border-[1.5px] px-4 text-[15px] ${FIELD_ON} ${draft.urgency === u ? (u === 'Urgent' ? 'bg-[#fdecec] font-semibold text-[#b42318]' : 'bg-brand-50 font-semibold text-ink') : 'bg-white text-ink-2'}`}>
+                <span className={`grid h-5.5 w-5.5 place-items-center rounded-full border-2 ${draft.urgency === u ? 'border-brand-600' : 'border-[#b6c2d4]'}`}>{draft.urgency === u && <span className="h-2.5 w-2.5 rounded-full bg-brand-600" />}</span>
+                {u}
+              </button>
+            ))}
+          </div>
+        </Field>
+        <Field label="Clinical indication / reason for tests" required={required} optional={!required} error={error || undefined} id="cl-ind">
+          <textarea
+            id="cl-ind"
+            rows={4}
+            value={draft.indication ?? ''}
+            onChange={(e) => (setDraft((d) => ({ ...d, indication: e.target.value.slice(0, 500) })), setError(''))}
+            placeholder={required ? 'Required for X-ray and CT: symptoms, findings, what you want to rule out...' : 'Symptoms, findings, what you want to rule out...'}
+            className={`${inputClass(error || undefined)} resize-none py-3 leading-snug`}
+          />
+        </Field>
+        {required && <p className="-mt-2 text-[12.5px] leading-snug text-muted">Imaging that uses radiation (X-ray, CT, mammography, fluoroscopy) must be clinically justified (NNRA).</p>}
+      </Card>
+
+      {/* Optional note and voice note for the branch */}
+      <ReferralNoteEditor />
+
+      <BottomAction>
+        <div className="grid grid-cols-[auto_1fr] gap-3">
+          <BackButton onClick={() => navigate(PATH[1])} label="Back to tests" />
+          <Button block onClick={next}>
+            Next: Review <ArrowRight size={20} />
+          </Button>
+        </div>
+      </BottomAction>
+    </>
+  );
+}
+
+/* ─────────────── 4 · Review & send ─────────────── */
+
+function SummaryStep() {
+  const { draft, setDraft, navigate, sendReferral } = useApp();
+  const { account } = useAccount();
+  const [error, setError] = useState('');
+  const services = servicesOf(draft);
+  if (!draft.patient.name) return <PatientStep />;
+  if (!services.length) return <ServicesStep />;
+  if (needsIndication(draft.serviceIds) && (draft.indication?.trim().length ?? 0) < 10) return <ClinicalStep />;
+  const p = draft.patient;
+  const send = () => {
+    if (!isActive(account)) return setError('Your account must be verified before you can send requests.');
+    if (!draft.patientInformed) return setError('Confirm that you have told the patient (the box above).');
+    const r = sendReferral();
+    navigate(`/refer/done/${r.id}`, { replace: true });
+  };
+
+  return (
+    <>
+      <ScreenHeader title="Review & Send" />
+      <Subtitle>Check the request before sending it to {BRANCH.label}.</Subtitle>
+      <Stepper steps={STEPS} current={3} />
+      <ResumedBanner />
+
+      <Card className="mb-3.5 p-5">
+        <CardHead icon={<UserRound size={22} className="text-brand-600" fill="currentColor" strokeWidth={1.5} />} title="Patient" onEdit={() => navigate(PATH[0])} />
         <p className="text-[17px] font-semibold text-ink">{p.name}</p>
         <p className="mt-1.5 flex items-center gap-2.5 text-[15px] text-ink-2">
           <Phone size={17} className="text-muted" /> {displayPhone(p.phone)}
@@ -326,7 +414,7 @@ function SummaryStep() {
       </Card>
 
       <Card className="mb-3.5 p-5">
-        <CardHead icon={<span className="grid h-6 w-6 place-items-center rounded-md bg-brand-600 text-[11px] font-bold text-white">Rx</span>} title={`Selected Services (${services.length})`} onEdit={() => navigate(PATH[1])} />
+        <CardHead icon={<span className="grid h-6 w-6 place-items-center rounded-md bg-brand-600 text-[11px] font-bold text-white">Rx</span>} title={`Tests (${services.length})`} onEdit={() => navigate(PATH[1])} />
         <ul className="space-y-2.5">
           {services.map((s) => (
             <li key={s.id} className="flex items-center justify-between gap-3 text-[15.5px]">
@@ -337,45 +425,39 @@ function SummaryStep() {
             </li>
           ))}
         </ul>
+        <div className="mt-3.5 flex items-center justify-between border-t border-line pt-3.5 text-[16px]">
+          <span className="text-ink">Quoted total for the patient</span>
+          <span className="font-bold text-ink">{naira(quoteOf(draft))}</span>
+        </div>
+        <p className="mt-1 text-[12.5px] text-muted">The patient sees these prices. The final price is confirmed at the branch.</p>
       </Card>
 
-      <Card className="mb-3.5 divide-y divide-line">
-        <div className="flex items-center justify-between p-4 text-[16px]">
-          <span className="text-ink">Estimated Patient Cost</span>
-          <span className="font-bold text-ink">{naira(bill)}</span>
-        </div>
-        <div className="flex items-center justify-between p-4 text-[16px]">
-          <span className="text-ink">Commission Rate</span>
-          <span className="font-semibold text-ink">{Math.round(RULES.commissionRate * 100)}%</span>
-        </div>
+      <Card className="mb-3.5 p-5">
+        <CardHead icon={<Stethoscope size={21} className="text-brand-600" />} title="Clinical details" onEdit={() => navigate(PATH[2])} />
+        <p className="text-[14.5px] text-ink-2">
+          Urgency: <b className={draft.urgency === 'Urgent' ? 'text-[#b42318]' : 'text-ink'}>{draft.urgency}</b>
+        </p>
+        <p className="mt-1 text-[14.5px] leading-relaxed text-ink-2">Reason: {draft.indication?.trim() ? <span className="text-ink">{draft.indication.trim()}</span> : <span className="text-muted">Not given</span>}</p>
+        {(draft.note?.trim() || draft.voiceNote) && <p className="mt-1 text-[14px] text-muted">{[draft.note?.trim() ? 'Note for the branch' : '', draft.voiceNote ? 'voice note' : ''].filter(Boolean).join(' and ')} attached.</p>}
       </Card>
 
-      {/* Optional note and voice note for the branch (owner, 2026-11-24) */}
-      <ReferralNoteEditor />
-
-      <div className="mb-3 flex items-center gap-3.5 rounded-[20px] border border-[#c8ecd7] bg-tint-green p-4">
-        <Wallet size={30} className="shrink-0 text-good" strokeWidth={2} />
-        <span>
-          <span className="block text-[15px] font-medium text-good-ink">Your Estimated Commission</span>
-          <span className="block text-[28px] font-bold tracking-[-0.02em] text-good-ink">{naira(commission)}</span>
-        </span>
-      </div>
-      <p className="mb-2 text-[12.5px] leading-relaxed text-muted">
-        Sent to {BRANCH.label}. Commission is confirmed when the patient completes and pays for the tests; final prices are confirmed at the branch.
-      </p>
+      {/* Patient notice (required) */}
+      <label className={`mb-3 flex cursor-pointer items-start gap-3 rounded-2xl border-[1.5px] bg-white p-4 ${error && !draft.patientInformed ? 'border-[#e5484d]' : 'border-line'}`}>
+        <input type="checkbox" checked={!!draft.patientInformed} onChange={(e) => (setDraft((d) => ({ ...d, patientInformed: e.target.checked })), setError(''))} className="mt-0.5 h-5 w-5 shrink-0 accent-brand-600" />
+        <span className="text-[14px] leading-snug text-ink">I have told the patient that their details and requested tests are being sent to {COMPANY.name}, and that I will be told when they attend and when results are ready.</span>
+      </label>
+      {error && (
+        <p className="mb-2 px-1 text-[13.5px] font-medium text-[#d93036]" role="alert">
+          {error}
+        </p>
+      )}
 
       <BottomAction>
         <div className="grid grid-cols-[auto_1fr] gap-3">
-        <BackButton onClick={() => navigate(PATH[1])} label="Back to services" />
-        <Button
-          block
-          onClick={() => {
-            const r = sendReferral();
-            navigate(`/refer/done/${r.id}`, { replace: true });
-          }}
-        >
-          <Send size={20} /> Send Referral
-        </Button>
+          <BackButton onClick={() => navigate(PATH[2])} label="Back to clinical details" />
+          <Button block onClick={send}>
+            <Send size={20} /> Send request
+          </Button>
         </div>
       </BottomAction>
     </>
@@ -401,11 +483,11 @@ function CardHead({ icon, title, onEdit }: { icon: React.ReactNode; title: strin
 export function ReferralSent({ id }: { id: string }) {
   const { referrals, navigate, showToast } = useApp();
   const r = referrals.find((x) => x.id === id);
-  if (!r) return <EmptyState sticker="clipboard" title="Referral not found" text="It may have been sent from another device." />;
+  if (!r) return <EmptyState sticker="clipboard" title="Request not found" text="It may have been sent from another device." />;
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(r.id);
-      showToast('Referral ID copied');
+      showToast('Request ID copied');
     } catch {
       showToast(r.id);
     }
@@ -413,29 +495,25 @@ export function ReferralSent({ id }: { id: string }) {
   return (
     <div className="flex min-h-[80dvh] flex-col items-center pt-[max(40px,var(--safe-top))] text-center">
       <div className="relative">
-        <Sticker name="party" size={120} />
+        <Sticker name="clipboard" size={110} />
         <Sticker name="check" size={52} className="absolute -bottom-1 -right-2" />
       </div>
-      <h1 className="mt-5 text-[26px] font-bold tracking-[-0.02em] text-ink">Referral sent!</h1>
-      <p className="mt-2 max-w-80 text-[15px] leading-relaxed text-muted">Share the referral ID with {r.patient.name}. The front desk uses it to find the referral and bill the patient.</p>
+      <h1 className="mt-5 text-[26px] font-bold tracking-[-0.02em] text-ink">Request sent</h1>
+      <p className="mt-2 max-w-80 text-[15px] leading-relaxed text-muted">The front desk uses the request ID to find {r.patient.name.split(' ')[0]}’s tests. You’ll be told when they arrive and when results are ready.</p>
 
       <button type="button" onClick={copy} className="card press mt-6 flex w-full max-w-sm items-center justify-between gap-3 px-5 py-4">
         <span className="text-left">
-          <span className="block text-[12.5px] font-semibold uppercase tracking-wide text-muted">Referral ID</span>
+          <span className="block text-[12.5px] font-semibold uppercase tracking-wide text-muted">Request ID</span>
           <span className="block text-[26px] font-bold tracking-wide text-brand-700">{r.id}</span>
         </span>
         <Copy size={22} className="text-brand-600" />
       </button>
-      <div className="mt-3 flex w-full max-w-sm items-center justify-between rounded-2xl bg-tint-green px-5 py-3.5 text-[15px]">
-        <span className="text-good-ink">Estimated commission</span>
-        <span className="font-bold text-good-ink">{naira(commissionOf(r))}</span>
-      </div>
-      {r.queued && <p className="mt-3 max-w-sm text-[12.5px] leading-relaxed text-muted">Saved on this phone. It is sent to the branch automatically when the cloud connection is available.</p>}
+      {r.queued && <p className="mt-3 max-w-sm text-[12.5px] leading-relaxed text-muted">Saved on this phone (encrypted). It’s sent to the branch when the server is connected.</p>}
 
       <div className="mt-6 grid w-full max-w-sm gap-3">
-        <WhatsAppButton onClick={() => shareOnWhatsApp(r)}>Share with patient via WhatsApp</WhatsAppButton>
+        <PatientMessageButton r={r} />
         <Button block variant="secondary" onClick={() => navigate(`/referrals/${r.id}`, { replace: true })}>
-          View referral
+          View request
         </Button>
         <Button block variant="ghost" onClick={() => navigate('/', { replace: true })}>
           Back to Home

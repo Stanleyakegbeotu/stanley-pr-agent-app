@@ -122,7 +122,7 @@ function PeoplePicker({ onClose, onPick }: { onClose: () => void; onPick: (convI
   const NOTE: Record<Conversation['kind'], string> = {
     frontdesk: 'Front desk, on duty now. Patients arriving, payments, results',
     manager: 'Branch manager. Approvals, problems, anything urgent',
-    admin: 'Company admin. Commission, payouts and your account',
+    admin: 'Company admin. Your account, verification and the app',
   };
   return (
     <div className="fixed inset-0 z-[70] flex items-end justify-center bg-[#0b1730]/40 md:items-center" onClick={onClose}>

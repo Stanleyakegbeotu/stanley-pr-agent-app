@@ -116,7 +116,7 @@ export const INBOXES: Conversation[] = [
     face: ADMIN,
     members: [ADMIN],
     shared: false,
-    messages: [{ from: 'them', text: 'Your commission for last month has been paid. Thank you for your referrals!', time: 'Yesterday' }],
+    messages: [{ from: 'them', text: 'Your account has been verified. Welcome to the Referrer Portal.', time: 'Yesterday' }],
   },
 ];
 

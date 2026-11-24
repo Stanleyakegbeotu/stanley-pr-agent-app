@@ -3,9 +3,8 @@
  * bar so the iPhone notch can never cover it) and a permanent rail on
  * tablets / desktop.
  */
-import { ChevronRight, MapPin, Plus, Settings, X } from 'lucide-react';
-import { PHOTOS } from '@/assets';
-import { AGENT, BRANCH, COMPANY, agentName } from '@/config/org';
+import { ChevronRight, MapPin, Settings, Stethoscope, X } from 'lucide-react';
+import { BRANCH, COMPANY, ROLE_LABEL } from '@/config/org';
 import { useApp } from '@/app/store';
 import { useInbox } from '@/domain/chat';
 import { useProfile } from '@/domain/profile';
@@ -29,7 +28,7 @@ export function Drawer({ open, onClose }: { open: boolean; onClose: () => void }
         <div className="flex items-center justify-between px-5 pb-2 pt-5">
           <button type="button" onClick={() => go('/')} className="flex items-center gap-2.5 text-left" aria-label="Dashboard">
             <span className="grid h-10 w-10 place-items-center rounded-xl bg-linear-to-b from-brand-500 to-brand-600 text-white shadow-[0_6px_14px_rgba(31,111,232,0.3)]">
-              <Plus size={24} strokeWidth={3} />
+              <Stethoscope size={22} strokeWidth={2.4} />
             </span>
             <span>
               <span className="block text-[21px] font-extrabold leading-none tracking-[-0.03em] text-brand-700">{COMPANY.appName}</span>
@@ -83,7 +82,7 @@ export function Drawer({ open, onClose }: { open: boolean; onClose: () => void }
           <span className="min-w-0 flex-1">
             <span className="block truncate text-[15px] font-semibold text-ink">{me.name}</span>
             <span className="block text-[12.5px] text-muted">
-              {AGENT.role} · {AGENT.id}
+              {ROLE_LABEL} · {me.clinician?.id}
             </span>
           </span>
           <Settings size={18} className="text-muted" />

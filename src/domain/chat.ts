@@ -1,5 +1,6 @@
 /**
- * Chat messages (owner, 2026-11-23). Offline-first: everything the agent sends
+ * Chat messages (owner, 2026-11-23). Logistics only: no results, request forms
+ * or ID photos (those go through requests and Results). Everything the clinician sends
  * — text, photos, videos, documents/receipts and voice notes — is saved on the
  * phone (IndexedDB, which can hold files) and shows a single tick until the
  * cloud connection delivers it. Opening messages from the branch come from the
@@ -8,6 +9,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { INBOXES, conversationById } from '@/data/team';
+import { canEncrypt, openBlob, openJSON, sealBlob, sealJSON, type SealedBlob } from './vault';
 
 export type MsgKind = 'text' | 'image' | 'video' | 'file' | 'audio';
 
@@ -41,31 +43,31 @@ export interface ChatMsg {
   status: 'saved' | 'delivered';
 }
 
-/* ─────────────── IndexedDB ─────────────── */
+/* ─────────────── encrypted storage (compliance, 2026-11-24) ─────────────── */
 
-const DB = 'stanley-pr-chat';
+/**
+ * Messages and their media are ENCRYPTED on the phone (domain/vault): each
+ * record keeps only its id, chat and time in the clear; the text and any
+ * file are AES-GCM ciphertext. Media is never written to the phone gallery.
+ * Without a secure connection (no WebCrypto) chat stays in memory only.
+ */
+interface SecureRecord {
+  id: string;
+  convId: string;
+  at: string;
+  sealed: string;
+  file?: SealedBlob;
+}
+const DB = 'stanley-pr-chat-secure';
+const LEGACY_DB = 'stanley-pr-chat';
 let dbp: Promise<IDBDatabase> | null = null;
 function db() {
   if (!dbp)
     dbp = new Promise((res, rej) => {
-      const r = indexedDB.open(DB, 2);
-      r.onupgradeneeded = (e) => {
-        if (e.oldVersion < 1) {
-          const s = r.result.createObjectStore('messages', { keyPath: 'id' });
-          s.createIndex('convId', 'convId');
-        }
-        // v2 (2026-11-24): the old sample chats became the branch inboxes.
-        if (e.oldVersion === 1) {
-          const MOVE: Record<string, string> = { branch: 'frontdesk', payments: 'admin', support: 'admin' };
-          const cur = r.transaction!.objectStore('messages').openCursor();
-          cur.onsuccess = () => {
-            const c = cur.result;
-            if (!c) return;
-            const m = c.value as ChatMsg;
-            if (MOVE[m.convId]) c.update({ ...m, convId: MOVE[m.convId] });
-            c.continue();
-          };
-        }
+      const r = indexedDB.open(DB, 1);
+      r.onupgradeneeded = () => {
+        const s = r.result.createObjectStore('messages', { keyPath: 'id' });
+        s.createIndex('convId', 'convId');
       };
       r.onsuccess = () => res(r.result);
       r.onerror = () => rej(r.error);
@@ -80,6 +82,63 @@ async function tx<T>(mode: IDBTransactionMode, run: (s: IDBObjectStore) => IDBRe
     t.oncomplete = () => res(req ? req.result : undefined);
     t.onerror = () => rej(t.error);
   });
+}
+const memory = new Map<string, ChatMsg>();
+
+async function putMsg(m: ChatMsg) {
+  if (!canEncrypt) return void memory.set(m.id, m);
+  const { blob, ...rest } = m;
+  const rec: SecureRecord = { id: m.id, convId: m.convId, at: m.at, sealed: await sealJSON(rest), file: blob ? await sealBlob(blob) : undefined };
+  await tx('readwrite', (s) => s.put(rec));
+}
+async function openRec(r: SecureRecord): Promise<ChatMsg | null> {
+  try {
+    const m = await openJSON<ChatMsg>(r.sealed);
+    return r.file ? { ...m, blob: await openBlob(r.file) } : m;
+  } catch {
+    return null; // the device key was destroyed (signed out)
+  }
+}
+async function getMsgs(convId?: string): Promise<ChatMsg[]> {
+  if (!canEncrypt) return [...memory.values()].filter((m) => !convId || m.convId === convId);
+  const recs = (await tx<SecureRecord[]>('readonly', (s) => (convId ? s.index('convId').getAll(convId) : s.getAll()) as IDBRequest<SecureRecord[]>)) ?? [];
+  return (await Promise.all(recs.map(openRec))).filter((m): m is ChatMsg => !!m);
+}
+async function deleteMsg(id: string) {
+  memory.delete(id);
+  if (canEncrypt) await tx('readwrite', (s) => s.delete(id));
+}
+
+/** Earlier versions stored chats unencrypted: encrypt them, then delete the old database. */
+export async function migrateLegacyChat() {
+  if (typeof indexedDB === 'undefined') return;
+  const old = await new Promise<IDBDatabase | null>((res) => {
+    const r = indexedDB.open(LEGACY_DB);
+    r.onupgradeneeded = () => (r.transaction?.abort(), res(null));
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => res(null);
+  });
+  if (!old) return;
+  try {
+    if (canEncrypt && old.objectStoreNames.contains('messages')) {
+      const MOVE: Record<string, string> = { branch: 'frontdesk', payments: 'admin', support: 'admin' };
+      const all = await new Promise<ChatMsg[]>((res) => {
+        const q = old.transaction('messages').objectStore('messages').getAll();
+        q.onsuccess = () => res((q.result as ChatMsg[]) ?? []);
+        q.onerror = () => res([]);
+      });
+      for (const m of all) await putMsg({ ...m, convId: MOVE[m.convId] ?? m.convId });
+    }
+  } finally {
+    old.close();
+    indexedDB.deleteDatabase(LEGACY_DB);
+  }
+}
+/** Sign out of this device. */
+export async function wipeChat() {
+  memory.clear();
+  dbp = null;
+  indexedDB.deleteDatabase(DB);
 }
 
 /* Opening messages from the sample conversations (deletable, remembered on this phone). */
@@ -133,7 +192,7 @@ export function useChat(convId: string) {
   const [seedTick, setSeedTick] = useState(0);
   useEffect(() => {
     let alive = true;
-    tx<ChatMsg[]>('readonly', (s) => s.index('convId').getAll(convId) as IDBRequest<ChatMsg[]>)
+    getMsgs(convId)
       .then((r) => alive && setMine(r ?? []))
       .catch(() => alive && setMine([]));
     return () => {
@@ -147,7 +206,7 @@ export function useChat(convId: string) {
     async (m: Omit<ChatMsg, 'id' | 'at' | 'convId' | 'from' | 'status'>) => {
       const msg: ChatMsg = { ...m, id: uid(), convId, from: 'me', at: new Date().toISOString(), status: 'saved' };
       setMine((x) => [...x, msg]);
-      await tx('readwrite', (s) => s.put(msg)).catch(() => undefined);
+      await putMsg(msg).catch(() => undefined);
       changed();
       return msg;
     },
@@ -170,12 +229,12 @@ export function useChat(convId: string) {
         return updated;
       }),
     );
-    if (updated) await tx('readwrite', (s) => s.put(updated!)).catch(() => undefined);
+    if (updated) await putMsg(updated).catch(() => undefined);
     changed();
   }, []);
 
   const clear = useCallback(async () => {
-    for (const m of mine) await tx('readwrite', (s) => s.delete(m.id)).catch(() => undefined);
+    for (const m of mine) await deleteMsg(m.id).catch(() => undefined);
     localStorage.setItem(DELETED_KEY, JSON.stringify([...deletedSeeds(), ...seedMessages(convId).map((m) => m.id)]));
     setMine([]);
     setSeedTick((t) => t + 1);
@@ -220,7 +279,7 @@ export function useInbox() {
   useEffect(() => {
     let alive = true;
     const load = () => {
-      tx<ChatMsg[]>('readonly', (s) => s.getAll() as IDBRequest<ChatMsg[]>)
+      getMsgs()
         .then((r) => alive && setStored(r ?? []))
         .catch(() => undefined);
       setTick((t) => t + 1);

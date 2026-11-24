@@ -1,53 +1,30 @@
 /**
- * Home sections (owner, 2026-11-24).
- *  • Updates from your branch: a carousel directly under Quick Actions, one
- *    update at a time (owner, 2026-11-24). A patient completed their tests
- *    (billing done), cancelled (before visiting, or at the branch), or
- *    removed/added tests at billing (and how that moved the commission).
- *    Each update can be dismissed. There is no "Arrived" status.
- *  • Today's referred patients: below Quick Actions, every patient referred
- *    today with their status; "No patient referred today" when there are none.
+ * Home sections.
+ *  • Updates from your branch: a carousel under Quick Actions, one update at
+ *    a time: a patient arrived, tests done, results ready, or not attended,
+ *    and which tests were not done. No amounts and no reasons. These show
+ *    patient names because they are inside the unlocked app; phone
+ *    notifications never do (data/content NOTIFICATIONS).
+ *  • Today's patients: every request sent today, with the same rules as
+ *    My Patients; "No patients requested today" when there are none.
  */
 import { useEffect, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
-import { ArrowDownRight, ArrowUpRight, Ban, CheckCircle2, ChevronRight, Clock3, Plus, Send, X } from 'lucide-react';
+import { CheckCircle2, ChevronRight, DoorOpen, FileText, FlaskConical, Plus, Send, UserX, X } from 'lucide-react';
 import { useApp } from '@/app/store';
-import { naira } from '@/domain/format';
-import { STATUS_LABEL, STATUS_NOTE, cancelSummary, cancelTitle, commissionOf, serviceSummary, testChanges, type Referral } from '@/domain/referrals';
-import { Button, InitialsAvatar, SectionTitle, StatusBadge } from '@/ui/kit';
+import { STATUS_LABEL, isToday, partialNote, statusOf, type Referral, type ReferralStatus } from '@/domain/referrals';
+import { Button, SectionTitle } from '@/ui/kit';
+import { PatientCard } from '@/screens/Referrals';
 
 const timeOf = (iso: string) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-const isToday = (iso: string) => new Date(iso).toDateString() === new Date().toDateString();
-const names = (list: { name: string }[]) => list.map((s) => s.name).join(', ');
-
-/** "2 tests removed: FBS, E/U/C. Commission down ₦3,450." and/or "1 test added: ...". */
-export function ChangeNote({ r, className = '' }: { r: Referral; className?: string }) {
-  const c = testChanges(r);
-  if (!c) return null;
-  const up = c.delta >= 0;
-  return (
-    <span className={`block rounded-xl px-2.5 py-2 text-[12.5px] leading-snug ${up ? 'bg-[#e8f8ef] text-good-ink' : 'bg-[#fdecec] text-[#b42318]'} ${className}`}>
-      {c.removed.length > 0 && (
-        <span className="block">
-          <b>
-            {c.removed.length} test{c.removed.length === 1 ? '' : 's'} removed by the patient:
-          </b>{' '}
-          {names(c.removed)}
-        </span>
-      )}
-      {c.added.length > 0 && (
-        <span className="block">
-          <b>
-            {c.added.length} test{c.added.length === 1 ? '' : 's'} added at the branch:
-          </b>{' '}
-          {names(c.added)}
-        </span>
-      )}
-      <span className="mt-0.5 flex items-center gap-1 font-semibold">
-        {up ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />} Commission {up ? 'up' : 'down'} {naira(Math.abs(c.delta))}
-      </span>
-    </span>
-  );
-}
+/** When the branch last changed this request. */
+const changedAt = (r: Referral): string | undefined => {
+  const s = statusOf(r);
+  if (s === 'ResultsReady') return r.resultsAt;
+  if (s === 'TestsDone') return r.testsDoneAt;
+  if (s === 'Arrived') return r.arrivedAt;
+  if (s === 'NotAttended') return new Date(new Date(r.createdAt).getTime() + 14 * 86_400_000).toISOString();
+  return undefined;
+};
 
 /* ─────────────── Updates from your branch (carousel) ─────────────── */
 
@@ -61,7 +38,6 @@ const readDismissed = (): string[] => {
   }
 };
 
-/** Owner (2026-11-24): a carousel directly under Quick Actions, showing the updates one by one. */
 export function BranchUpdates() {
   const { referrals, navigate } = useApp();
   const [gone, setGone] = useState(readDismissed);
@@ -74,10 +50,11 @@ export function BranchUpdates() {
 
   const since = Date.now() - 2 * 86_400_000; // the last 2 days
   const updates = referrals
-    .filter((r) => r.status !== 'Pending' && r.updatedAt && new Date(r.updatedAt).getTime() >= since)
-    .map((r) => ({ key: `${r.id}:${r.status}`, r }))
+    .map((r) => ({ r, s: statusOf(r), at: changedAt(r) }))
+    .filter((u) => u.at && new Date(u.at).getTime() >= since)
+    .map((u) => ({ ...u, key: `${u.r.id}:${u.s}` }))
     .filter((u) => !gone.includes(u.key))
-    .sort((a, b) => b.r.updatedAt!.localeCompare(a.r.updatedAt!));
+    .sort((a, b) => b.at!.localeCompare(a.at!));
   const n = updates.length;
   const at = n ? Math.min(index, n - 1) : 0;
 
@@ -131,9 +108,9 @@ export function BranchUpdates() {
       <SectionTitle title={`Updates from your branch (${n})`} action="See all" onAction={() => navigate('/referrals')} />
       <div className="overflow-hidden rounded-[22px]" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onMouseEnter={() => setPaused(true)} onMouseLeave={() => !start.current && setPaused(false)} style={{ touchAction: 'pan-y' }}>
         <div className="flex items-stretch" style={{ transform: `translateX(calc(${-at * 100}% + ${drag}px))`, transition: drag ? 'none' : 'transform 520ms cubic-bezier(.22,.8,.24,1)' }}>
-          {updates.map(({ key, r }, i) => (
+          {updates.map(({ key, r, s, at: when }, i) => (
             <div key={key} className="w-full shrink-0" aria-hidden={i !== at} aria-roledescription="slide" aria-label={`Update ${i + 1} of ${n}`}>
-              <Update r={r} onOpen={() => !moved.current && navigate(`/referrals/${r.id}`)} onDismiss={() => dismiss(key)} />
+              <Update r={r} s={s} when={when!} onOpen={() => !moved.current && navigate(s === 'ResultsReady' ? `/results/${r.id}` : `/referrals/${r.id}`)} onDismiss={() => dismiss(key)} />
             </div>
           ))}
         </div>
@@ -151,25 +128,30 @@ export function BranchUpdates() {
   );
 }
 
-function Update({ r, onOpen, onDismiss }: { r: Referral; onOpen: () => void; onDismiss: () => void }) {
-  const done = r.status === 'Completed';
-  const kind = done
-    ? { icon: <CheckCircle2 size={22} />, badge: 'Completed', card: 'from-[#ecfbf2] to-white border-[#c8ecd7]', tone: 'bg-good text-white', title: `${r.patient.name} completed at the branch`, text: `Billing is done. Your commission of ${naira(commissionOf(r))} is confirmed.` }
-    : { icon: <Ban size={22} />, badge: 'Cancelled', card: 'from-[#fff0f0] to-white border-[#f6cfcf]', tone: 'bg-[#e5484d] text-white', title: `${r.patient.name}: ${cancelTitle(r).toLowerCase()}`, text: `${cancelSummary(r)} No commission for this referral.` };
+const KIND: Partial<Record<ReferralStatus, { icon: React.ReactNode; card: string; tone: string; title: (n: string) => string; text: string }>> = {
+  Arrived: { icon: <DoorOpen size={21} />, card: 'from-[#eaf3ff] to-white border-[#cfe0fb]', tone: 'bg-brand-600 text-white', title: (n) => `${n} arrived at the branch`, text: 'The patient is with the front desk.' },
+  TestsDone: { icon: <FlaskConical size={21} />, card: 'from-[#f3eeff] to-white border-[#e2d8ff]', tone: 'bg-violet text-white', title: (n) => `${n}: tests done`, text: 'Results come after the specialist signs them off.' },
+  ResultsReady: { icon: <CheckCircle2 size={22} />, card: 'from-[#ecfbf2] to-white border-[#c8ecd7]', tone: 'bg-good text-white', title: (n) => `Results ready for ${n}`, text: 'Tap to view the signed-off result.' },
+  NotAttended: { icon: <UserX size={21} />, card: 'from-[#f4f6fa] to-white border-line', tone: 'bg-[#8a94a6] text-white', title: (n) => `${n} did not attend`, text: 'No visit within 14 days of the request.' },
+};
+
+function Update({ r, s, when, onOpen, onDismiss }: { r: Referral; s: ReferralStatus; when: string; onOpen: () => void; onDismiss: () => void }) {
+  const k = KIND[s]!;
+  const partial = partialNote(r);
   return (
-    <div className={`relative flex h-full select-none flex-col rounded-[22px] border bg-linear-to-br p-4 pr-11 shadow-[0_10px_26px_rgba(30,74,160,0.10)] ${kind.card}`}>
+    <div className={`relative flex h-full select-none flex-col rounded-[22px] border bg-linear-to-br p-4 pr-11 shadow-[0_10px_26px_rgba(30,74,160,0.10)] ${k.card}`}>
       <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 items-start gap-3 text-left">
-        <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl shadow-sm ${kind.tone}`}>{kind.icon}</span>
+        <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl shadow-sm ${k.tone}`}>{k.icon}</span>
         <span className="min-w-0 flex-1">
-          <span className="block text-[15px] font-bold leading-snug text-ink">{kind.title}</span>
-          <span className="mt-1 block text-[13.5px] leading-snug text-ink-2">{kind.text}</span>
-          <ChangeNote r={r} className="mt-2" />
+          <span className="block text-[15px] font-bold leading-snug text-ink">{k.title(r.patient.name)}</span>
+          <span className="mt-1 block text-[13.5px] leading-snug text-ink-2">{k.text}</span>
+          {partial && <span className="mt-2 block rounded-xl bg-[#fff6e5] px-2.5 py-2 text-[12.5px] leading-snug text-[#8a5a12]">{partial}</span>}
           <span className="mt-2 flex items-center justify-between gap-2 text-[12px] text-muted">
             <span>
-              {r.id}, {isToday(r.updatedAt!) ? `today ${timeOf(r.updatedAt!)}` : `yesterday ${timeOf(r.updatedAt!)}`}
+              {r.id}, {isToday(when) ? `today ${timeOf(when)}` : `yesterday ${timeOf(when)}`}
             </span>
             <span className="flex items-center gap-0.5 font-semibold text-brand-600">
-              View <ChevronRight size={14} />
+              {s === 'ResultsReady' ? <FileText size={13} /> : null} View <ChevronRight size={14} />
             </span>
           </span>
         </span>
@@ -181,29 +163,28 @@ function Update({ r, onOpen, onDismiss }: { r: Referral; onOpen: () => void; onD
   );
 }
 
-/* ─────────────── Today's referred patients ─────────────── */
+/* ─────────────── Today's patients ─────────────── */
 
 export function TodayPatients() {
   const { referrals, navigate } = useApp();
   const today = referrals.filter((r) => isToday(r.createdAt)).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   return (
     <section className="mt-6">
-      <SectionTitle title="Today’s Referred Patients" action={today.length ? 'See all' : undefined} onAction={() => navigate('/referrals')} />
+      <SectionTitle title="Today’s Patients" action={today.length ? 'See all' : undefined} onAction={() => navigate('/referrals')} />
       {today.length === 0 ? (
         <div className="card flex flex-col items-center px-5 py-7 text-center">
           <span className="grid h-14 w-14 place-items-center rounded-full bg-tint-blue text-brand-600">
             <Send size={24} />
           </span>
-          <p className="mt-3 text-[16px] font-bold text-ink">No patient referred today</p>
-          <p className="mt-1 text-[13.5px] text-muted">Patients you refer today will show here with their status.</p>
+          <p className="mt-3 text-[16px] font-bold text-ink">No patients requested today</p>
+          <p className="mt-1 text-[13.5px] text-muted">Patients you request tests for today will show here with their status.</p>
           <div className="mt-4 w-full max-w-[240px]">
             <Button block onClick={() => navigate('/refer')}>
-              <Plus size={18} /> Refer a Patient
+              <Plus size={18} /> New request
             </Button>
           </div>
         </div>
       ) : (
-        /* One card per patient, laid out like the service cards in Branch Inventory (owner, 2026-11-24). */
         <ul className="space-y-2.5">
           {today.map((r) => (
             <li key={r.id}>
@@ -216,62 +197,4 @@ export function TodayPatients() {
   );
 }
 
-const STATUS_TAG: Record<Referral['status'], string> = { Pending: 'bg-[#fff1e0] text-[#c2410c]', Completed: 'bg-tint-green text-good-ink', Cancelled: 'bg-[#fdecec] text-[#b42318]' };
-
-/** Tile colours by status (the 64px square, like a service's picture). */
-const TILE: Record<Referral['status'], string> = {
-  Pending: 'from-[#fff3e2] to-[#ffe2bf] text-[#c2410c]',
-  Completed: 'from-[#e3f8ec] to-[#c9efd9] text-good-ink',
-  Cancelled: 'from-[#fdecec] to-[#f9d4d4] text-[#b42318]',
-};
-const initialsOf = (n: string) =>
-  n
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0]!.toUpperCase())
-    .join('');
-
-function PatientCard({ r, onOpen }: { r: Referral; onOpen: () => void }) {
-  const c = testChanges(r);
-  const tests = r.billedServiceIds ?? r.serviceIds;
-  return (
-    <button type="button" onClick={onOpen} className="press flex w-full items-start gap-3.5 rounded-[20px] bg-white p-3 text-left shadow-[0_6px_20px_rgba(30,74,160,0.07)] ring-1 ring-line/70">
-      <span className={`relative grid h-[64px] w-[64px] shrink-0 place-items-center rounded-[16px] bg-linear-to-br text-[20px] font-bold ${TILE[r.status]}`}>
-        {initialsOf(r.patient.name)}
-        <span className="absolute -bottom-1 -right-1 grid h-6 w-6 place-items-center rounded-full bg-white shadow-sm">
-          {r.status === 'Completed' ? <CheckCircle2 size={15} className="text-good" /> : r.status === 'Cancelled' ? <Ban size={14} className="text-[#d93036]" /> : <Send size={13} className="text-orange" />}
-        </span>
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="flex items-start justify-between gap-2">
-          <span className="truncate text-[15px] font-semibold leading-snug text-ink">{r.patient.name}</span>
-          <span className={`shrink-0 whitespace-nowrap text-[15px] font-bold ${r.status === 'Cancelled' ? 'text-faint line-through' : r.status === 'Completed' ? 'text-good' : 'text-orange'}`}>{naira(commissionOf(r))}</span>
-        </span>
-        <span className="mt-0.5 line-clamp-1 text-[12.5px] text-muted">
-          {r.status === 'Cancelled' ? cancelSummary(r) : `${serviceSummary(r)}, ${STATUS_NOTE[r.status].toLowerCase()}`}
-        </span>
-        <span className="mt-2 flex flex-wrap gap-1.5">
-          <Tag tone={`font-semibold ${STATUS_TAG[r.status]}`}>{STATUS_LABEL[r.status]}</Tag>
-          <Tag tone="bg-[#f1f4f9] text-ink-2">
-            <Clock3 size={11} /> {timeOf(r.createdAt)}
-          </Tag>
-          <Tag tone="bg-brand-50 text-brand-700">
-            {tests.length} test{tests.length === 1 ? '' : 's'}
-          </Tag>
-          {c && c.removed.length > 0 && <Tag tone="bg-[#fdecec] text-[#b42318]">{c.removed.length} removed by patient</Tag>}
-          {c && c.added.length > 0 && <Tag tone="bg-[#e8f8ef] text-good-ink">{c.added.length} added</Tag>}
-          {c && (
-            <Tag tone={c.delta >= 0 ? 'bg-[#e8f8ef] text-good-ink' : 'bg-[#fdecec] text-[#b42318]'}>
-              {c.delta >= 0 ? <ArrowUpRight size={11} /> : <ArrowDownRight size={11} />} {naira(Math.abs(c.delta))}
-            </Tag>
-          )}
-        </span>
-      </span>
-    </button>
-  );
-}
-
-function Tag({ tone, children }: { tone: string; children: React.ReactNode }) {
-  return <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11.5px] font-medium ${tone}`}>{children}</span>;
-}
+export { STATUS_LABEL };

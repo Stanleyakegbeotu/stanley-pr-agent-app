@@ -1,25 +1,28 @@
 /**
- * Dashboard (owner's reference): greeting + photo, search, announcement
- * carousel, Today's Activity, Monthly Target and Quick Actions. Every figure
- * is worked out from the referrals (domain/referrals.ts) — nothing typed in.
+ * Dashboard: greeting + photo, search, announcement carousel, Today's
+ * Activity (counts only), Quick Actions, branch updates and today's patients.
+ * Compliance (2026-11-24): no money figures, targets, invitations or
+ * symptom-to-test assistant. A Pending / Suspended account sees the
+ * verification notice instead of patient sections.
  */
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Bell, Building2, Check, ChevronRight, Database, FlaskConical, Gift, Menu, MessageCircle, Sparkles, Star, Target, UserPlus, Users } from 'lucide-react';
-import { PHOTOS } from '@/assets';
-import { AGENT, BRANCH, RULES, agentName } from '@/config/org';
-import { naira, timeOfDay } from '@/domain/format';
-import { inPeriod, statsFor } from '@/domain/referrals';
+import { Bell, Building2, ChevronRight, DoorOpen, FileText, FlaskConical, Menu, MessageCircle, ShieldCheck, Stethoscope, UserPlus, Users } from 'lucide-react';
+import { BRANCH, ROLE_LABEL } from '@/config/org';
+import { timeOfDay } from '@/domain/format';
+import { isToday, reachedArrival, statusOf } from '@/domain/referrals';
+import { isActive, useAccount } from '@/domain/account';
 import { useApp } from '@/app/store';
 import { useShell } from '@/app/shell';
-import { FilterButton, ProgressBar, SearchField, SectionTitle } from '@/ui/kit';
+import { FilterButton, SearchField, SectionTitle } from '@/ui/kit';
 import { useInbox } from '@/domain/chat';
 import { useProfile } from '@/domain/profile';
-import { BankRequiredCard } from '@/screens/BankDetails';
 import { BranchUpdates, TodayPatients } from '@/screens/home/HomeSections';
 import { AnnouncementCarousel } from './AnnouncementCarousel';
 
 export function Dashboard() {
-  const { referrals, navigate, showToast } = useApp();
+  const { referrals, navigate } = useApp();
+  const { account } = useAccount();
+  const active = isActive(account);
   const inbox = useInbox();
   const me = useProfile();
   const { openMenu } = useShell();
@@ -34,26 +37,13 @@ export function Dashboard() {
     io.observe(el);
     return () => io.disconnect();
   }, []);
-  const today = statsFor(referrals, 'today');
-  const monthCount = referrals.filter((r) => inPeriod(r.createdAt, 'month') && r.status !== 'Cancelled').length;
-  const pct = Math.round((monthCount / RULES.monthlyReferralTarget) * 100);
+  // Counts only, never money.
+  const todays = referrals.filter((r) => isToday(r.createdAt));
+  const today = { requested: todays.length, arrived: todays.filter((r) => reachedArrival(statusOf(r))).length, results: referrals.filter((r) => r.resultsAt && isToday(r.resultsAt)).length };
 
   const search = (e: FormEvent) => {
     e.preventDefault();
     navigate(q.trim() ? `/services?q=${encodeURIComponent(q.trim())}` : '/services');
-  };
-
-  const invite = async () => {
-    const text = `Join me as a ${AGENT.role} with ${BRANCH.label}. Refer patients for diagnostics and earn commission.`;
-    try {
-      if (navigator.share) await navigator.share({ title: 'Become a Stanley PR Agent', text });
-      else {
-        await navigator.clipboard.writeText(text);
-        showToast('Invitation copied, paste it into WhatsApp or SMS');
-      }
-    } catch {
-      /* cancelled */
-    }
   };
 
   return (
@@ -87,10 +77,10 @@ export function Dashboard() {
               {me.name}&nbsp;<span aria-hidden="true">👋</span>
             </h1>
             <span className="mt-2.5 inline-flex items-center gap-2 rounded-full bg-brand-100/80 py-1 pl-1.5 pr-3 text-[14px] font-medium text-ink-2">
-              <span className="grid h-5.5 w-5.5 place-items-center rounded-full bg-linear-to-b from-[#ffd34d] to-[#f5a400] text-white">
-                <Star size={12} fill="currentColor" strokeWidth={0} />
+              <span className="grid h-5.5 w-5.5 place-items-center rounded-full bg-brand-600 text-white">
+                <Stethoscope size={12} />
               </span>
-              {AGENT.role}
+              {ROLE_LABEL}
             </span>
             <button type="button" onClick={() => navigate('/branch')} className="mt-2.5 flex items-center gap-2 text-left text-[15px] text-ink-2">
               <Building2 size={18} className="shrink-0 text-muted" />
@@ -103,73 +93,50 @@ export function Dashboard() {
           </button>
         </section>
 
-        {/* Required settings (owner): bank details until added */}
-        <BankRequiredCard />
+        {!active && (
+          <button type="button" onClick={() => navigate('/referrals')} className="press mb-5 flex w-full items-start gap-3 rounded-[20px] border border-[#cfe0fb] bg-brand-50 p-4 text-left">
+            <ShieldCheck size={22} className="mt-0.5 shrink-0 text-brand-600" />
+            <span>
+              <span className="block text-[15.5px] font-bold text-ink">{account?.status === 'suspended' ? 'Your account is suspended' : 'Your account is being verified'}</span>
+              <span className="mt-0.5 block text-[13.5px] leading-snug text-ink-2">{account?.status === 'suspended' ? 'Contact Silhouette in the Inbox.' : 'Silhouette is checking your licence. You can browse the test catalogue meanwhile.'}</span>
+            </span>
+          </button>
+        )}
 
         {/* Search */}
         <form onSubmit={search} className="mb-5 flex gap-3" role="search">
-          <SearchField value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search tests, services, prices..." aria-label="Search tests, services and prices" className="[&_input]:text-[14.5px]" />
-          <FilterButton onClick={() => navigate('/services')} label="Browse the service catalogue" />
+          <SearchField value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search tests, prices, preparation..." aria-label="Search tests" className="[&_input]:text-[14.5px]" />
+          <FilterButton onClick={() => navigate('/services')} label="Browse the test catalogue" />
         </form>
 
         <AnnouncementCarousel />
 
-        {/* Today's Activity */}
-        <section className="mb-5">
-          <SectionTitle title="Today’s Activity" action="View Details" onAction={() => navigate('/referrals')} />
-          <div className="grid grid-cols-3 gap-2.5">
-            <Tile tint="bg-tint-blue border-[#d6e7ff]" icon={<Users size={27} className="text-brand-500" fill="currentColor" strokeWidth={1.4} />} label="Patients Referred" value={String(today.referred)} ink="text-brand-800" onClick={() => navigate('/referrals')} />
-            <Tile
-              tint="bg-tint-green border-[#cdeedb]"
-              icon={
-                <span className="grid h-7 w-7 place-items-center rounded-full bg-good text-white">
-                  <Check size={17} strokeWidth={3.2} />
-                </span>
-              }
-              label="Completed at Branch"
-              value={String(today.completed)}
-              ink="text-[#14633a]"
-              onClick={() => navigate('/referrals')}
-            />
-            <Tile tint="bg-tint-purple border-[#e2d8ff]" icon={<Database size={26} className="text-violet" strokeWidth={2} />} label="Est. Commission" value={naira(today.estimated)} ink="text-violet" onClick={() => navigate('/earnings')} />
-          </div>
-        </section>
-
-        {/* Monthly target */}
-        <button type="button" onClick={() => navigate('/targets')} className="card press mb-6 flex w-full items-center gap-3 p-4 text-left">
-          <Target size={36} className="shrink-0 text-brand-600" strokeWidth={2.2} />
-          <span className="min-w-0 flex-1">
-            <span className="block whitespace-nowrap text-[16.5px] font-bold text-ink">Your Monthly Target</span>
-            <span className="mt-0.5 block text-[14px] text-ink-2">
-              You’ve referred {monthCount} of {RULES.monthlyReferralTarget} target patients.
-            </span>
-            <span className="mt-2.5 flex items-center gap-3">
-              <ProgressBar value={monthCount} max={RULES.monthlyReferralTarget} label="Monthly referral target" />
-              <span className="text-[14px] text-ink-2">{Math.min(100, pct)}%</span>
-            </span>
-          </span>
-          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-tint-pink">
-            <Gift size={24} className="text-[#f0446f]" strokeWidth={2.2} />
-          </span>
-          <ChevronRight size={20} className="shrink-0 text-ink-2" />
-        </button>
+        {/* Today's Activity: counts only */}
+        {active && (
+          <section className="mb-5">
+            <SectionTitle title="Today’s Activity" action="View Patients" onAction={() => navigate('/referrals')} />
+            <div className="grid grid-cols-3 gap-2.5">
+              <Tile tint="bg-tint-blue border-[#d6e7ff]" icon={<Users size={27} className="text-brand-500" fill="currentColor" strokeWidth={1.4} />} label="Requested" value={String(today.requested)} ink="text-brand-800" onClick={() => navigate('/referrals')} />
+              <Tile tint="bg-tint-orange border-[#ffe2c6]" icon={<DoorOpen size={26} className="text-orange" strokeWidth={2} />} label="Arrived" value={String(today.arrived)} ink="text-warn-ink" onClick={() => navigate('/referrals?status=Arrived')} />
+              <Tile tint="bg-tint-green border-[#cdeedb]" icon={<FileText size={26} className="text-good" strokeWidth={2} />} label="Results ready" value={String(today.results)} ink="text-[#14633a]" onClick={() => navigate('/results')} />
+            </div>
+          </section>
+        )}
 
         {/* Quick actions */}
         <section>
           <SectionTitle title="Quick Actions" />
           <div className="grid grid-cols-4 gap-2.5">
-            <Action tint="bg-tint-blue border-[#d6e7ff]" icon={<UserPlus size={30} className="text-brand-500" strokeWidth={2.2} />} label={'Refer a\nPatient'} onClick={() => navigate('/refer')} />
-            <Action tint="bg-tint-green border-[#cdeedb]" icon={<FlaskConical size={30} className="text-good" strokeWidth={2.2} />} label={'Branch\nInventory'} onClick={() => navigate('/services')} />
-            <Action tint="bg-tint-purple border-[#e2d8ff]" icon={<Sparkles size={30} className="text-violet" fill="currentColor" strokeWidth={1.4} />} label={'AI Test\nAssistant'} onClick={() => navigate('/assistant')} />
-            <Action tint="bg-tint-orange border-[#ffe2c6]" icon={<Users size={30} className="text-orange" fill="currentColor" strokeWidth={1.4} />} label={'Invite a\nColleague'} onClick={invite} />
+            <Action tint="bg-tint-blue border-[#d6e7ff]" icon={<UserPlus size={30} className="text-brand-500" strokeWidth={2.2} />} label={'New\nRequest'} onClick={() => navigate('/refer')} />
+            <Action tint="bg-tint-green border-[#cdeedb]" icon={<FlaskConical size={30} className="text-good" strokeWidth={2.2} />} label={'Test\nCatalogue'} onClick={() => navigate('/services')} />
+            <Action tint="bg-tint-purple border-[#e2d8ff]" icon={<FileText size={30} className="text-violet" strokeWidth={2.2} />} label={'My\nResults'} onClick={() => navigate('/results')} />
+            <Action tint="bg-tint-orange border-[#ffe2c6]" icon={<Building2 size={30} className="text-orange" strokeWidth={2.2} />} label={'Branch\nInfo'} onClick={() => navigate('/branch')} />
           </div>
         </section>
 
-        {/* Updates from your branch: a carousel under Quick Actions (owner, 2026-11-24) */}
-        <BranchUpdates />
-
-        {/* Today's referred patients (owner, 2026-11-24) */}
-        <TodayPatients />
+        {/* Updates from your branch (carousel) and today's patients: verified accounts only */}
+        {active && <BranchUpdates />}
+        {active && <TodayPatients />}
       </div>
     </div>
   );

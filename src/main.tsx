@@ -4,14 +4,26 @@ import '@fontsource-variable/inter';
 import './index.css';
 import { App } from './app/App';
 import { AppStoreProvider } from './app/store';
+import { Gate } from './app/Gate';
 import { watchSafeArea } from './app/safeArea';
+import { initSecureStore } from './domain/secureStore';
+import { migrateLegacyChat } from './domain/chat';
+import { migrateLegacyVoice } from './domain/referralVoice';
 
 watchSafeArea();
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <AppStoreProvider>
-      <App />
-    </AppStoreProvider>
-  </React.StrictMode>,
-);
+// Patient data is decrypted into memory before the first screen (and any
+// plain-text data from earlier versions is encrypted and the original removed).
+void (async () => {
+  await initSecureStore().catch(() => undefined);
+  await Promise.all([migrateLegacyChat(), migrateLegacyVoice()]).catch(() => undefined);
+  ReactDOM.createRoot(document.getElementById('root')!).render(
+    <React.StrictMode>
+      <Gate>
+        <AppStoreProvider>
+          <App />
+        </AppStoreProvider>
+      </Gate>
+    </React.StrictMode>,
+  );
+})();

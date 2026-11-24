@@ -14,8 +14,8 @@ import { displayPhone } from '@/domain/format';
 import { servicesOf } from '@/domain/referrals';
 import { Button } from '@/ui/kit';
 
-const PATH = ['/refer', '/refer/services', '/refer/summary'] as const;
-const STEP_NAME = ['Patient details', 'Select services', 'Summary'];
+const PATH = ['/refer', '/refer/services', '/refer/clinical', '/refer/summary'] as const;
+const STEP_NAME = ['Patient details', 'Choose tests', 'Clinical details', 'Review & send'];
 const when = (iso?: string) => {
   if (!iso) return '';
   const d = new Date(iso);
@@ -27,12 +27,12 @@ const when = (iso?: string) => {
 let promptDone = false;
 let bannerDismissed = false;
 
-/** On launch: "You have an unfinished referral". */
+/** On launch: "You have an unfinished request". */
 export function ResumeDraftPrompt() {
   const { draft, route, navigate, clearDraft } = useApp();
   const inRefer = route.parts[0] === 'refer';
   const [open, setOpen] = useState(() => draftAtLaunch && !promptDone && !inRefer);
-  if (!open || !hasDraftContent(draft)) return null;
+  if (!open || inRefer || !hasDraftContent(draft)) return null;
   const close = () => {
     promptDone = true;
     setOpen(false);
@@ -48,7 +48,7 @@ export function ResumeDraftPrompt() {
             <ClipboardList size={23} />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-[18px] font-bold text-ink">You have an unfinished referral</p>
+            <p className="text-[18px] font-bold text-ink">You have an unfinished request</p>
             <p className="text-[13.5px] text-muted">Saved {when(draft.savedAt)}. Nothing you typed was lost.</p>
           </div>
           <button type="button" onClick={close} aria-label="Not now" className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-muted hover:bg-page">
@@ -70,7 +70,7 @@ export function ResumeDraftPrompt() {
             navigate(PATH[step]);
           }}
         >
-          Continue referral
+          Continue request
         </Button>
         <div className="mt-2.5 grid grid-cols-2 gap-2.5">
           <Button
@@ -112,7 +112,7 @@ export function ResumedBanner() {
     <div className="mb-4 flex items-center gap-3 rounded-2xl border border-[#cfe0fb] bg-brand-50 px-3.5 py-3">
       <RotateCcw size={18} className="shrink-0 text-brand-600" />
       <p className="min-w-0 flex-1 text-[13.5px] leading-snug text-ink-2">
-        <b className="text-ink">Continuing your unfinished referral</b>, saved {when(draft.savedAt)}.
+        <b className="text-ink">Continuing your unfinished request</b>, saved {when(draft.savedAt)}.
       </p>
       <button
         type="button"
@@ -120,7 +120,7 @@ export function ResumedBanner() {
           hide();
           clearDraft();
           navigate('/refer', { replace: true });
-          showToast('Started a new referral');
+          showToast('Started a new request');
         }}
         className="shrink-0 rounded-full bg-white px-3 py-1.5 text-[13px] font-semibold text-brand-700 ring-1 ring-line"
       >

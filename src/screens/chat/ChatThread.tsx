@@ -6,13 +6,13 @@
  *    emojis, attachments (photos/videos, camera, receipts/documents), and
  *    voice notes — one tap starts recording; pause/resume, delete or send.
  *  • Messages: swipe right to reply; press and hold (or right-click) for
- *    Reply · Copy · Download · Delete; tap a photo to view and download it;
+ *    Reply · Copy · Delete; tap a photo to view it (media is never saved to the gallery);
  *    voice notes play with a waveform and speed control.
  * Offline-first: everything is saved on the phone (single tick) and delivered
  * when the cloud connection is available.
  */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
-import { ArrowLeft, BellOff, Users, Camera, Check, ChevronDown, Copy, Download, FileText, Image as ImageIcon, Info, Mic, MoreVertical, Pause, Play, Paperclip, Reply, Send, Smile, Trash2, X } from 'lucide-react';
+import { ArrowLeft, BellOff, Users, Camera, Check, ChevronDown, Copy, FileText, Image as ImageIcon, Info, Mic, MoreVertical, Pause, Play, Paperclip, Reply, Send, Smile, Trash2, X } from 'lucide-react';
 import { conversationById, type Conversation } from '@/data/team';
 import { chatSettings, fmtDuration, fmtSize, markRead, previewOf, saveChatSettings, useChat, type ChatMsg, type MsgKind, type ReplyRef } from '@/domain/chat';
 import { useApp } from '@/app/store';
@@ -31,14 +31,6 @@ export function useBlobUrl(blob?: Blob) {
     return () => URL.revokeObjectURL(u);
   }, [blob]);
   return url;
-}
-function download(blob: Blob, name: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = name;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 const timeOf = (iso: string) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 function dayOf(iso: string) {
@@ -123,7 +115,8 @@ export function ChatThread({ id }: { id: string }) {
 
       {/* Messages */}
       <div className="min-h-[calc(100dvh-4rem)] bg-[radial-gradient(circle_at_1px_1px,#dfe7f3_1px,transparent_0)] bg-[length:22px_22px] px-3 pt-3" style={{ paddingBottom: barH + 16 }}>
-        <p className="mx-auto mb-3 max-w-xs rounded-xl bg-[#fff6dc] px-3 py-2 text-center text-[12px] leading-snug text-[#7a5b12] shadow-sm">🔒 Messages are saved on this phone and delivered when the cloud connection is available.</p>
+        <p className="mx-auto mb-3 max-w-xs rounded-xl bg-[#fff6dc] px-3 py-2 text-center text-[12px] leading-snug text-[#7a5b12] shadow-sm">🔒 Encrypted on this phone. For logistics only.</p>
+        <p className="mx-auto mb-3 max-w-sm rounded-xl bg-[#fdecec] px-3 py-2 text-center text-[12px] font-medium leading-snug text-[#7a271a] shadow-sm">Don’t send patient results, request forms or ID photos here. Use the request and Results sections.</p>
         {messages.length === 0 && (
           <div className="mx-auto mt-10 flex max-w-xs flex-col items-center rounded-3xl bg-white/90 px-5 py-6 text-center shadow-sm">
             <ConvAvatar conv={conv} size={64} />
@@ -171,10 +164,6 @@ export function ChatThread({ id }: { id: string }) {
             } catch {
               showToast('Couldn’t copy on this device');
             }
-            setMenuFor(null);
-          }}
-          onDownload={() => {
-            if (menuFor.blob) download(menuFor.blob, menuFor.fileName ?? `stanley-${menuFor.kind}-${menuFor.id}`);
             setMenuFor(null);
           }}
           onDelete={async () => {
@@ -248,7 +237,7 @@ function Bubble({ m, convName, showSender, onReply, onMenu, onOpenImage }: { m: 
       <span className="pointer-events-none absolute left-1 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full bg-white text-brand-600 shadow" style={{ opacity: Math.min(1, dx / 56), transform: `translateY(-50%) scale(${0.6 + Math.min(0.4, dx / 140)})` }}>
         <Reply size={16} />
       </span>
-      {/* Always-visible actions button (owner): Reply · Copy · Download · Delete without needing a long press. */}
+      {/* Always-visible actions button (owner): Reply · Copy · Delete without needing a long press. */}
       <button
         type="button"
         onClick={onMenu}
@@ -318,11 +307,6 @@ function Body({ m, onOpenImage }: { m: ChatMsg; onOpenImage: () => void }) {
             <span className="block truncate text-[14px] font-semibold">{m.fileName}</span>
             <span className="text-[12px] text-muted">{fmtSize(m.size)}</span>
           </span>
-          {m.blob && (
-            <button type="button" onClick={() => download(m.blob!, m.fileName ?? 'document')} aria-label="Download" className="grid h-9 w-9 place-items-center rounded-full bg-white text-brand-600 shadow-sm">
-              <Download size={17} />
-            </button>
-          )}
         </div>
         {m.text && <p className="mt-1.5 whitespace-pre-wrap break-words px-1">{m.text}</p>}
       </>
@@ -629,7 +613,7 @@ function Sheet({ children, onClose }: { children: React.ReactNode; onClose: () =
   );
 }
 
-function ActionSheet({ m, onClose, onReply, onCopy, onDownload, onDelete }: { m: ChatMsg; onClose: () => void; onReply: () => void; onCopy: () => void; onDownload: () => void; onDelete: () => void }) {
+function ActionSheet({ m, onClose, onReply, onCopy, onDelete }: { m: ChatMsg; onClose: () => void; onReply: () => void; onCopy: () => void; onDelete: () => void }) {
   const [confirm, setConfirm] = useState(false);
   const row = (icon: React.ReactNode, label: string, onClick: () => void, danger = false) => (
     <button type="button" onClick={onClick} className={`press flex w-full items-center gap-3.5 rounded-xl px-3 py-3 text-left text-[15.5px] font-medium hover:bg-page ${danger ? 'text-[#d93036]' : 'text-ink'}`}>
@@ -650,7 +634,6 @@ function ActionSheet({ m, onClose, onReply, onCopy, onDownload, onDelete }: { m:
         <>
           {!m.deleted && row(<Reply size={20} />, 'Reply', onReply)}
           {!m.deleted && (m.text || m.kind === 'text') && row(<Copy size={20} />, 'Copy text', onCopy)}
-          {!m.deleted && m.blob && row(<Download size={20} />, m.kind === 'image' ? 'Save photo to device' : m.kind === 'video' ? 'Save video to device' : m.kind === 'audio' ? 'Save voice note' : 'Download file', onDownload)}
           {row(<Trash2 size={20} />, 'Delete', () => setConfirm(true), true)}
         </>
       )}
@@ -667,9 +650,7 @@ function ImageViewer({ m, onClose }: { m: ChatMsg; onClose: () => void }) {
           <X size={24} />
         </button>
         <span className="text-[14px]">{timeOf(m.at)}</span>
-        <button type="button" onClick={() => m.blob && download(m.blob, m.fileName ?? `stanley-photo-${m.id}.jpg`)} aria-label="Save photo to device" className="grid h-11 w-11 place-items-center">
-          <Download size={22} />
-        </button>
+        <span className="w-11" />
       </div>
       <div className="flex flex-1 items-center justify-center p-2" onClick={onClose}>
         {url && <img src={url} alt="" className="max-h-full max-w-full object-contain" />}

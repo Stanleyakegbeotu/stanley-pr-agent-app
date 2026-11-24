@@ -1,148 +1,78 @@
-/** My Referrals (owner's reference) and one referral's details. */
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { CalendarDays, Check, ClipboardList, Copy, Filter, Hash, Phone, Plus } from 'lucide-react';
+/**
+ * My Patients (compliance rebuild, 2026-11-24): the clinician's OWN requests
+ * only, for 90 days after results / non-attendance. Counts only, never money
+ * totals; each request shows its quoted price. No searching all history by
+ * phone number. Details: status timeline, tests and quoted price, which tests
+ * were not done (no reasons), clinical details, note, results link.
+ */
+import { useMemo, useState } from 'react';
+import { CalendarDays, Check, Copy, FileText, Hash, Phone, Plus, Siren, Stethoscope } from 'lucide-react';
 import { BRANCH } from '@/config/org';
 import { displayPhone, naira, shortDate } from '@/domain/format';
-import { billOf, commissionOf, isEstimate, serviceSummary, servicesOf, type ReferralStatus, STATUS_LABEL, testChanges, billedIds, cancelSummary, cancelTitle } from '@/domain/referrals';
+import { NOT_ATTENDED_DAYS, RETENTION_DAYS, STAGES, STATUS_LABEL, STATUS_NOTE, countsFor, inMonth, isToday, partialNote, quoteOf, serviceSummary, servicesOf, statusOf, type Referral, type ReferralStatus } from '@/domain/referrals';
 import { useApp } from '@/app/store';
-import { Button, Card, Chip, ChipRow, EmptyState, FilterButton, InitialsAvatar, ScreenHeader, SearchField, StatusBadge, Subtitle, WhatsAppButton } from '@/ui/kit';
-import { shareOnWhatsApp } from '@/domain/whatsapp';
-import { ChangeNote } from '@/screens/home/HomeSections';
+import { Button, Card, Chip, ChipRow, EmptyState, InitialsAvatar, ScreenHeader, SearchField, Segmented, StatusBadge, Subtitle } from '@/ui/kit';
 import { ReferralNoteView } from '@/screens/refer/ReferralNote';
+import { PatientMessageButton } from '@/screens/refer/PatientMessage';
 import { priceText } from '@/screens/Services';
 
+type Period = 'today' | 'month' | 'all';
 type FilterKey = 'All' | ReferralStatus;
-const FILTERS: FilterKey[] = ['All', 'Pending', 'Completed', 'Cancelled'];
+const FILTERS: FilterKey[] = ['All', 'Requested', 'Arrived', 'TestsDone', 'ResultsReady', 'NotAttended'];
 
-/** Local calendar day of a date ("2026-11-23"). */
-const dayKey = (d: Date | string) => {
-  const x = new Date(d);
-  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
-};
-const dayDate = (k: string) => new Date(`${k}T12:00:00`);
-const WEEKDAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const MONTH = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-function dayLabel(k: string) {
-  const today = dayKey(new Date());
-  const y = new Date();
-  y.setDate(y.getDate() - 1);
-  const d = dayDate(k);
-  const date = `${WEEKDAY[d.getDay()]}, ${d.getDate()} ${MONTH[d.getMonth()]}`;
-  return k === today ? `Today · ${date}` : k === dayKey(y) ? `Yesterday · ${date}` : `${date} ${d.getFullYear()}`;
-}
-
-/**
- * My Referrals (owner, 2026-11-23): a DAILY report — opens on today's
- * referrals; the day strip and calendar show any other day's work.
- * Searching looks across every day.
- */
 export function MyReferrals() {
   const { referrals, navigate, route } = useApp();
-  const today = dayKey(new Date());
-  const [day, setDay] = useState<string>(route.query.get('day') ?? today);
+  const qs = route.query.get('status') as ReferralStatus | null;
+  const [period, setPeriod] = useState<Period>(qs ? 'all' : 'month');
+  const [f, setF] = useState<FilterKey>(qs && FILTERS.includes(qs) ? qs : 'All');
   const [q, setQ] = useState('');
-  const [f, setF] = useState<FilterKey>('All');
-  const [newestFirst, setNewestFirst] = useState(true);
-  const picker = useRef<HTMLInputElement>(null);
-  const strip = useRef<HTMLDivElement>(null);
 
-  // Referrals per day (for the strip's counts).
-  const perDay = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const r of referrals) m.set(dayKey(r.createdAt), (m.get(dayKey(r.createdAt)) ?? 0) + 1);
-    return m;
-  }, [referrals]);
-  // The last 14 days, today on the right (like a calendar strip).
-  const days = useMemo(() => {
-    const out: string[] = [];
-    for (let i = 13; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      out.push(dayKey(d));
-    }
-    if (!out.includes(day)) out.unshift(day);
-    return out;
-  }, [day]);
-  useEffect(() => {
-    strip.current?.querySelector<HTMLElement>('[aria-pressed="true"]')?.scrollIntoView({ inline: 'center', block: 'nearest' });
-  }, [day]);
-
-  const t = q.trim().toLowerCase();
-  const digits = t.replace(/\D/g, '');
-  const searching = t.length > 0;
-  const ofDay = useMemo(() => referrals.filter((r) => searching || dayKey(r.createdAt) === day), [referrals, day, searching]);
+  const inPeriod = useMemo(() => referrals.filter((r) => (period === 'today' ? isToday(r.createdAt) : period === 'month' ? inMonth(r.createdAt) : true)), [referrals, period]);
+  const month = countsFor(referrals.filter((r) => inMonth(r.createdAt)));
   const counts = useMemo(() => {
-    const c: Record<string, number> = { All: ofDay.length };
-    for (const r of ofDay) c[r.status] = (c[r.status] ?? 0) + 1;
+    const c: Record<string, number> = { All: inPeriod.length };
+    for (const r of inPeriod) c[statusOf(r)] = (c[statusOf(r)] ?? 0) + 1;
     return c;
-  }, [ofDay]);
-  const list = ofDay
-    .filter((r) => f === 'All' || r.status === f)
-    .filter((r) => !t || r.patient.name.toLowerCase().includes(t) || r.id.toLowerCase().includes(t) || (digits.length >= 3 && (r.patient.phone.includes(digits) || r.id.includes(digits))) || serviceSummary(r).toLowerCase().includes(t))
-    .sort((a, b) => (newestFirst ? b.createdAt.localeCompare(a.createdAt) : a.createdAt.localeCompare(b.createdAt)));
-  const live = ofDay.filter((r) => r.status !== 'Cancelled');
-  const summary = {
-    referred: live.length,
-    cancelled: ofDay.filter((r) => r.status === 'Cancelled').length,
-    completed: live.filter((r) => r.status === 'Completed').length,
-    commission: live.reduce((s, r) => s + commissionOf(r), 0),
-  };
-  const pick = (k: string) => {
-    setDay(k);
-    setF('All');
-  };
+  }, [inPeriod]);
+  const t = q.trim().toLowerCase();
+  // Search by name or request ID, only within what's listed (no phone-number search of history).
+  const list = inPeriod.filter((r) => f === 'All' || statusOf(r) === f).filter((r) => !t || r.patient.name.toLowerCase().includes(t) || r.id.toLowerCase().includes(t));
 
   return (
     <>
-      <ScreenHeader
-        title="My Referrals"
-        back={false}
-        right={
-          <button type="button" onClick={() => picker.current?.showPicker?.() ?? picker.current?.click()} aria-label="Pick a day" className="press grid h-11 w-11 place-items-center rounded-full bg-white text-brand-600 shadow-[0_4px_12px_rgba(30,74,160,0.1)] ring-1 ring-line">
-            <CalendarDays size={20} />
-          </button>
-        }
-      />
-      <input ref={picker} type="date" max={today} value={day} onChange={(e) => e.target.value && pick(e.target.value)} className="sr-only" aria-label="Pick a day" tabIndex={-1} />
-      <Subtitle>Your daily referral report. Pick a day to see that day’s work.</Subtitle>
+      <ScreenHeader title="My Patients" back={false} />
+      <Subtitle>Patients you requested tests for. Each stays here for {RETENTION_DAYS} days after results or non-attendance.</Subtitle>
 
-      {/* Day strip */}
-      <div ref={strip} className="-mx-5 mb-4 flex gap-2 overflow-x-auto px-5 pb-1 md:-mx-8 md:px-8">
-        {days.map((k) => {
-          const d = dayDate(k);
-          const on = k === day && !searching;
-          const n = perDay.get(k) ?? 0;
-          return (
-            <button key={k} type="button" aria-pressed={on} onClick={() => pick(k)} className={`press flex w-[58px] shrink-0 flex-col items-center rounded-[18px] py-2.5 ${on ? 'bg-brand-600 text-white shadow-[0_10px_22px_rgba(31,111,232,0.3)]' : 'bg-white text-ink ring-1 ring-line'}`}>
-              <span className={`text-[11.5px] font-medium ${on ? 'text-white/85' : 'text-muted'}`}>{k === today ? 'Today' : WEEKDAY[d.getDay()]}</span>
-              <span className="text-[19px] font-bold leading-tight">{d.getDate()}</span>
-              <span className={`mt-0.5 h-1.5 w-1.5 rounded-full ${n ? (on ? 'bg-white' : 'bg-brand-500') : 'bg-transparent'}`} />
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Day summary */}
+      {/* Month summary: counts only */}
       <section className="mb-4 rounded-[22px] bg-linear-to-br from-brand-600 to-brand-800 p-4 text-white shadow-[0_14px_30px_rgba(31,111,232,0.28)]">
-        <p className="text-[13px] font-medium text-white/80">{searching ? `Search results across all days` : dayLabel(day)}</p>
-        <div className="mt-2 grid grid-cols-4 gap-2">
-          {[
-            ['Referred', String(summary.referred)],
-            ['Completed', String(summary.completed)],
-            ['Cancelled', String(summary.cancelled)],
-            ['Est. comm.', naira(summary.commission)],
-          ].map(([l, v]) => (
+        <p className="text-[13px] font-medium text-white/80">This month</p>
+        <div className="mt-2 grid grid-cols-3 gap-2">
+          {(
+            [
+              ['Referred', month.referred],
+              ['Attended', month.attended],
+              ['Results ready', month.resultsReady],
+            ] as const
+          ).map(([l, v]) => (
             <div key={l} className="min-w-0">
-              <p className={`truncate font-bold leading-tight ${v!.length > 6 ? 'text-[15px]' : 'text-[22px]'}`}>{v}</p>
-              <p className="text-[11.5px] text-white/75">{l}</p>
+              <p className="text-[24px] font-bold leading-tight">{v}</p>
+              <p className="text-[12px] text-white/75">{l}</p>
             </div>
           ))}
         </div>
       </section>
 
-      <div className="mb-4 flex gap-3">
-        <SearchField value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search all days by name, phone or ID..." aria-label="Search referrals" />
-        <FilterButton onClick={() => setNewestFirst((v) => !v)} label={newestFirst ? 'Showing newest first, tap for oldest first' : 'Showing oldest first, tap for newest first'} icon={<Filter size={21} />} />
+      <Segmented<Period>
+        value={period}
+        onChange={(p) => (setPeriod(p), setF('All'))}
+        options={[
+          { value: 'today', label: 'Today' },
+          { value: 'month', label: 'This month' },
+          { value: 'all', label: `Last ${RETENTION_DAYS} days` },
+        ]}
+      />
+      <div className="mb-4">
+        <SearchField value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name or request ID..." aria-label="Search patients" />
       </div>
       <ChipRow>
         {FILTERS.filter((x) => x === 'All' || counts[x]).map((x) => (
@@ -155,40 +85,21 @@ export function MyReferrals() {
       {list.length === 0 ? (
         <EmptyState
           sticker="clipboard"
-          title={searching ? 'No matching referrals' : `No referrals ${day === today ? 'yet today' : 'on this day'}`}
-          text={searching ? 'Try another name, phone number or referral ID.' : day === today ? 'Patients you refer today will appear here with their status.' : `You didn’t send any referrals on ${dayLabel(day)}. Pick another day above.`}
+          title={t ? 'No matching patients' : period === 'today' ? 'No requests today' : 'No patients here'}
+          text={t ? 'Try another name or request ID.' : 'Patients you request tests for will appear here with their status.'}
           action={
-            day === today && !searching ? (
+            !t ? (
               <Button onClick={() => navigate('/refer')}>
-                <Plus size={19} /> Refer a Patient
+                <Plus size={19} /> New request
               </Button>
             ) : undefined
           }
         />
       ) : (
-        <ul className="space-y-3">
+        <ul className="space-y-2.5">
           {list.map((r) => (
             <li key={r.id}>
-              <button type="button" onClick={() => navigate(`/referrals/${r.id}`)} className="card press flex w-full items-start gap-3.5 p-4 text-left">
-                <InitialsAvatar name={r.patient.name} />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[16.5px] font-bold text-ink">{r.patient.name}</span>
-                  <span className="mt-1 flex items-center gap-1.5 text-[13.5px] text-muted">
-                    <Hash size={14} /> {r.id}
-                  </span>
-                  <span className="mt-0.5 flex items-center gap-1.5 truncate text-[13.5px] text-muted">
-                    <ClipboardList size={14} className="shrink-0" /> {serviceSummary(r)}
-                  </span>
-                </span>
-                <span className="flex shrink-0 flex-col items-end gap-1.5">
-                  <StatusBadge status={r.status} />
-                  <span className="text-[13px] text-muted">{searching ? shortDate(r.createdAt) : new Date(r.createdAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</span>
-                  <span className={`text-[16px] font-bold ${r.status === 'Cancelled' ? 'text-faint line-through' : r.status === 'Pending' ? 'text-orange' : 'text-good'}`}>
-                    {isEstimate(r) && r.status === 'Pending' ? 'Est. ' : ''}
-                    {naira(commissionOf(r))}
-                  </span>
-                </span>
-              </button>
+              <PatientCard r={r} onOpen={() => navigate(`/referrals/${r.id}`)} />
             </li>
           ))}
         </ul>
@@ -197,26 +108,55 @@ export function MyReferrals() {
   );
 }
 
-const STAGES: ReferralStatus[] = ['Pending', 'Completed'];
-const STAGE_TEXT: Record<string, string> = {
-  Pending: 'Sent to the branch with the referral ID',
-  Completed: 'Billing done at the branch, commission confirmed',
-};
+/** One patient, laid out like the service cards (status tile, name, quote, tags). */
+export function PatientCard({ r, onOpen }: { r: Referral; onOpen: () => void }) {
+  const s = statusOf(r);
+  const partial = partialNote(r);
+  return (
+    <button type="button" onClick={onOpen} className="press flex w-full items-start gap-3.5 rounded-[20px] bg-white p-3 text-left shadow-[0_6px_20px_rgba(30,74,160,0.07)] ring-1 ring-line/70">
+      <InitialsAvatar name={r.patient.name} size={52} />
+      <span className="min-w-0 flex-1">
+        <span className="flex items-start justify-between gap-2">
+          <span className="truncate text-[15px] font-semibold leading-snug text-ink">{r.patient.name}</span>
+          <span className="shrink-0 whitespace-nowrap text-[14px] font-bold text-brand-600">{naira(quoteOf(r))}</span>
+        </span>
+        <span className="mt-0.5 line-clamp-1 text-[12.5px] text-muted">
+          {r.id}, {isToday(r.createdAt) ? new Date(r.createdAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : shortDate(r.createdAt)}, {serviceSummary(r)}
+        </span>
+        {partial && <span className="mt-0.5 block text-[12.5px] font-medium text-[#b45309]">{partial}</span>}
+        <span className="mt-2 flex flex-wrap items-center gap-1.5">
+          <StatusBadge status={s} />
+          <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[11.5px] font-medium text-brand-700">
+            {r.serviceIds.length} test{r.serviceIds.length === 1 ? '' : 's'}
+          </span>
+          {r.urgency === 'Urgent' && <span className="rounded-full bg-[#fdecec] px-2 py-0.5 text-[11.5px] font-semibold text-[#b42318]">Urgent</span>}
+          {r.queued && <span className="rounded-full bg-[#f1f4f9] px-2 py-0.5 text-[11.5px] font-medium text-ink-2">Waiting to send</span>}
+        </span>
+      </span>
+    </button>
+  );
+}
+
+const STAGE_TIME: Record<string, (r: Referral) => string | undefined> = { Requested: (r) => r.createdAt, Arrived: (r) => r.arrivedAt, TestsDone: (r) => r.testsDoneAt, ResultsReady: (r) => r.resultsAt };
 
 export function ReferralDetails({ id }: { id: string }) {
-  const { referrals, showToast } = useApp();
+  const { referrals, navigate, showToast } = useApp();
   const r = referrals.find((x) => x.id === id);
   if (!r)
     return (
       <>
-        <ScreenHeader title="Referral" />
-        <EmptyState sticker="clipboard" title="Referral not found" text="Check the referral ID and try again." />
+        <ScreenHeader title="Request" />
+        <EmptyState sticker="clipboard" title="Request not found" text={`You can only see your own patients, for ${RETENTION_DAYS} days after results.`} />
       </>
     );
-  const at = STAGES.indexOf(r.status);
+  const s = statusOf(r);
+  const at = STAGES.indexOf(s);
+  const partial = partialNote(r);
+  const tests = servicesOf(r);
+  const notDone = new Set(r.doneServiceIds ? tests.filter((x) => !r.doneServiceIds!.includes(x.id)).map((x) => x.id) : []);
   return (
     <>
-      <ScreenHeader title="Referral Details" />
+      <ScreenHeader title="Request Details" />
       <Card className="mb-3.5 p-5">
         <div className="flex items-center gap-3.5">
           <InitialsAvatar name={r.patient.name} size={56} />
@@ -227,48 +167,52 @@ export function ReferralDetails({ id }: { id: string }) {
               onClick={async () => {
                 try {
                   await navigator.clipboard.writeText(r.id);
-                  showToast('Referral ID copied');
+                  showToast('Request ID copied');
                 } catch {
                   showToast(r.id);
                 }
               }}
               className="mt-0.5 flex items-center gap-1.5 text-[14px] font-semibold text-brand-600"
             >
-              {r.id} <Copy size={14} />
+              <Hash size={14} /> {r.id} <Copy size={14} />
             </button>
           </div>
-          <StatusBadge status={r.status} />
+          <StatusBadge status={s} />
         </div>
         <div className="mt-4 space-y-1.5 text-[15px] text-ink-2">
           <p className="flex items-center gap-2.5">
             <Phone size={17} className="text-muted" /> {displayPhone(r.patient.phone)}
           </p>
           <p className="flex items-center gap-2.5">
-            <CalendarDays size={17} className="text-muted" /> Referred {shortDate(r.createdAt)} · {BRANCH.name} branch
+            <CalendarDays size={17} className="text-muted" /> Requested {shortDate(r.createdAt)}, {BRANCH.name} branch
           </p>
         </div>
       </Card>
 
-      <ReferralNoteView id={r.id} note={r.note} voiceNote={r.voiceNote} />
-
-      {r.status === 'Cancelled' && (
-        <div className="mb-3.5 rounded-[20px] border border-[#f6c9c9] bg-[#fdecec] p-4">
-          <p className="text-[15.5px] font-bold text-[#b42318]">{cancelTitle(r)}</p>
-          <p className="mt-0.5 text-[14px] text-[#7a271a]">{cancelSummary(r)} There is no commission for this referral.</p>
-        </div>
+      {s === 'ResultsReady' && (
+        <Button block className="mb-3.5" onClick={() => navigate(`/results/${r.id}`)}>
+          <FileText size={19} /> View results
+        </Button>
       )}
-      {r.status !== 'Cancelled' && (
+
+      {s === 'NotAttended' ? (
+        <div className="mb-3.5 rounded-[20px] border border-[#ffe2c6] bg-tint-orange p-4">
+          <p className="text-[15.5px] font-bold text-warn-ink">Not attended</p>
+          <p className="mt-0.5 text-[14px] text-warn-ink">The patient didn’t come to the branch within {NOT_ATTENDED_DAYS} days of the request.</p>
+        </div>
+      ) : (
         <Card className="mb-3.5 p-5">
           <h2 className="mb-4 text-[17px] font-bold text-ink">Progress</h2>
           <ol className="space-y-4">
-            {STAGES.map((s, i) => {
+            {STAGES.map((st, i) => {
               const done = i <= at;
+              const time = STAGE_TIME[st]!(r);
               return (
-                <li key={s} className="flex items-start gap-3.5">
+                <li key={st} className="flex items-start gap-3.5">
                   <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${done ? 'bg-brand-600 text-white' : 'border-2 border-[#d7dfeb] text-faint'}`}>{done ? <Check size={17} strokeWidth={3} /> : i + 1}</span>
                   <span>
-                    <span className={`block text-[15.5px] font-semibold ${done ? 'text-ink' : 'text-faint'}`}>{STATUS_LABEL[s]}</span>
-                    <span className="block text-[13.5px] text-muted">{STAGE_TEXT[s]}</span>
+                    <span className={`block text-[15.5px] font-semibold ${done ? 'text-ink' : 'text-faint'}`}>{STATUS_LABEL[st]}</span>
+                    <span className="block text-[13.5px] text-muted">{done && time ? new Date(time).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : STATUS_NOTE[st]}</span>
                   </span>
                 </li>
               );
@@ -278,47 +222,44 @@ export function ReferralDetails({ id }: { id: string }) {
       )}
 
       <Card className="mb-3.5 p-5">
-        <h2 className="mb-3 text-[17px] font-bold text-ink">{r.billedServiceIds ? 'Services billed' : 'Services'} ({billedIds(r).length})</h2>
+        <h2 className="mb-3 text-[17px] font-bold text-ink">Tests requested ({tests.length})</h2>
         <ul className="space-y-2.5">
-          {servicesOf(r).map((s) => {
-            const removed = !!r.billedServiceIds && !r.billedServiceIds.includes(s.id);
-            return (
-              <li key={s.id} className="flex justify-between gap-3 text-[15.5px]">
-                <span>
-                  <span className={removed ? 'text-faint line-through' : 'text-ink'}>{s.name}</span>
-                  {removed && <span className="ml-2 rounded-md bg-[#fdecec] px-1.5 py-0.5 text-[11.5px] font-semibold text-[#b42318]">Removed</span>}
-                </span>
-                <span className={`font-semibold ${removed ? 'text-faint line-through' : 'text-ink'}`}>{priceText(s.price)}</span>
-              </li>
-            );
-          })}
-          {(testChanges(r)?.added ?? []).map((s) => (
-            <li key={s.id} className="flex justify-between gap-3 text-[15.5px]">
-              <span className="text-ink">
-                {s.name}
-                <span className="ml-2 rounded-md bg-[#e8f8ef] px-1.5 py-0.5 text-[11.5px] font-semibold text-good-ink">Added</span>
+          {tests.map((x) => (
+            <li key={x.id} className="flex justify-between gap-3 text-[15.5px]">
+              <span>
+                <span className="text-ink">{x.name}</span>
+                {notDone.has(x.id) && <span className="ml-2 rounded-md bg-[#fff1e0] px-1.5 py-0.5 text-[11.5px] font-semibold text-[#b45309]">Not done</span>}
               </span>
-              <span className="font-semibold text-ink">{priceText(s.price)}</span>
+              <span className="font-semibold text-ink">{priceText(x.price)}</span>
             </li>
           ))}
         </ul>
-        {testChanges(r) && <ChangeNote r={r} className="mt-3.5" />}
+        {partial && <p className="mt-3 rounded-xl bg-[#fff6e5] px-3 py-2 text-[13.5px] text-[#8a5a12]">{partial}.</p>}
         <div className="mt-3.5 flex justify-between border-t border-line pt-3.5 text-[16px]">
-          <span className="text-ink">Patient bill</span>
-          <span className="font-bold text-ink">{naira(billOf(r))}</span>
+          <span className="text-ink">Quoted price</span>
+          <span className="font-bold text-ink">{naira(quoteOf(r))}</span>
         </div>
+        <p className="mt-1 text-[12.5px] text-muted">What the patient was told to expect. The final price is confirmed at the branch.</p>
       </Card>
 
-      <div className={`flex items-center justify-between rounded-[20px] border p-4 ${r.status === 'Completed' ? 'border-[#c8ecd7] bg-tint-green' : 'border-[#ffe2c6] bg-tint-orange'}`}>
-        <span className={`text-[15px] font-medium ${r.status === 'Completed' ? 'text-good-ink' : 'text-warn-ink'}`}>{r.status === 'Completed' ? (r.paidAt ? 'Commission paid' : 'Commission confirmed') : r.status === 'Cancelled' ? 'No commission' : 'Estimated commission'}</span>
-        <span className={`text-[22px] font-bold ${r.status === 'Completed' ? 'text-good-ink' : 'text-warn-ink'}`}>{naira(r.status === 'Cancelled' ? 0 : commissionOf(r))}</span>
-      </div>
-      {r.queued && <p className="mt-3 text-[12.5px] text-muted">Saved on this phone, sent to the branch automatically when the cloud connection is available.</p>}
-      {r.status === 'Pending' && (
-        <div className="mt-4">
-          <WhatsAppButton onClick={() => shareOnWhatsApp(r)}>Send referral to patient on WhatsApp</WhatsAppButton>
-        </div>
-      )}
+      <Card className="mb-3.5 p-5">
+        <h2 className="mb-2 flex items-center gap-2.5 text-[17px] font-bold text-ink">
+          <Stethoscope size={19} className="text-brand-600" /> Clinical details
+        </h2>
+        <p className="flex items-center gap-2 text-[14.5px] text-ink-2">
+          {r.urgency === 'Urgent' && <Siren size={16} className="text-[#d93036]" />} Urgency: <b className="text-ink">{r.urgency}</b>
+        </p>
+        {r.indication && (
+          <p className="mt-1.5 text-[14.5px] leading-relaxed text-ink-2">
+            Reason for tests: <span className="text-ink">{r.indication}</span>
+          </p>
+        )}
+      </Card>
+
+      <ReferralNoteView id={r.id} note={r.note} voiceNote={r.voiceNote} />
+
+      {r.queued && <p className="mb-3 text-[12.5px] text-muted">Saved on this phone (encrypted). It’s sent to the branch when the server is connected.</p>}
+      {(s === 'Requested' || s === 'Arrived') && <PatientMessageButton r={r} />}
     </>
   );
 }

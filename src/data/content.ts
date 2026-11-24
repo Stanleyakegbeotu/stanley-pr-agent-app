@@ -1,6 +1,13 @@
 /**
- * Announcements, campaigns, messages, help and training content (samples).
- * When the cloud database is connected these come from the company.
+ * Announcements, campaigns, notifications, help and training content (samples).
+ * When the server is connected these come from the company.
+ *
+ * Compliance (2026-11-24):
+ *  • No money content for clinicians (no commission, targets or rewards).
+ *  • Campaigns are patient-facing health information or offers open to ALL
+ *    patients, and only show once they carry an ARCON approval (ARCON Act 2022).
+ *  • Notifications never contain patient names or tests; details are only
+ *    inside the unlocked app.
  */
 import type { StickerKey } from '@/assets';
 import type { RoutePath } from '@/app/routes';
@@ -16,7 +23,7 @@ export interface Announcement {
   /** Card gradient (all in the app's blue family, one accent each). */
   theme: 'blue' | 'indigo' | 'teal' | 'violet';
   sticker: StickerKey;
-  /** Big figure on the pill ("15%"). */
+  /** Short word on the pill ("NEW"). */
   badge?: string;
   /** Show the rising bar chart behind the sticker. */
   chart?: boolean;
@@ -24,10 +31,10 @@ export interface Announcement {
 }
 
 export const ANNOUNCEMENTS: Announcement[] = [
-  { id: 'rate-15', kicker: 'Announcement', title: 'Your Commission\nis now 15%', text: 'We’ve increased your referral commission on eligible services.', cta: 'View Details', to: '/earnings', theme: 'blue', sticker: 'womanHealthWorker', badge: '15%', chart: true, date: 'This week' },
-  { id: 'bonus', kicker: 'Monthly bonus', title: 'Earn ₦10,000\nextra this month', text: 'Reach 15 completed referrals this month and unlock your bonus.', cta: 'See My Target', to: '/targets', theme: 'indigo', sticker: 'trophy', badge: '₦10k', date: 'This month' },
-  { id: 'screening', kicker: 'Campaign', title: 'Free Health\nScreening Week', text: 'Invite patients for free blood pressure and sugar checks at the branch.', cta: 'View Campaign', to: '/campaigns', theme: 'teal', sticker: 'manHealthWorker', badge: 'FREE', date: 'Starts Monday' },
-  { id: 'catalogue', kicker: 'Abuja Branch', title: `${SERVICES.length} services,\none referral`, text: 'Lab, X-ray, MRI, ultrasound, CT and more. See every service and price.', cta: 'View Services', to: '/services', theme: 'violet', sticker: 'hospital', badge: String(SERVICES.length), date: 'Now available' },
+  { id: 'results', kicker: 'New', title: 'Results in\nthe app', text: 'Signed-off results for your own patients, kept for 90 days.', cta: 'Open Results', to: '/results', theme: 'blue', sticker: 'womanHealthWorker', badge: 'NEW', date: 'This week' },
+  { id: 'erequest', kicker: 'Requests', title: 'No more\npaper forms', text: 'Send the request with the clinical reason. Silhouette tells the patient the tests and price.', cta: 'New request', to: '/refer', theme: 'indigo', sticker: 'clipboard', date: 'Now available' },
+  { id: 'prep', kicker: 'Patient care', title: 'Preparing\npatients', text: 'Fasting, full bladder and metal-free tips for every test.', cta: 'Read the guide', to: '/training/preparation', theme: 'teal', sticker: 'calendar', date: 'Guide' },
+  { id: 'catalogue', kicker: 'Abuja Branch', title: `${SERVICES.length} tests,\none request`, text: 'Lab, X-ray, MRI, ultrasound, CT and more, with prices and preparation.', cta: 'View tests', to: '/services', theme: 'violet', sticker: 'hospital', badge: String(SERVICES.length), date: 'Now available' },
 ];
 
 export interface Campaign {
@@ -37,12 +44,24 @@ export interface Campaign {
   period: string;
   sticker: StickerKey;
   status: 'Active' | 'Upcoming' | 'Ended';
+  /** ARCON approval (reference + date). Without it the campaign is not shown. */
+  arconApproval?: { reference: string; date: string };
 }
 export const CAMPAIGNS: Campaign[] = [
-  { id: 'screening', title: 'Free Health Screening Week', text: 'Free blood pressure and blood sugar checks for every patient you refer during the week.', period: 'Mon to Sat, next week', sticker: 'stethoscope', status: 'Upcoming' },
-  { id: 'women', title: 'Women’s Wellness Month', text: '10% off pelvic ultrasound and thyroid tests for women referred this month.', period: 'All this month', sticker: 'womanHealthWorker', status: 'Active' },
-  { id: 'heart', title: 'Know Your Heart', text: 'Lipid profile + ECG package at a reduced price for patients over 40.', period: 'Last month', sticker: 'chart', status: 'Ended' },
+  {
+    id: 'screening',
+    title: 'Free Health Screening Week',
+    text: 'Free blood pressure and blood sugar checks for anyone who visits the branch during the week. Share this information with patients who may benefit.',
+    period: 'Mon to Sat, next week',
+    sticker: 'stethoscope',
+    status: 'Upcoming',
+    // TODO(company): replace with the real ARCON approval reference and date.
+    arconApproval: { reference: 'Sample reference, replace with ARCON approval', date: '2026-11-10' },
+  },
+  { id: 'women', title: 'Women’s Wellness Month', text: 'Pelvic ultrasound and thyroid tests at a reduced price for all women this month.', period: 'All this month', sticker: 'womanHealthWorker', status: 'Active' },
 ];
+/** Only campaigns with an ARCON approval may be shown. */
+export const approvedCampaigns = () => CAMPAIGNS.filter((c) => c.arconApproval?.reference && c.arconApproval.date);
 
 /* Conversations: see data/team.ts (branch inboxes). */
 
@@ -54,10 +73,11 @@ export interface Notice {
   sticker: StickerKey;
   to?: RoutePath;
 }
+/** Generic on purpose: no patient names or tests in notifications. */
 export const NOTIFICATIONS: Notice[] = [
-  { id: 'n1', title: 'Patient completed', text: 'John Adeyemi’s X-Ray and MRI are completed. Commission confirmed.', when: 'Today · 09:42', sticker: 'check', to: '/referrals' },
-  { id: 'n2', title: 'Referral cancelled', text: 'Blessing Udo cancelled before visiting the branch.', when: 'Today · 09:10', sticker: 'hospital', to: '/referrals' },
-  { id: 'n3', title: 'Commission rate updated', text: 'Your commission is now 15% on eligible services.', when: 'This week', sticker: 'moneyBag', to: '/earnings' },
+  { id: 'n1', title: 'Results ready', text: 'Results are ready for one of your patients. Open the app to view them.', when: 'Today · 09:42', sticker: 'check', to: '/results' },
+  { id: 'n2', title: 'Patient arrived', text: 'A patient you referred has arrived at the branch.', when: 'Today · 09:10', sticker: 'hospital', to: '/referrals' },
+  { id: 'n3', title: 'Account verified', text: 'Silhouette has verified your licence. You can send requests.', when: 'This week', sticker: 'stethoscope', to: '/refer' },
 ];
 
 export interface Faq {
@@ -65,10 +85,12 @@ export interface Faq {
   a: string;
 }
 export const FAQS: Faq[] = [
-  { q: 'How do I refer a patient?', a: 'Tap Refer (the blue + button), enter the patient’s details, choose the services and send. The patient gets a referral ID to show at the branch front desk.' },
-  { q: 'When is my commission confirmed?', a: 'Your commission is an estimate until the patient’s tests are completed and paid at the branch. It is then confirmed and paid in the next payout.' },
-  { q: 'How is commission calculated?', a: 'Commission is a percentage of the patient’s full bill for all the tests they do, currently 15%. ₦103,000 × 15% = ₦15,450.' },
-  { q: 'Can I refer without internet?', a: 'Yes. The referral is saved on your phone and sent automatically when you are back online.' },
+  { q: 'How do I send a request?', a: 'Tap the blue + button. Enter the patient’s details, choose the tests, add the clinical details and send. The patient gets a request ID to show at the front desk.' },
+  { q: 'Why must I give a reason for X-ray and CT?', a: 'Imaging that uses radiation must be clinically justified (NNRA). Add the symptoms, findings and what you want to rule out. It also helps the radiologist report.' },
+  { q: 'What does the patient receive?', a: 'Silhouette sends the patient the request ID, the branch address, the tests, how to prepare and the quoted price, with a link to the patient privacy notice. It never comes from your personal WhatsApp.' },
+  { q: 'When do I get the results?', a: 'After the pathologist or radiologist signs them off. You get a notification without patient details, then open Results in the app. Results stay available for 90 days.' },
+  { q: 'Who can see my patients’ information?', a: 'Only you, for the patients you requested tests for, and the Silhouette staff caring for them. Data on your phone is encrypted and the app locks with your PIN.' },
+  { q: 'Can I send a request without internet?', a: 'Yes. It is saved on your phone, encrypted, and sent when you are back online.' },
 ];
 
 export interface Resource {
@@ -80,7 +102,8 @@ export interface Resource {
   body: string[];
 }
 export const RESOURCES: Resource[] = [
-  { slug: 'first-referral', title: 'Your first referral, made simple', text: 'Create a referral and guide your patient through every step.', minutes: 5, sticker: 'clipboard', body: ['Open Refer and enter the patient’s full name and phone number.', 'Pick the services the doctor requested, the price and your estimated commission show as you go.', 'Review the summary and send. Share the referral ID with the patient; the front desk uses it to bill them.'] },
-  { slug: 'services', title: 'Understanding diagnostic services', text: 'Know the difference between lab tests, X-ray, CT, MRI and ultrasound.', minutes: 7, sticker: 'microscope', body: ['Laboratory tests use blood or other samples.', 'X-ray, CT and MRI are imaging tests, MRI uses no radiation and shows soft tissue best.', 'Ultrasound uses sound waves and is safe in pregnancy.'] },
-  { slug: 'preparation', title: 'Preparing patients for their visit', text: 'Fasting, full bladder and metal-free tips that save time at the branch.', minutes: 4, sticker: 'calendar', body: ['Check each service’s preparation note before the patient travels.', 'Many blood tests and abdominal scans need fasting.', 'Pelvic ultrasound usually needs a full bladder.'] },
+  { slug: 'first-request', title: 'Sending your first request', text: 'The four steps of an e-request, from patient details to sending.', minutes: 5, sticker: 'clipboard', body: ['Enter the patient’s full name and phone number (gender and age are optional).', 'Choose the tests by category or by name. Search help can suggest tests from a description, but you decide.', 'Add the clinical reason (required for X-ray and CT) and the urgency.', 'Tell the patient their details go to Silhouette, tick the box, and send. Give the patient the request ID.'] },
+  { slug: 'services', title: 'Understanding diagnostic tests', text: 'The difference between lab tests, X-ray, CT, MRI and ultrasound.', minutes: 7, sticker: 'microscope', body: ['Laboratory tests use blood or other samples.', 'X-ray and CT use radiation and must be clinically justified; MRI uses no radiation and shows soft tissue best.', 'Ultrasound uses sound waves and is safe in pregnancy.'] },
+  { slug: 'preparation', title: 'Preparing patients for their visit', text: 'Fasting, full bladder and metal-free tips that save time at the branch.', minutes: 4, sticker: 'calendar', body: ['Check each test’s preparation note before the patient travels.', 'Many blood tests and abdominal scans need fasting.', 'Pelvic ultrasound usually needs a full bladder.', 'Patients should remove metal before X-ray, CT and MRI, and tell staff if they may be pregnant.'] },
+  { slug: 'results', title: 'Receiving results', text: 'When results appear, how long they stay and how to keep them confidential.', minutes: 3, sticker: 'check', body: ['Results appear after the specialist signs them off.', 'Only you can see results for the patients you requested tests for, for 90 days.', 'Results are watermarked with your name. Don’t screenshot or forward them; each view is recorded.'] },
 ];

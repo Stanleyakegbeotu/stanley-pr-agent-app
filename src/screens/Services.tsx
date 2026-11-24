@@ -8,9 +8,9 @@
  *  • Each service: what it is, what it's for, how it's done, how to prepare.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowUpRight, Clock3, Droplets, ScanLine, Lightbulb, ListChecks, Share2, Stethoscope, Target, UserPlus, Utensils, Wallet } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, Clock3, Droplets, ScanLine, Lightbulb, ListChecks, Share2, Stethoscope, Target, UserPlus, Utensils } from 'lucide-react';
 import { PHOTOS } from '@/assets';
-import { BRANCH, RULES } from '@/config/org';
+import { BRANCH } from '@/config/org';
 import { CATEGORIES, GUIDE_SOURCES, SERVICES, categoryFrom, categoryInfo, categoryVisual, serviceById, type Service } from '@/data/services';
 import { naira } from '@/domain/format';
 import { SEARCH_EXAMPLES, smartSearch } from '@/domain/testSearch';
@@ -134,7 +134,7 @@ export function CategoryHome({ onOpen, onExample }: { onOpen: (k: string) => voi
           <Lightbulb size={20} />
         </span>
         <div className="min-w-0">
-          <p className="text-[14.5px] font-semibold text-ink">Not sure of the name?</p>
+          <p className="text-[14.5px] font-semibold text-ink">Search help: you choose the tests</p>
           <p className="text-[13px] text-ink-2">Describe what the doctor is checking for:</p>
           <div className="mt-2.5 flex flex-wrap gap-2">
             {SEARCH_EXAMPLES.map((x) => (
@@ -404,10 +404,7 @@ export function ServiceDetails({ id }: { id: string }) {
         <Fact icon={<Droplets size={17} />} label="Sample / test" value={s.sample} />
         <Fact icon={<Clock3 size={17} />} label="Usual time" value={s.duration} />
       </div>
-      <div className="mt-3 flex items-center gap-3 rounded-[20px] bg-tint-green p-4">
-        <Wallet size={22} className="shrink-0 text-good" />
-        <p className="text-[14px] leading-snug text-good-ink">{s.price == null ? 'The branch hasn’t recorded a price for this service yet, so it can’t be referred in the app.' : `Your commission: ${naira(s.price * RULES.commissionRate)} (${Math.round(RULES.commissionRate * 100)}% of ${naira(s.price)}) when the patient completes the test.`}</p>
-      </div>
+      {s.price == null && <p className="mt-3 rounded-[20px] bg-page p-4 text-[14px] leading-snug text-ink-2">The branch hasn’t recorded a price for this test yet, so it can’t be requested in the app.</p>}
       <p className="mt-3 flex items-start gap-2 text-[12px] leading-relaxed text-muted">
         <Stethoscope size={14} className="mt-0.5 shrink-0" /> General guidance written from {GUIDE_SOURCES.join(', ')}. The requesting doctor and the branch confirm the details for each patient.
       </p>
@@ -415,7 +412,7 @@ export function ServiceDetails({ id }: { id: string }) {
       <div className="mt-5 grid gap-3">
         {s.price != null && (
           <Button block onClick={refer}>
-            <UserPlus size={20} /> Refer a patient for this test
+            <UserPlus size={20} /> Request this test for a patient
           </Button>
         )}
         <Button block variant="secondary" onClick={shareGuide}>
