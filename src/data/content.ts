@@ -4,6 +4,7 @@
  */
 import type { StickerKey } from '@/assets';
 import type { RoutePath } from '@/app/routes';
+import { SERVICES } from './services';
 
 export interface Announcement {
   id: string;
@@ -26,7 +27,7 @@ export const ANNOUNCEMENTS: Announcement[] = [
   { id: 'rate-15', kicker: 'Announcement', title: 'Your Commission\nis now 15%', text: 'We’ve increased your referral commission on eligible services.', cta: 'View Details', to: '/earnings', theme: 'blue', sticker: 'womanHealthWorker', badge: '15%', chart: true, date: 'This week' },
   { id: 'bonus', kicker: 'Monthly bonus', title: 'Earn ₦10,000\nextra this month', text: 'Reach 15 completed referrals this month and unlock your bonus.', cta: 'See My Target', to: '/targets', theme: 'indigo', sticker: 'trophy', badge: '₦10k', date: 'This month' },
   { id: 'screening', kicker: 'Campaign', title: 'Free Health\nScreening Week', text: 'Invite patients for free blood pressure and sugar checks at the branch.', cta: 'View Campaign', to: '/campaigns', theme: 'teal', sticker: 'manHealthWorker', badge: 'FREE', date: 'Starts Monday' },
-  { id: 'ct-new', kicker: 'New service', title: 'CT Scan now at\nAbuja Branch', text: 'Refer patients for CT imaging — results shared with the doctor.', cta: 'View Service', to: '/services/ct-abdomen', theme: 'violet', sticker: 'hospital', badge: 'NEW', date: 'Now available' },
+  { id: 'catalogue', kicker: 'Abuja Branch', title: `${SERVICES.length} services,\none referral`, text: 'Lab, X-ray, MRI, ultrasound, CT and more — see every service and price.', cta: 'View Services', to: '/services', theme: 'violet', sticker: 'hospital', badge: String(SERVICES.length), date: 'Now available' },
 ];
 
 export interface Campaign {

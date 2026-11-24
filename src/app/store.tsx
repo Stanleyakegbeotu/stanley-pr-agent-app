@@ -13,6 +13,7 @@
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { sampleReferrals } from '@/data/referrals';
+import { serviceById } from '@/data/services';
 import { nextReferralNumber, referralId, type Referral } from '@/domain/referrals';
 import { useRouter } from './router';
 import type { Route, RoutePath } from './routes';
@@ -33,7 +34,10 @@ function load(): Saved {
   try {
     const raw = window.localStorage.getItem(KEY);
     const s = raw ? (JSON.parse(raw) as Partial<Saved>) : {};
-    return { mine: Array.isArray(s.mine) ? s.mine : [], draft: s.draft && typeof s.draft === 'object' ? { ...EMPTY_DRAFT, ...s.draft, patient: { ...EMPTY_DRAFT.patient, ...s.draft.patient } } : EMPTY_DRAFT };
+    const draft = s.draft && typeof s.draft === 'object' ? { ...EMPTY_DRAFT, ...s.draft, patient: { ...EMPTY_DRAFT.patient, ...s.draft.patient } } : EMPTY_DRAFT;
+    // Keep only services still in the catalogue (the catalogue comes from the dashboard and can change).
+    draft.serviceIds = (draft.serviceIds ?? []).filter((id) => serviceById(id));
+    return { mine: Array.isArray(s.mine) ? s.mine : [], draft };
   } catch {
     return { mine: [], draft: EMPTY_DRAFT };
   }

@@ -4,11 +4,12 @@
  * the AI Test Assistant.
  */
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, Clock3, Mail, MapPin, Phone, Send, Sparkles, UserRound } from 'lucide-react';
+import { Building2, ChevronDown, ChevronRight, Hash, Layers, MapPin, Phone, Send, Sparkles, UserRound } from 'lucide-react';
 import { PHOTOS } from '@/assets';
-import { AGENT, BRANCH, RULES, agentName } from '@/config/org';
+import { AGENT, BRANCH, COMPANY, RULES, agentName } from '@/config/org';
 import { ANNOUNCEMENTS, CAMPAIGNS, CONVERSATIONS, FAQS, NOTIFICATIONS, RESOURCES } from '@/data/content';
-import { SERVICES, type Service } from '@/data/services';
+import { CATEGORIES, SERVICES, serviceByName, type Service } from '@/data/services';
+import { priceText } from '@/screens/Services';
 import { naira, shortDate } from '@/domain/format';
 import { useApp } from '@/app/store';
 import { Button, Card, EmptyState, InitialsAvatar, ScreenHeader, ServiceThumb, Sticker, Subtitle } from '@/ui/kit';
@@ -17,12 +18,14 @@ import { Button, Card, EmptyState, InitialsAvatar, ScreenHeader, ServiceThumb, S
 
 export function BranchInfo() {
   const { navigate } = useApp();
+  const missing = 'Not on record yet';
   const rows: [React.ReactNode, string, string][] = [
-    [<MapPin size={19} />, 'Address', BRANCH.address],
-    [<Clock3 size={19} />, 'Opening hours', BRANCH.hours],
-    [<Phone size={19} />, 'Phone', BRANCH.phone],
-    [<Mail size={19} />, 'Email', BRANCH.email],
-    [<UserRound size={19} />, 'Branch contact', BRANCH.manager],
+    [<Building2 size={19} />, 'Company', COMPANY.name],
+    [<Hash size={19} />, 'Branch code', `${BRANCH.code} · referral IDs start with ${BRANCH.idCode}-R`],
+    [<MapPin size={19} />, 'Address', BRANCH.address ?? missing],
+    [<Phone size={19} />, 'Phone', BRANCH.phone ?? missing],
+    [<UserRound size={19} />, 'Branch manager', BRANCH.manager ?? missing],
+    [<Layers size={19} />, 'Services', `${SERVICES.length} services in ${CATEGORIES.length} categories`],
   ];
   return (
     <>
@@ -33,7 +36,7 @@ export function BranchInfo() {
           <div>
             <p className="text-[19px] font-bold text-ink">{BRANCH.label}</p>
             <p className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-tint-green px-2.5 py-0.5 text-[13px] font-semibold text-good-ink">
-              <i className="h-1.5 w-1.5 rounded-full bg-good" /> Your assigned branch · Open
+              <i className="h-1.5 w-1.5 rounded-full bg-good" /> Your assigned branch
             </p>
           </div>
         </div>
@@ -49,9 +52,10 @@ export function BranchInfo() {
           ))}
         </ul>
       </Card>
+      {(!BRANCH.address || !BRANCH.phone) && <p className="mb-3.5 text-[12.5px] leading-relaxed text-muted">Details marked “Not on record yet” are added by the branch in the STANLEY dashboard and appear here automatically once the cloud connection is on.</p>}
       <div className="grid grid-cols-2 gap-3">
         <Button variant="secondary" onClick={() => navigate('/messages/branch')}>
-          Message branch
+          Message
         </Button>
         <Button onClick={() => navigate('/services')}>Services</Button>
       </div>
@@ -345,20 +349,22 @@ export function Profile() {
 /* ─────────────── AI Test Assistant ─────────────── */
 
 /** Symptom/need → services, from the catalogue's own guide (no AI model is connected yet). */
-const GUIDE: { label: string; ids: string[]; why: string }[] = [
-  { label: 'Knee pain or injury', ids: ['xray-leg', 'mri-knee'], why: 'X-ray first for bones; MRI shows ligaments and cartilage.' },
-  { label: 'Stomach / abdominal pain', ids: ['us-abdomen', 'ct-abdomen'], why: 'Ultrasound is the usual first scan; CT gives more detail when needed.' },
-  { label: 'General check-up', ids: ['lab-panel', 'fbc', 'lipid'], why: 'A broad blood panel with cholesterol for heart health.' },
-  { label: 'Tiredness / weight change', ids: ['thyroid', 'fbc'], why: 'Thyroid function and blood count are common first checks.' },
-  { label: 'Chest pain / palpitations', ids: ['ecg', 'chest-xray', 'lipid'], why: 'Heart rhythm, chest imaging and heart-risk markers.' },
-  { label: 'Pelvic pain / pregnancy', ids: ['us-pelvic'], why: 'Pelvic ultrasound is safe and non-invasive.' },
+const GUIDE: { label: string; names: string[]; why: string }[] = [
+  { label: 'Knee pain or injury', names: ['KNEE X-RAY', 'KNEE MRI'], why: 'X-ray first for bones; MRI shows ligaments and cartilage.' },
+  { label: 'Fever', names: ['MP', 'WIDAL', 'FULL BLOOD COUNT'], why: 'Malaria parasite, typhoid (Widal) and a blood count are the usual first checks.' },
+  { label: 'Stomach / abdominal pain', names: ['ABDOMINOPELVIC SCAN', 'CT ABDOMEN WITH CONTRAST'], why: 'Ultrasound is the usual first scan; CT gives more detail when needed.' },
+  { label: 'General check-up', names: ['FULL BLOOD COUNT', 'FASTING LIPID PROFILE', 'E/U/C', 'LIVER FUNCTION TEST (LFT)', 'FBS'], why: 'Blood count, cholesterol, kidney and liver function and blood sugar.' },
+  { label: 'Tiredness / weight change', names: ['THYROID MARKERS (T3,T4,TSH)', 'FULL BLOOD COUNT'], why: 'Thyroid function and blood count are common first checks.' },
+  { label: 'Chest pain / palpitations', names: ['ECG', 'CHEST (AP)', 'ECHOCARDIOGRAPHY (ADULT)'], why: 'Heart rhythm, chest imaging and an ultrasound of the heart.' },
+  { label: 'Headache / head injury', names: ['CT BRAIN/HEAD', 'MRI BRAIN'], why: 'CT is quick after an injury; MRI shows more detail of the brain.' },
+  { label: 'Pregnancy', names: ['PREGNANCY TEST', 'OBSTETRICS SCAN'], why: 'Confirm the pregnancy, then an obstetric scan to check the baby.' },
 ];
 
 export function AiAssistant() {
   const { navigate, setDraft } = useApp();
   const [pick, setPick] = useState<number | null>(null);
   const g = pick === null ? null : GUIDE[pick]!;
-  const services = g ? (g.ids.map((id) => SERVICES.find((s) => s.id === id)).filter(Boolean) as Service[]) : [];
+  const services = g ? (g.names.map(serviceByName).filter((x) => x && x.price != null) as Service[]) : [];
   return (
     <>
       <ScreenHeader title="AI Test Assistant" />
@@ -388,7 +394,7 @@ export function AiAssistant() {
                   <ServiceThumb service={s} className="h-[64px] w-[70px] shrink-0 rounded-2xl" />
                   <span className="min-w-0 flex-1">
                     <span className="block text-[16px] font-bold text-ink">{s.name}</span>
-                    <span className="block text-[16px] font-bold text-brand-600">{naira(s.price)}</span>
+                    <span className="block text-[16px] font-bold text-brand-600">{priceText(s.price)}</span>
                   </span>
                   <ChevronRight size={20} className="shrink-0 text-muted" />
                 </button>
@@ -398,7 +404,7 @@ export function AiAssistant() {
           <Button
             block
             onClick={() => {
-              setDraft((d) => ({ ...d, serviceIds: Array.from(new Set([...d.serviceIds, ...g.ids])) }));
+              setDraft((d) => ({ ...d, serviceIds: Array.from(new Set([...d.serviceIds, ...services.map((x) => x.id)])) }));
               navigate('/refer');
             }}
           >

@@ -41,6 +41,15 @@ import rocket from './stickers/rocket.png';
 import stethoscope from './stickers/stethoscope.png';
 import xray from './stickers/xray.png';
 import envelope from './stickers/envelope.png';
+import heart from './stickers/heart.png';
+import heartPulse from './stickers/heart-pulse.png';
+import brain from './stickers/brain.png';
+import lungs from './stickers/lungs.png';
+import bloodDrop from './stickers/blood-drop.png';
+import bone from './stickers/bone.png';
+import petriDish from './stickers/petri-dish.png';
+import watch from './stickers/watch.png';
+import dna from './stickers/dna.png';
 
 export const PHOTOS = {
   agentAvatar,
@@ -79,5 +88,14 @@ export const STICKERS = {
   stethoscope,
   xray,
   envelope,
+  heart,
+  heartPulse,
+  brain,
+  lungs,
+  bloodDrop,
+  bone,
+  petriDish,
+  watch,
+  dna,
 };
 export type StickerKey = keyof typeof STICKERS;

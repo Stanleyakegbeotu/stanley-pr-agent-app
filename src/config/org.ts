@@ -2,29 +2,39 @@
  * Organisation settings for the PR agent app — the ONE place for company,
  * branch and agent facts and the business rules the app follows.
  *
- * Values follow the owner's reference design (2026-11-23). Branch contact
- * details marked "sample" are placeholders until the cloud database supplies
- * the real branch record.
+ * Company and branch come from the STANLEY desktop app (the same data the
+ * dashboard uses): the agent is assigned to the real Abuja branch, BR001.
+ * Details the dashboard has no record of yet stay "Not on record" — never
+ * invented. The agent profile is a sample until sign-in is connected.
  */
+import CATALOGUE from '@/data/catalogue.generated.json';
+
+const NOT_ON_RECORD = 'Not on record';
+const known = (v: string | undefined) => (v && v !== NOT_ON_RECORD ? v : null);
 
 export const COMPANY = {
-  name: 'Stanley Diagnostics',
+  /** "Silhouette Diagnostic Consultants" */
+  name: CATALOGUE.company.name,
+  shortName: CATALOGUE.company.shortName,
   appName: 'STANLEY',
   appTagline: 'PR AGENT PORTAL',
 };
 
+const b = CATALOGUE.branch;
 export const BRANCH = {
-  id: 'abuja',
-  name: 'Abuja',
-  label: 'Stanley Diagnostics – Abuja Branch',
-  /** Prefix of referral IDs — must match the dashboard's Billing ("ABJ-R" + 6 digits). */
-  idCode: 'ABJ',
-  // Sample contact details — replaced by the real branch record when the cloud database is connected.
-  address: 'Abuja, Federal Capital Territory (sample address)',
-  hours: 'Monday – Saturday · 7:00am – 7:00pm',
-  phone: '+234 800 000 0000 (sample)',
-  email: 'abuja@example.com',
-  manager: 'Branch Manager',
+  /** Same id as the dashboard ("br001-abuja"). */
+  id: b.id,
+  code: b.code,
+  name: b.name,
+  city: b.city,
+  /** "Silhouette – Abuja Branch" */
+  label: `${CATALOGUE.company.shortName} – ${b.name} Branch`,
+  /** Prefix of referral IDs — the dashboard's Billing reads "ABJ-R" + 6 digits. */
+  idCode: b.idCode,
+  /** null = the dashboard has no record of it yet. */
+  address: known(b.address),
+  phone: known(b.phone),
+  manager: known(b.manager),
 };
 
 export const AGENT = {

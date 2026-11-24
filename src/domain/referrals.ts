@@ -8,7 +8,7 @@
  *    the patient's tests are completed and paid.
  */
 import { BRANCH, RULES } from '@/config/org';
-import { serviceById, type Service } from '@/data/services';
+import { categoryInfo, serviceById, type Service } from '@/data/services';
 
 export type ReferralStatus = 'Pending' | 'Arrived' | 'Completed' | 'Cancelled';
 
@@ -29,14 +29,15 @@ export const referralId = (n: number) => `${BRANCH.idCode}-R${String(n).padStart
 export const nextReferralNumber = (list: Referral[]) => Math.max(0, ...list.map((r) => Number(r.id.replace(/\D/g, '')) || 0)) + 1;
 
 export const servicesOf = (r: Pick<Referral, 'serviceIds'>): Service[] => r.serviceIds.map(serviceById).filter(Boolean) as Service[];
-export const billOf = (r: Pick<Referral, 'serviceIds'>) => servicesOf(r).reduce((s, x) => s + x.price, 0);
+/** Patient bill = the recorded prices of every service (a service with no price can't be referred). */
+export const billOf = (r: Pick<Referral, 'serviceIds'>) => servicesOf(r).reduce((s, x) => s + (x.price ?? 0), 0);
 export const commissionOf = (r: Pick<Referral, 'serviceIds'>, rate = RULES.commissionRate) => Math.round(billOf(r) * rate);
-/** Short service label for lists ("X-Ray, MRI"). */
+/** Short service label for lists: the service's name, or its categories when there are several ("X-Ray, MRI"). */
 export const serviceSummary = (r: Pick<Referral, 'serviceIds'>) => {
   const s = servicesOf(r);
   if (!s.length) return '—';
-  if (s.length === 1) return s[0]!.short;
-  return s.map((x) => x.short.split(' – ')[0]).join(', ');
+  if (s.length === 1) return s[0]!.name;
+  return Array.from(new Set(s.map((x) => categoryInfo(x.category).label))).join(', ');
 };
 
 export const isEstimate = (r: Referral) => r.status === 'Pending' || r.status === 'Arrived';

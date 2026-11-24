@@ -6,13 +6,15 @@
  * or a refresh loses nothing. Errors are shown on the field itself.
  */
 import { useRef, useState } from 'react';
-import { ArrowRight, CalendarDays, Check, ChevronDown, Copy, Hash, Pencil, Phone, Send, Share2, UserRound, Wallet } from 'lucide-react';
+import { ArrowRight, CalendarDays, Check, ChevronDown, Copy, Hash, Pencil, Phone, Send, UserRound, Wallet } from 'lucide-react';
 import { BRANCH, RULES } from '@/config/org';
-import { CATEGORIES, searchServices, type Category } from '@/data/services';
+import { CATEGORIES, categoryInfo, searchServices } from '@/data/services';
+import { shareOnWhatsApp } from '@/domain/whatsapp';
+import { priceText } from '@/screens/Services';
 import { displayPhone, formatPersonName, isValidNgPhone, naira } from '@/domain/format';
 import { billOf, commissionOf, servicesOf } from '@/domain/referrals';
 import { useApp } from '@/app/store';
-import { Button, Card, Chip, ChipRow, EmptyState, Field, ScreenHeader, SearchField, ServiceThumb, Stepper, Sticker, Subtitle, inputClass } from '@/ui/kit';
+import { Button, Card, Chip, ChipRow, EmptyState, Field, ScreenHeader, SearchField, ServiceThumb, Stepper, Sticker, Subtitle, WhatsAppButton, inputClass } from '@/ui/kit';
 
 const STEPS = ['Patient', 'Services', 'Summary'];
 const PATH = ['/refer', '/refer/services', '/refer/summary'] as const;
@@ -93,7 +95,7 @@ function PatientStep() {
               <input id="pt-phone" name="phone" type="tel" inputMode="tel" autoComplete="tel-national" value={p.phone} onChange={(e) => set({ phone: e.target.value.replace(/[^\d ]/g, '').slice(0, 13) })} placeholder="Enter phone number" className={`${inputClass(errors.phone)} min-w-0`} />
             </div>
           </Field>
-          <Field label="Gender">
+          <Field label="Gender" optional>
             <div className="grid grid-cols-2 gap-3" role="radiogroup" aria-label="Gender">
               {(['Male', 'Female'] as const).map((g) => (
                 <button key={g} type="button" role="radio" aria-checked={p.gender === g} onClick={() => set({ gender: p.gender === g ? '' : g })} className={`press flex min-h-13 items-center gap-3 rounded-2xl border px-4 text-[15px] ${p.gender === g ? 'border-brand-500 bg-brand-50 text-ink ring-1 ring-brand-500' : 'border-line bg-white text-ink-2'}`}>
@@ -103,7 +105,7 @@ function PatientStep() {
               ))}
             </div>
           </Field>
-          <Field label="Age" error={errors.age} id="pt-age">
+          <Field label="Age" optional error={errors.age} id="pt-age">
             <input id="pt-age" name="age" type="number" inputMode="numeric" min={0} max={120} value={p.age} onChange={(e) => set({ age: e.target.value.slice(0, 3) })} placeholder="Enter age" className={inputClass(errors.age)} />
           </Field>
         </Card>
@@ -141,8 +143,9 @@ function ReferIllustration() {
 function ServicesStep() {
   const { draft, setDraft, navigate } = useApp();
   const [q, setQ] = useState('');
-  const [cat, setCat] = useState<Category | 'All'>('All');
+  const [cat, setCat] = useState<string>('All');
   const [error, setError] = useState('');
+  const [shown, setShown] = useState(40);
   const list = searchServices(q, cat);
   const chosen = draft.serviceIds;
   const total = billOf(draft);
@@ -163,9 +166,12 @@ function ServicesStep() {
       <Stepper steps={STEPS} current={1} />
       <SearchField className="mb-4" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search for a test or service..." aria-label="Search for a test or service" />
       <ChipRow>
-        {(['All', ...CATEGORIES] as const).map((c) => (
-          <Chip key={c} active={cat === c} onClick={() => setCat(c)}>
-            {c}
+        <Chip active={cat === 'All'} onClick={() => (setCat('All'), setShown(40))}>
+          All
+        </Chip>
+        {CATEGORIES.map((c) => (
+          <Chip key={c.key} active={cat === c.key} onClick={() => (setCat(c.key), setShown(40))}>
+            {c.label} ({c.count})
           </Chip>
         ))}
       </ChipRow>
@@ -173,16 +179,17 @@ function ServicesStep() {
         <EmptyState sticker="microscope" title="No matching service" text="Try another name, e.g. “MRI” or “blood count”." />
       ) : (
         <ul className="space-y-3" role="listbox" aria-multiselectable="true" aria-label="Services">
-          {list.map((s) => {
+          {list.slice(0, shown).map((s) => {
             const on = chosen.includes(s.id);
+            const unpriced = s.price == null;
             return (
               <li key={s.id}>
-                <button type="button" role="option" aria-selected={on} onClick={() => toggle(s.id)} className={`card press flex w-full items-center gap-3.5 p-3 text-left ${on ? 'border-brand-500 ring-1 ring-brand-500' : ''}`}>
+                <button type="button" role="option" aria-selected={on} aria-disabled={unpriced} onClick={() => (unpriced ? setError(`${s.name} has no price recorded yet — ask the branch.`) : toggle(s.id))} className={`card press flex w-full items-center gap-3.5 p-3 text-left ${on ? 'border-brand-500 ring-1 ring-brand-500' : ''} ${unpriced ? 'opacity-60' : ''}`}>
                   <ServiceThumb service={s} className="h-[72px] w-[80px] shrink-0 rounded-2xl" />
                   <span className="min-w-0 flex-1">
                     <span className="block text-[16px] font-bold text-ink">{s.name}</span>
-                    <span className="mt-0.5 block text-[17px] font-bold text-brand-600">{naira(s.price)}</span>
-                    <span className="block truncate text-[13px] text-muted">{s.preparation}</span>
+                    <span className={`mt-0.5 block font-bold ${unpriced ? 'text-[14px] text-muted' : 'text-[17px] text-brand-600'}`}>{priceText(s.price)}</span>
+                    <span className="block truncate text-[13px] text-muted">{categoryInfo(s.category).label}</span>
                   </span>
                   <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-full border-2 ${on ? 'border-brand-600 bg-brand-600 text-white' : 'border-[#c4cfdf]'}`}>{on && <Check size={16} strokeWidth={3} />}</span>
                 </button>
@@ -190,6 +197,11 @@ function ServicesStep() {
             );
           })}
         </ul>
+      )}
+      {shown < list.length && (
+        <Button variant="secondary" block className="mt-4" onClick={() => setShown((n) => n + 40)}>
+          Show more ({list.length - shown} more)
+        </Button>
       )}
       <BottomAction>
         {error && (
@@ -249,7 +261,7 @@ function SummaryStep() {
               <span className="flex items-center gap-2.5 text-ink">
                 <Hash size={15} className="text-muted" /> {s.name}
               </span>
-              <span className="font-semibold text-ink">{naira(s.price)}</span>
+              <span className="font-semibold text-ink">{priceText(s.price)}</span>
             </li>
           ))}
         </ul>
@@ -312,24 +324,12 @@ export function ReferralSent({ id }: { id: string }) {
   const { referrals, navigate, showToast } = useApp();
   const r = referrals.find((x) => x.id === id);
   if (!r) return <EmptyState sticker="clipboard" title="Referral not found" text="It may have been sent from another device." />;
-  const text = `Stanley referral ${r.id}\nPatient: ${r.patient.name}\nServices: ${servicesOf(r).map((s) => s.name).join(', ')}\nBranch: ${BRANCH.label}\nShow this referral ID at the front desk.`;
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(r.id);
       showToast('Referral ID copied');
     } catch {
       showToast(r.id);
-    }
-  };
-  const share = async () => {
-    try {
-      if (navigator.share) await navigator.share({ title: `Referral ${r.id}`, text });
-      else {
-        await navigator.clipboard.writeText(text);
-        showToast('Referral details copied — paste them into WhatsApp or SMS');
-      }
-    } catch {
-      /* cancelled */
     }
   };
   return (
@@ -355,9 +355,7 @@ export function ReferralSent({ id }: { id: string }) {
       {r.queued && <p className="mt-3 max-w-sm text-[12.5px] leading-relaxed text-muted">Saved on this phone. It is sent to the branch automatically when the cloud connection is available.</p>}
 
       <div className="mt-6 grid w-full max-w-sm gap-3">
-        <Button block onClick={share}>
-          <Share2 size={19} /> Share with patient
-        </Button>
+        <WhatsAppButton onClick={() => shareOnWhatsApp(r)}>Share with patient via WhatsApp</WhatsAppButton>
         <Button block variant="secondary" onClick={() => navigate(`/referrals/${r.id}`, { replace: true })}>
           View referral
         </Button>

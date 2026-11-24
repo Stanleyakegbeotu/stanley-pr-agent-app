@@ -5,7 +5,9 @@ import { BRANCH } from '@/config/org';
 import { displayPhone, naira, shortDate } from '@/domain/format';
 import { billOf, commissionOf, isEstimate, serviceSummary, servicesOf, type ReferralStatus } from '@/domain/referrals';
 import { useApp } from '@/app/store';
-import { Button, Card, Chip, ChipRow, EmptyState, FilterButton, InitialsAvatar, ScreenHeader, SearchField, StatusBadge, Subtitle } from '@/ui/kit';
+import { Button, Card, Chip, ChipRow, EmptyState, FilterButton, InitialsAvatar, ScreenHeader, SearchField, StatusBadge, Subtitle, WhatsAppButton } from '@/ui/kit';
+import { shareOnWhatsApp } from '@/domain/whatsapp';
+import { priceText } from '@/screens/Services';
 
 type FilterKey = 'All' | ReferralStatus;
 const FILTERS: FilterKey[] = ['All', 'Pending', 'Arrived', 'Completed', 'Cancelled'];
@@ -165,7 +167,7 @@ export function ReferralDetails({ id }: { id: string }) {
           {servicesOf(r).map((s) => (
             <li key={s.id} className="flex justify-between gap-3 text-[15.5px]">
               <span className="text-ink">{s.name}</span>
-              <span className="font-semibold text-ink">{naira(s.price)}</span>
+              <span className="font-semibold text-ink">{priceText(s.price)}</span>
             </li>
           ))}
         </ul>
@@ -180,6 +182,11 @@ export function ReferralDetails({ id }: { id: string }) {
         <span className={`text-[22px] font-bold ${r.status === 'Completed' ? 'text-good-ink' : 'text-warn-ink'}`}>{naira(r.status === 'Cancelled' ? 0 : commissionOf(r))}</span>
       </div>
       {r.queued && <p className="mt-3 text-[12.5px] text-muted">Saved on this phone — sent to the branch automatically when the cloud connection is available.</p>}
+      {r.status === 'Pending' && (
+        <div className="mt-4">
+          <WhatsAppButton onClick={() => shareOnWhatsApp(r)}>Send referral to patient on WhatsApp</WhatsAppButton>
+        </div>
+      )}
     </>
   );
 }
