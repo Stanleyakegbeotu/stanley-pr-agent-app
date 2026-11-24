@@ -7,3 +7,13 @@
   --color-blue-700: #1d52c6;
   --breakpoint-md: 800px;
 }
+
+/* App feel (owner, 2026-11-23): no visible scrollbars anywhere — pages still scroll by touch, wheel and keyboard. */
+@layer base {
+  * {
+    scrollbar-width: none;
+  }
+  *::-webkit-scrollbar {
+    display: none;
+  }
+}
