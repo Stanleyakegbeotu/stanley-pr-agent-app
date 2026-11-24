@@ -8,16 +8,18 @@
 import { referralId, type Referral, type ReferralStatus } from '@/domain/referrals';
 import { serviceByName } from './services';
 
-type Seed = [name: string, services: string[], status: ReferralStatus, daysAgo: number, phone: string, gender: 'Male' | 'Female', age: number];
+type Seed = [name: string, services: string[], status: ReferralStatus, daysAgo: number, phone: string, gender: 'Male' | 'Female', age: number, billed?: string[], cancelReason?: string];
 
 // Newest first. Service names exactly as recorded in the catalogue.
 // John: LEG X RAY ₦18,000 + KNEE MRI ₦160,000 = ₦178,000 → 15% = ₦26,700.
 const SEEDS: Seed[] = [
-  ['John Adeyemi', ['LEG X RAY', 'KNEE MRI'], 'Completed', 0, '8034567890', 'Male', 42],
+  // Sample billing changes (owner, 2026-11-24): John added a chest X-ray; Tunde dropped 2 tests; Blessing cancelled.
+  ['John Adeyemi', ['LEG X RAY', 'KNEE MRI'], 'Completed', 0, '8034567890', 'Male', 42, ['LEG X RAY', 'KNEE MRI', 'CHEST (AP)']],
   ['Mary Okafor', ['ABDOMINOPELVIC SCAN'], 'Arrived', 0, '8023344556', 'Female', 35],
-  ['Tunde Bakare', ['FASTING LIPID PROFILE'], 'Completed', 0, '7061234567', 'Male', 51],
+  ['Tunde Bakare', ['FASTING LIPID PROFILE', 'FBS', 'E/U/C'], 'Completed', 0, '7061234567', 'Male', 51, ['FASTING LIPID PROFILE']],
   ['Aisha Bello', ['FULL BLOOD COUNT', 'MP'], 'Pending', 0, '8159876543', 'Female', 27],
   ['Chinedu Obi', ['THYROID MARKERS (T3,T4,TSH)'], 'Pending', 0, '9032221100', 'Male', 39],
+  ['Blessing Udo', ['PELVIC ULTRASOUND'], 'Cancelled', 0, '8023456781', 'Female', 32, undefined, 'The patient changed their mind and cancelled the visit.'],
   ['Emeka Igwe', ['CT ABDOMEN WITH CONTRAST'], 'Pending', 1, '8067788990', 'Male', 58],
   ['Faith Obi', ['E/U/C', 'LIVER FUNCTION TEST (LFT)'], 'Pending', 2, '7012345678', 'Female', 31],
   ['Halima Yusuf', ['PELVIC ULTRASOUND'], 'Completed', 3, '8134455667', 'Female', 29],
@@ -47,7 +49,7 @@ export const FIRST_SAMPLE_NUMBER = 842;
 
 export function sampleReferrals(now = new Date()): Referral[] {
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 10, 0, 0);
-  return SEEDS.map(([name, services, status, daysAgo, phone, gender, age], i) => {
+  return SEEDS.map(([name, services, status, daysAgo, phone, gender, age, billed, cancelReason], i) => {
     const d = new Date(now);
     d.setDate(d.getDate() - daysAgo);
     // Spread the day's referrals over the morning, newest first, never in the future.
@@ -57,7 +59,12 @@ export function sampleReferrals(now = new Date()): Referral[] {
     const createdAt = d.toISOString();
     // Commission for completed referrals from earlier months was paid on the 1st of this month.
     const paidAt = status === 'Completed' && d < monthStart ? monthStart.toISOString() : undefined;
-    const serviceIds = services.map((n) => serviceByName(n)?.id).filter((x): x is string => !!x);
-    return { id: referralId(FIRST_SAMPLE_NUMBER - i), patient: { name, phone, gender, age: String(age) }, serviceIds, status, createdAt, paidAt };
+    const ids = (names: string[]) => names.map((n) => serviceByName(n)?.id).filter((x): x is string => !!x);
+    const serviceIds = ids(services);
+    // Billing done: the branch billed what was referred, unless the sample says otherwise.
+    const billedServiceIds = status === 'Completed' ? ids(billed ?? services) : undefined;
+    // The branch updated the status a little after the referral (never in the future).
+    const updatedAt = status === 'Pending' ? undefined : new Date(Math.min(now.getTime(), d.getTime() + (25 + (i % 4) * 20) * 60_000)).toISOString();
+    return { id: referralId(FIRST_SAMPLE_NUMBER - i), patient: { name, phone, gender, age: String(age) }, serviceIds, status, createdAt, paidAt, billedServiceIds, updatedAt, cancelReason };
   });
 }

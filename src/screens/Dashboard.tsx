@@ -15,6 +15,7 @@ import { FilterButton, ProgressBar, SearchField, SectionTitle } from '@/ui/kit';
 import { useInbox } from '@/domain/chat';
 import { useProfile } from '@/domain/profile';
 import { BankRequiredCard } from '@/screens/BankDetails';
+import { BranchUpdates, TodayPatients } from '@/screens/home/HomeSections';
 import { AnnouncementCarousel } from './AnnouncementCarousel';
 
 export function Dashboard() {
@@ -83,7 +84,7 @@ export function Dashboard() {
           <div className="min-w-0">
             <p className="text-[17px] text-ink-2">{timeOfDay()}</p>
             <h1 className="mt-0.5 text-[22px] font-bold leading-tight tracking-[-0.025em] text-ink">
-              {agentName()}&nbsp;<span aria-hidden="true">👋</span>
+              {me.name}&nbsp;<span aria-hidden="true">👋</span>
             </h1>
             <span className="mt-2.5 inline-flex items-center gap-2 rounded-full bg-brand-100/80 py-1 pl-1.5 pr-3 text-[14px] font-medium text-ink-2">
               <span className="grid h-5.5 w-5.5 place-items-center rounded-full bg-linear-to-b from-[#ffd34d] to-[#f5a400] text-white">
@@ -104,6 +105,7 @@ export function Dashboard() {
 
         {/* Required settings (owner): bank details until added */}
         <BankRequiredCard />
+        <BranchUpdates />
 
         {/* Search */}
         <form onSubmit={search} className="mb-5 flex gap-3" role="search">
@@ -163,6 +165,9 @@ export function Dashboard() {
             <Action tint="bg-tint-orange border-[#ffe2c6]" icon={<Users size={30} className="text-orange" fill="currentColor" strokeWidth={1.4} />} label={'Invite a\nColleague'} onClick={invite} />
           </div>
         </section>
+
+        {/* Today's referred patients (owner, 2026-11-24) */}
+        <TodayPatients />
       </div>
     </div>
   );

@@ -3,10 +3,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { CalendarDays, Check, ClipboardList, Copy, Filter, Hash, Phone, Plus } from 'lucide-react';
 import { BRANCH } from '@/config/org';
 import { displayPhone, naira, shortDate } from '@/domain/format';
-import { billOf, commissionOf, isEstimate, serviceSummary, servicesOf, type ReferralStatus } from '@/domain/referrals';
+import { billOf, commissionOf, isEstimate, serviceSummary, servicesOf, type ReferralStatus, STATUS_LABEL, testChanges, billedIds } from '@/domain/referrals';
 import { useApp } from '@/app/store';
 import { Button, Card, Chip, ChipRow, EmptyState, FilterButton, InitialsAvatar, ScreenHeader, SearchField, StatusBadge, Subtitle, WhatsAppButton } from '@/ui/kit';
 import { shareOnWhatsApp } from '@/domain/whatsapp';
+import { ChangeNote } from '@/screens/home/HomeSections';
 import { priceText } from '@/screens/Services';
 
 type FilterKey = 'All' | ReferralStatus;
@@ -145,7 +146,7 @@ export function MyReferrals() {
       <ChipRow>
         {FILTERS.filter((x) => x === 'All' || counts[x]).map((x) => (
           <Chip key={x} active={f === x} onClick={() => setF(x)}>
-            {x} ({counts[x] ?? 0})
+            {x === 'All' ? 'All' : STATUS_LABEL[x]} ({counts[x] ?? 0})
           </Chip>
         ))}
       </ChipRow>
@@ -197,9 +198,9 @@ export function MyReferrals() {
 
 const STAGES: ReferralStatus[] = ['Pending', 'Arrived', 'Completed'];
 const STAGE_TEXT: Record<string, string> = {
-  Pending: 'Referral sent, waiting for the patient to visit',
-  Arrived: 'Patient arrived at the branch',
-  Completed: 'Tests completed and paid, commission confirmed',
+  Pending: 'Sent to the branch, awaiting the patient',
+  Arrived: 'The patient arrived at the branch',
+  Completed: 'Billing done at the branch, commission confirmed',
 };
 
 export function ReferralDetails({ id }: { id: string }) {
@@ -248,6 +249,12 @@ export function ReferralDetails({ id }: { id: string }) {
         </div>
       </Card>
 
+      {r.status === 'Cancelled' && (
+        <div className="mb-3.5 rounded-[20px] border border-[#f6c9c9] bg-[#fdecec] p-4">
+          <p className="text-[15.5px] font-bold text-[#b42318]">The patient cancelled</p>
+          <p className="mt-0.5 text-[14px] text-[#7a271a]">{r.cancelReason ?? 'The branch recorded this visit as cancelled.'} There is no commission for this referral.</p>
+        </div>
+      )}
       {r.status !== 'Cancelled' && (
         <Card className="mb-3.5 p-5">
           <h2 className="mb-4 text-[17px] font-bold text-ink">Progress</h2>
@@ -258,7 +265,7 @@ export function ReferralDetails({ id }: { id: string }) {
                 <li key={s} className="flex items-start gap-3.5">
                   <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${done ? 'bg-brand-600 text-white' : 'border-2 border-[#d7dfeb] text-faint'}`}>{done ? <Check size={17} strokeWidth={3} /> : i + 1}</span>
                   <span>
-                    <span className={`block text-[15.5px] font-semibold ${done ? 'text-ink' : 'text-faint'}`}>{s}</span>
+                    <span className={`block text-[15.5px] font-semibold ${done ? 'text-ink' : 'text-faint'}`}>{STATUS_LABEL[s]}</span>
                     <span className="block text-[13.5px] text-muted">{STAGE_TEXT[s]}</span>
                   </span>
                 </li>
@@ -269,15 +276,31 @@ export function ReferralDetails({ id }: { id: string }) {
       )}
 
       <Card className="mb-3.5 p-5">
-        <h2 className="mb-3 text-[17px] font-bold text-ink">Services ({servicesOf(r).length})</h2>
+        <h2 className="mb-3 text-[17px] font-bold text-ink">{r.billedServiceIds ? 'Services billed' : 'Services'} ({billedIds(r).length})</h2>
         <ul className="space-y-2.5">
-          {servicesOf(r).map((s) => (
+          {servicesOf(r).map((s) => {
+            const removed = !!r.billedServiceIds && !r.billedServiceIds.includes(s.id);
+            return (
+              <li key={s.id} className="flex justify-between gap-3 text-[15.5px]">
+                <span>
+                  <span className={removed ? 'text-faint line-through' : 'text-ink'}>{s.name}</span>
+                  {removed && <span className="ml-2 rounded-md bg-[#fdecec] px-1.5 py-0.5 text-[11.5px] font-semibold text-[#b42318]">Removed</span>}
+                </span>
+                <span className={`font-semibold ${removed ? 'text-faint line-through' : 'text-ink'}`}>{priceText(s.price)}</span>
+              </li>
+            );
+          })}
+          {(testChanges(r)?.added ?? []).map((s) => (
             <li key={s.id} className="flex justify-between gap-3 text-[15.5px]">
-              <span className="text-ink">{s.name}</span>
+              <span className="text-ink">
+                {s.name}
+                <span className="ml-2 rounded-md bg-[#e8f8ef] px-1.5 py-0.5 text-[11.5px] font-semibold text-good-ink">Added</span>
+              </span>
               <span className="font-semibold text-ink">{priceText(s.price)}</span>
             </li>
           ))}
         </ul>
+        {testChanges(r) && <ChangeNote r={r} className="mt-3.5" />}
         <div className="mt-3.5 flex justify-between border-t border-line pt-3.5 text-[16px]">
           <span className="text-ink">Patient bill</span>
           <span className="font-bold text-ink">{naira(billOf(r))}</span>

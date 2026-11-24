@@ -6,6 +6,12 @@
  *  • Commission = the referred patient's FULL bill × the company rate
  *    (owner rule). Pending referrals show an ESTIMATE; it is confirmed once
  *    the patient's tests are completed and paid.
+ *  • Status (owner, 2026-11-24): every referral starts as SUBMITTED (stored as
+ *    'Pending': sent, awaiting the patient), then Arrived, then Completed once
+ *    billing is done at the branch, or Cancelled (with the reason).
+ *  • The branch may bill different tests than were referred (the patient drops
+ *    or adds tests). Commission follows what was BILLED, and testChanges()
+ *    tells the agent exactly what changed and by how much.
  */
 import { BRANCH, RULES } from '@/config/org';
 import { categoryInfo, serviceById, type Service } from '@/data/services';
@@ -23,15 +29,47 @@ export interface Referral {
   paidAt?: string;
   /** Saved on this phone, waiting for the cloud database. */
   queued?: boolean;
+  /** What the branch actually billed (set at billing). Absent = the referred tests. */
+  billedServiceIds?: string[];
+  /** When the status last changed at the branch (arrived, completed, cancelled). */
+  updatedAt?: string;
+  /** Why the visit was cancelled, as recorded by the branch. */
+  cancelReason?: string;
 }
+
+/** What the agent sees for each status. */
+export const STATUS_LABEL: Record<ReferralStatus, string> = { Pending: 'Submitted', Arrived: 'Arrived', Completed: 'Completed', Cancelled: 'Cancelled' };
+/** One line explaining where the patient is. */
+export const STATUS_NOTE: Record<ReferralStatus, string> = {
+  Pending: 'Awaiting the patient at the branch',
+  Arrived: 'Arrived at the branch, tests in progress',
+  Completed: 'Completed at the branch, billing done',
+  Cancelled: 'Cancelled by the patient',
+};
+
+type Billable = Pick<Referral, 'serviceIds'> & { billedServiceIds?: string[] };
+/** The tests that count for the bill: what the branch billed, or what was referred. */
+export const billedIds = (r: Billable) => r.billedServiceIds ?? r.serviceIds;
 
 export const referralId = (n: number) => `${BRANCH.idCode}-R${String(n).padStart(6, '0')}`;
 export const nextReferralNumber = (list: Referral[]) => Math.max(0, ...list.map((r) => Number(r.id.replace(/\D/g, '')) || 0)) + 1;
 
 export const servicesOf = (r: Pick<Referral, 'serviceIds'>): Service[] => r.serviceIds.map(serviceById).filter(Boolean) as Service[];
 /** Patient bill = the recorded prices of every service (a service with no price can't be referred). */
-export const billOf = (r: Pick<Referral, 'serviceIds'>) => servicesOf(r).reduce((s, x) => s + (x.price ?? 0), 0);
-export const commissionOf = (r: Pick<Referral, 'serviceIds'>, rate = RULES.commissionRate) => Math.round(billOf(r) * rate);
+export const billOf = (r: Billable) => servicesOf({ serviceIds: billedIds(r) }).reduce((s, x) => s + (x.price ?? 0), 0);
+export const commissionOf = (r: Billable, rate = RULES.commissionRate) => Math.round(billOf(r) * rate);
+
+/** Tests the patient dropped or added at billing, and how that moved the commission. Null when nothing changed. */
+export function testChanges(r: Billable) {
+  if (!r.billedServiceIds) return null;
+  const billed = new Set(r.billedServiceIds);
+  const referred = new Set(r.serviceIds);
+  const removed = servicesOf({ serviceIds: r.serviceIds.filter((id) => !billed.has(id)) });
+  const added = servicesOf({ serviceIds: r.billedServiceIds.filter((id) => !referred.has(id)) });
+  if (!removed.length && !added.length) return null;
+  const delta = commissionOf(r) - commissionOf({ serviceIds: r.serviceIds });
+  return { removed, added, delta };
+}
 /** Short service label for lists: the service's name, or its categories when there are several ("X-Ray, MRI"). */
 export const serviceSummary = (r: Pick<Referral, 'serviceIds'>) => {
   const s = servicesOf(r);

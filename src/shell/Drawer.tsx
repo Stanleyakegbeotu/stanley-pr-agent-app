@@ -81,7 +81,7 @@ export function Drawer({ open, onClose }: { open: boolean; onClose: () => void }
         <button type="button" onClick={() => go('/profile')} className="flex items-center gap-3 border-t border-line px-5 py-3.5 text-left">
           <img src={me.photo} alt="" className="h-11 w-11 rounded-full object-cover" />
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-[15px] font-semibold text-ink">{agentName()}</span>
+            <span className="block truncate text-[15px] font-semibold text-ink">{me.name}</span>
             <span className="block text-[12.5px] text-muted">
               {AGENT.role} · {AGENT.id}
             </span>

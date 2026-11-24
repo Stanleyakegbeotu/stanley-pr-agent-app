@@ -8,7 +8,7 @@ import { ArrowLeft, Check, Search, SlidersHorizontal } from 'lucide-react';
 import { PHOTOS, STICKERS, type StickerKey } from '@/assets';
 import type { Service } from '@/data/services';
 import { initials } from '@/domain/format';
-import type { ReferralStatus } from '@/domain/referrals';
+import { STATUS_LABEL, type ReferralStatus } from '@/domain/referrals';
 import { useApp } from '@/app/store';
 
 const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(' ');
@@ -177,7 +177,7 @@ const STATUS_STYLE: Record<ReferralStatus, string> = {
   Cancelled: 'bg-[#fde2e2] text-[#b42318]',
 };
 export function StatusBadge({ status }: { status: ReferralStatus }) {
-  return <span className={cx('inline-flex items-center whitespace-nowrap rounded-lg px-2.5 py-1 text-[13px] font-semibold', STATUS_STYLE[status])}>{status}</span>;
+  return <span className={cx('inline-flex items-center whitespace-nowrap rounded-lg px-2.5 py-1 text-[13px] font-semibold', STATUS_STYLE[status])}>{STATUS_LABEL[status]}</span>;
 }
 
 const AVATAR_TINTS = ['bg-tint-blue text-brand-700', 'bg-tint-purple text-violet', 'bg-tint-orange text-orange', 'bg-tint-green text-good-ink', 'bg-tint-pink text-[#c2255c]'];

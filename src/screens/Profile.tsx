@@ -12,8 +12,8 @@ import { useApp } from '@/app/store';
 import { AGENT, BRANCH, RULES, agentName } from '@/config/org';
 import { naira, shortDate } from '@/domain/format';
 import { commissionOf, serviceSummary, type Referral } from '@/domain/referrals';
-import { saveProfile, squarePhoto, tidyPhone, useProfile, validEmail } from '@/domain/profile';
-import { BankRow } from '@/screens/BankDetails';
+import { TITLES, saveProfile, squarePhoto, tidyName, tidyPhone, useProfile, validEmail } from '@/domain/profile';
+import { BANK_PURPOSE, BankRow } from '@/screens/BankDetails';
 import { Button, Card, Chip, ChipRow, EmptyState, Field, InitialsAvatar, ScreenHeader, StatusBadge, inputClass } from '@/ui/kit';
 
 /** Which patients a figure opens. */
@@ -70,7 +70,7 @@ export function Profile() {
           </span>
         </button>
         <input ref={file} type="file" accept="image/*" hidden onChange={(e) => (void changePhoto(e.target.files?.[0]), (e.target.value = ''))} />
-        <p className="mt-3 text-[21px] font-bold text-ink">{agentName()}</p>
+        <p className="mt-3 text-[21px] font-bold text-ink">{me.name}</p>
         <p className="text-[14.5px] text-muted">
           {AGENT.role}, {AGENT.id}
         </p>
@@ -114,6 +114,7 @@ export function Profile() {
       <h2 className="mb-2 px-1 text-[13px] font-semibold uppercase tracking-[0.06em] text-muted">Payouts</h2>
       <div className="mb-5">
         <BankRow />
+        <p className="mt-2 px-1 text-[12.5px] leading-relaxed text-muted">{BANK_PURPOSE}</p>
       </div>
 
       {/* Set by the branch */}
@@ -126,7 +127,7 @@ export function Profile() {
           </div>
         ))}
       </Card>
-      <p className="mt-3 px-1 text-[12.5px] leading-relaxed text-muted">To change your name or branch, message your branch manager. Your photo, phone, email and bank changes are saved on this phone and reach the branch once the cloud connection is on.</p>
+      <p className="mt-3 px-1 text-[12.5px] leading-relaxed text-muted">To change your branch, message your branch manager. Your name, photo, phone, email and bank changes are saved on this phone and reach the branch once the cloud connection is on.</p>
 
       {editing && <EditProfile onClose={() => setEditing(false)} onSaved={() => (setEditing(false), showToast('Profile updated'))} onPhoto={() => file.current?.click()} />}
     </>
@@ -149,16 +150,23 @@ function Stat({ icon, tone, value, label, note, onClick }: { icon: React.ReactNo
 
 function EditProfile({ onClose, onSaved, onPhoto }: { onClose: () => void; onSaved: () => void; onPhoto: () => void }) {
   const me = useProfile();
+  const [title, setTitle] = useState(me.title);
+  const [first, setFirst] = useState(me.firstName);
+  const [last, setLast] = useState(me.lastName);
   const [phone, setPhone] = useState(me.phone);
   const [email, setEmail] = useState(me.email);
   const [tried, setTried] = useState(false);
+  const firstOk = tidyName(first);
+  const lastOk = tidyName(last);
+  const firstErr = tried && !firstOk ? 'Enter your first name (letters only).' : undefined;
+  const lastErr = tried && !lastOk ? 'Enter your last name (letters only).' : undefined;
   const tidy = tidyPhone(phone);
   const phoneErr = tried && !tidy ? 'Enter a Nigerian mobile number, like 0803 456 7890.' : undefined;
   const emailErr = tried && !validEmail(email) ? 'Enter a valid email address, like name@example.com.' : undefined;
   const save = () => {
     setTried(true);
-    if (!tidy || !validEmail(email)) return;
-    saveProfile({ phone: tidy, email: email.trim().toLowerCase() });
+    if (!firstOk || !lastOk || !tidy || !validEmail(email)) return;
+    saveProfile({ title, firstName: firstOk, lastName: lastOk, phone: tidy, email: email.trim().toLowerCase() });
     onSaved();
   };
   return (
@@ -179,6 +187,23 @@ function EditProfile({ onClose, onSaved, onPhoto }: { onClose: () => void; onSav
             )}
           </div>
         </div>
+        <div className="grid grid-cols-[96px_1fr] gap-3">
+          <Field label="Title" id="p-title">
+            <select id="p-title" value={title} onChange={(e) => setTitle(e.target.value)} className={inputClass()}>
+              {TITLES.map((t) => (
+                <option key={t || 'none'} value={t}>
+                  {t || 'None'}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="First name" id="p-first" error={firstErr}>
+            <input id="p-first" autoComplete="given-name" value={first} onChange={(e) => setFirst(e.target.value)} className={inputClass(firstErr)} />
+          </Field>
+        </div>
+        <Field label="Last name" id="p-last" error={lastErr}>
+          <input id="p-last" autoComplete="family-name" value={last} onChange={(e) => setLast(e.target.value)} className={inputClass(lastErr)} />
+        </Field>
         <Field label="Phone number" id="p-phone" error={phoneErr}>
           <input id="p-phone" type="tel" inputMode="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className={inputClass(phoneErr)} />
         </Field>

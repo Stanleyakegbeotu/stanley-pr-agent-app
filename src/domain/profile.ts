@@ -1,6 +1,7 @@
 /**
  * The agent's own editable details (owner, 2026-11-24): profile photo, phone
- * number, email and BANK DETAILS (required: commission can't be paid without them). Name, partner ID and branch are set by the branch.
+ * number, email, NAME (title, first, last) and BANK DETAILS (required:
+ * commission can't be paid without them). Partner ID and branch are set by the branch.
  * Saved on this phone; sent to the desktop app once the cloud connection is on.
  */
 import { useSyncExternalStore } from 'react';
@@ -13,9 +14,14 @@ export interface BankDetails {
   accountNumber: string;
   accountName: string;
   at: string;
+  /** When the agent confirmed the purpose: used only to pay their monthly PR commission. */
+  agreedAt?: string;
 }
 
 export interface ProfileEdits {
+  title?: string;
+  firstName?: string;
+  lastName?: string;
   photo?: string;
   bank?: BankDetails;
   phone?: string;
@@ -50,10 +56,19 @@ const subscribe = (l: () => void) => {
   return () => listeners.delete(l);
 };
 
+/** Title (may be empty), first and last name: the agent's edits over the branch record. */
+function nameParts(e: ProfileEdits) {
+  return { title: e.title ?? AGENT.title, firstName: e.firstName ?? AGENT.firstName, lastName: e.lastName ?? AGENT.lastName };
+}
+const joinName = (n: { title: string; firstName: string; lastName: string }) => [n.title, n.firstName, n.lastName].filter(Boolean).join(' ');
+/** The agent's display name ("Dr. Stanley Okafor"), outside React (e.g. WhatsApp messages). */
+export const displayName = () => joinName(nameParts(read()));
+
 /** Current details: the agent's edits over the branch record. */
 export function useProfile() {
   const e = useSyncExternalStore(subscribe, read, read);
-  return { photo: e.photo ?? PHOTOS.agentAvatar, customPhoto: !!e.photo, phone: e.phone ?? AGENT.phone, email: e.email ?? AGENT.email, bank: e.bank, updatedAt: e.updatedAt };
+  const n = nameParts(e);
+  return { ...n, name: joinName(n), photo: e.photo ?? PHOTOS.agentAvatar, customPhoto: !!e.photo, phone: e.phone ?? AGENT.phone, email: e.email ?? AGENT.email, bank: e.bank, updatedAt: e.updatedAt };
 }
 
 /* ─────────────── checks ─────────────── */
@@ -65,6 +80,13 @@ export function tidyPhone(v: string): string | null {
   if (!/^[789][01]\d{8}$/.test(n)) return null;
   return `+234 ${n.slice(0, 3)} ${n.slice(3, 6)} ${n.slice(6)}`;
 }
+/** Tidy a typed name part: "  chukwuemeka  " → "Chukwuemeka"; null if it isn't a name. */
+export function tidyName(v: string): string | null {
+  const t = v.trim().replace(/\s+/g, ' ');
+  if (t.length < 2 || !/^[\p{L}][\p{L}' .-]*$/u.test(t)) return null;
+  return t.replace(/(^|[\s'-])(\p{L})/gu, (_, a: string, b: string) => a + b.toUpperCase());
+}
+export const TITLES = ['Dr.', 'Mr.', 'Mrs.', 'Ms.', 'Miss', 'Pharm.', 'Nurse', 'Prof.', ''];
 export const validEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v.trim());
 
 /** Square, small JPEG of a chosen photo (keeps the phone's storage light). */
