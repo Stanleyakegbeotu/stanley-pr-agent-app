@@ -16,7 +16,9 @@
  *  • People are always shown by name AND role (admin/people.ts).
  */
 import { useMemo, useState, type ReactNode } from 'react';
-import { CalendarDays, ChevronDown, ChevronRight, Clock3, CreditCard, Handshake, MapPin, MessageCircle, Phone, UserCheck, Users } from 'lucide-react';
+import { CalendarDays, ChevronDown, ChevronRight, Clock3, Copy, CreditCard, Handshake, MapPin, MessageCircle, Phone, Sparkles, UserCheck, Users } from 'lucide-react';
+import { useNav } from '@/app/store';
+import { useSeen } from './charts';
 import { useApp as useCompany } from '@company/app/AppState';
 import { SERVICES, getBranch } from '@company/data/company';
 import type { Currency, PaymentMethod, PeriodSelection } from '@company/data/types';
@@ -371,10 +373,17 @@ function HospitalSheet({ hkey, name, branchIds, start, onClose }: { hkey: string
   );
 }
 
-/** The patient visit record (desktop: PatientRecord / VisitSlip), as a slide-up. */
+/**
+ * The patient visit record (desktop: PatientRecord / VisitSlip), as a slide-up
+ * (owner, 2026-11-25: richer and more mature): a hero in the colour of the
+ * payment state with an animated "paid" ring, quick actions, the visit as a
+ * timeline (arrived, billed by whom, tests, payment), the people involved with
+ * their photos, the bill as a receipt, and the patient's earlier visits.
+ */
 export function VisitSheet({ visit, onClose }: { visit: PatientVisit; onClose: () => void }) {
   const team = useTeam();
   const { agents } = useCompany();
+  const { showToast } = useNav();
   const [focus, setFocus] = useState<Focus | null>(null);
   const history = useMemo(() => patientHistory(visit.branchId, visit.patientRef), [visit.branchId, visit.patientRef]);
   const visits = history.visits.length ? history.visits : [visit];
@@ -385,46 +394,147 @@ export function VisitSheet({ visit, onClose }: { visit: PatientVisit; onClose: (
   const by = team.processedBy(v);
   const agent = v.agentId != null ? agents.find((a) => a.id === v.agentId) : undefined;
   const balance = v.billed - v.paid;
-  const stamp = v.payment === 'Paid' ? 'bg-tint-green text-good-ink' : v.payment === 'Part-paid' ? 'bg-[#fff1e0] text-[#b45309]' : 'bg-[#fdecec] text-[#b42318]';
+  const pct = v.billed > 0 ? Math.min(1, v.paid / v.billed) : 1;
+  const state = v.payment === 'Paid' ? { label: 'Paid in full', hero: 'from-[#0f7a43] via-[#16a35a] to-[#4cc98a]', ring: '#ffffff' } : v.payment === 'Part-paid' ? { label: 'Part paid', hero: 'from-[#c2410c] via-[#e0601a] to-[#f59e0b]', ring: '#ffffff' } : { label: 'Not paid', hero: 'from-[#b42318] via-[#d93036] to-[#f0646a]', ring: '#ffffff' };
   const totals = visits.reduce((s, x) => ({ billed: s.billed + x.billed, paid: s.paid + x.paid }), { billed: 0, paid: 0 });
+  const { ref, seen } = useSeen<HTMLDivElement>(0.2);
+  const R = 30;
+  const C = 2 * Math.PI * R;
+  const copy = async (text: string, what: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast(`${what} copied`);
+    } catch {
+      showToast(`${what}: ${text}`);
+    }
+  };
+  const steps: { icon: ReactNode; title: string; sub: string; tone: string }[] = [
+    { icon: <MapPin size={15} />, title: `Arrived at ${branch?.name ?? 'the branch'}`, sub: `${timeOf(v.at)} · ${dateOf(v.at)}`, tone: 'bg-brand-600' },
+    { icon: <UserCheck size={15} />, title: `Registered and billed by ${by ? by.name : 'the front desk'}`, sub: by ? by.role : 'Name not on record', tone: 'bg-violet' },
+    { icon: <Sparkles size={15} />, title: `${v.services.length} test${v.services.length === 1 ? '' : 's'} requested`, sub: v.services.map((s) => s.name).slice(0, 3).join(', ') + (v.services.length > 3 ? ` +${v.services.length - 3} more` : ''), tone: 'bg-[#0ea5e9]' },
+    v.paid > 0
+      ? { icon: <CreditCard size={15} />, title: `${formatMoney(v.paid, c)} paid${v.method ? ` by ${v.method}` : ''}`, sub: balance > 0 ? `${formatMoney(balance, c)} still owed` : 'Bill settled', tone: balance > 0 ? 'bg-[#f59e0b]' : 'bg-good' }
+      : { icon: <Clock3 size={15} />, title: 'Payment pending', sub: `${formatMoney(balance, c)} owed`, tone: 'bg-[#ef4444]' },
+  ];
   return (
     <Sheet back title="Patient visit" subtitle={`${v.patientRef} · ${dateOf(v.at)}`} onClose={onClose} tall>
-      {/* Patient */}
-      <div className="mb-3 rounded-[22px] bg-linear-to-br from-[#e8f1ff] to-[#d6e6ff] p-4">
-        <div className="flex items-start gap-3">
-          <InitialsAvatar name={v.patientName} size={54} />
+      {/* Hero */}
+      <div ref={ref} className={`relative mb-3 overflow-hidden rounded-[26px] bg-linear-to-br p-4 text-white shadow-[0_14px_30px_rgba(20,40,90,0.2)] ${state.hero}`}>
+        <span aria-hidden="true" className="absolute -right-14 -top-20 h-56 w-56 rounded-full bg-white/10" />
+        <span aria-hidden="true" className="absolute -bottom-20 -left-12 h-44 w-44 rounded-full bg-black/5" />
+        <div className="relative flex items-start gap-3">
+          <span className="rounded-full ring-[3px] ring-white/70">
+            <InitialsAvatar name={v.patientName} size={56} />
+          </span>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-[18px] font-bold text-ink">{v.patientName}</p>
-            <p className="text-[12.5px] text-ink-2">{v.isNew ? 'New patient, first visit' : visits.length > 1 ? `Returning patient, ${visits.length} visits` : 'Returning patient'}</p>
-            <p className="mt-1 flex items-center gap-1.5 text-[12.5px] text-ink-2">
-              <Phone size={13} /> {v.phone ?? 'Phone not provided'}
+            <p className="truncate text-[19px] font-bold leading-tight">{v.patientName}</p>
+            <p className="mt-0.5 text-[12.5px] text-white/90">{v.isNew ? 'New patient, first visit' : visits.length > 1 ? `Returning patient · ${visits.length} visits` : 'Returning patient'}</p>
+            <span className="mt-1.5 flex flex-wrap gap-1.5">
+              <span className="rounded-full bg-white/20 px-2 py-0.5 text-[11.5px] font-semibold ring-1 ring-white/30">{v.patientRef}</span>
+              <span className="rounded-full bg-white px-2 py-0.5 text-[11.5px] font-bold text-ink">{state.label}</span>
+            </span>
+          </div>
+        </div>
+        <div className="relative mt-4 flex items-end justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[12px] text-white/85">Total billed</p>
+            <p className="text-[28px] font-bold leading-none tracking-[-0.02em]">{formatMoney(v.billed, c)}</p>
+            <p className="mt-1.5 text-[12.5px] text-white/90">
+              {formatMoney(v.paid, c)} paid{balance > 0 ? ` · ${formatMoney(balance, c)} owed` : ''}
             </p>
           </div>
-          <span className={`shrink-0 rounded-full px-2.5 py-1 text-[12px] font-bold ${stamp}`}>{v.payment === 'Part-paid' ? 'Part paid' : v.payment}</span>
+          <div className="relative grid h-[76px] w-[76px] shrink-0 place-items-center">
+            <svg viewBox="0 0 76 76" className="absolute inset-0 -rotate-90">
+              <circle cx="38" cy="38" r={R} fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="8" />
+              {pct > 0 && <circle cx="38" cy="38" r={R} fill="none" stroke={state.ring} strokeWidth="8" strokeLinecap="round" strokeDasharray={`${seen ? pct * C : 0} ${C}`} style={{ transition: 'stroke-dasharray 1100ms cubic-bezier(0.22,0.8,0.24,1) 200ms' }} />}
+            </svg>
+            <span className="text-center leading-none">
+              <b className="block text-[16px]">{Math.round(pct * 100)}%</b>
+              <span className="text-[10px] text-white/85">paid</span>
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* Facts */}
-      <div className="mb-3 grid grid-cols-2 gap-2">
-        <Fact icon={<CalendarDays size={15} />} label="Date of visit" value={dateOf(v.at)} />
-        <Fact icon={<Clock3 size={15} />} label="Arrival time" value={timeOf(v.at)} />
-        <Fact icon={<UserCheck size={15} />} label="Processed by" value={by?.name ?? 'Name not on record'} sub={by?.role ?? (v.processedBy.role === 'Receptionist' ? 'Front Desk' : v.processedBy.role)} photo={by} />
-        <Fact icon={<CreditCard size={15} />} label="Payment method" value={v.method ?? 'Not paid yet'} sub={v.method && v.payment === 'Part-paid' ? 'Part payment' : undefined} />
-        <Fact icon={<Handshake size={15} />} label="Referred by" value={agent ? agent.name : v.agentId != null ? `PR agent #${v.agentId}` : 'Walk in (no referrer)'} sub={agent?.hospital.trim() ? `PR agent, ${agent.hospital.trim().toUpperCase()}` : undefined} onClick={v.agentId != null ? () => setFocus({ kind: 'agent', id: v.agentId! }) : undefined} />
-        <Fact icon={<MapPin size={15} />} label="Branch" value={`${branch?.name ?? v.branchId} · ${branch?.code ?? ''}`} sub={branch?.city} />
+      {/* Quick actions */}
+      <div className="mb-3 grid grid-cols-3 gap-2">
+        {v.phone ? (
+          <a href={`tel:${v.phone.replace(/\s+/g, '')}`} className="press flex min-h-[60px] flex-col items-center justify-center gap-1 rounded-2xl bg-white text-[12px] font-semibold text-brand-700 ring-1 ring-line/70">
+            <Phone size={18} /> Call patient
+          </a>
+        ) : (
+          <span className="flex min-h-[60px] flex-col items-center justify-center gap-1 rounded-2xl bg-white text-[12px] font-semibold text-faint ring-1 ring-line/70">
+            <Phone size={18} /> No phone
+          </span>
+        )}
+        <button type="button" onClick={() => copy(v.patientRef, 'Patient ID')} className="press flex min-h-[60px] flex-col items-center justify-center gap-1 rounded-2xl bg-white text-[12px] font-semibold text-brand-700 ring-1 ring-line/70">
+          <Copy size={17} /> Copy ID
+        </button>
+        <button type="button" disabled={v.agentId == null} onClick={() => v.agentId != null && setFocus({ kind: 'agent', id: v.agentId })} className="press flex min-h-[60px] flex-col items-center justify-center gap-1 rounded-2xl bg-white text-[12px] font-semibold text-violet ring-1 ring-line/70 disabled:text-faint">
+          <Handshake size={18} /> {v.agentId != null ? 'Referrer' : 'Walk in'}
+        </button>
       </div>
 
-      {/* Bill */}
-      <div className="mb-3 rounded-[22px] bg-white p-3 ring-1 ring-line/70">
-        <p className="mb-2 flex items-center justify-between px-1 text-[13px] font-semibold text-ink-2">
-          Tests performed <span className="text-muted">{v.services.length} test{v.services.length === 1 ? '' : 's'}</span>
-        </p>
-        <ul className="space-y-1.5">
+      {/* Timeline */}
+      <div className="mb-3 rounded-[22px] bg-white p-4 ring-1 ring-line/70">
+        <p className="mb-3 text-[13px] font-semibold text-ink-2">How the visit went</p>
+        <ol className="relative">
+          {steps.map((s, i) => (
+            <li key={s.title} className="relative flex gap-3 pb-4 last:pb-0" style={{ opacity: seen ? 1 : 0, transform: seen ? 'none' : 'translateY(8px)', transition: `opacity 450ms ease ${250 + i * 120}ms, transform 450ms ease ${250 + i * 120}ms` }}>
+              {i < steps.length - 1 && <span aria-hidden="true" className="absolute left-[15px] top-8 h-[calc(100%-28px)] w-0.5 rounded-full bg-[#e3ebf7]" />}
+              <span className={`relative grid h-8 w-8 shrink-0 place-items-center rounded-full text-white shadow-sm ${s.tone}`}>{s.icon}</span>
+              <span className="min-w-0 pt-0.5">
+                <span className="block text-[14px] font-semibold leading-snug text-ink">{s.title}</span>
+                <span className="block text-[12px] leading-snug text-muted">{s.sub}</span>
+              </span>
+            </li>
+          ))}
+        </ol>
+      </div>
+
+      {/* People */}
+      <div className="mb-3 grid grid-cols-2 gap-2">
+        <div className="min-w-0 rounded-[20px] bg-linear-to-br from-[#f4f8fe] to-[#e8f1ff] p-3 ring-1 ring-line/70">
+          <p className="text-[11.5px] font-medium text-muted">Processed by</p>
+          <span className="mt-2 flex items-center gap-2">
+            {by?.photo ? <img src={by.photo} alt="" className="h-10 w-10 shrink-0 rounded-full object-cover ring-2 ring-white" /> : <InitialsAvatar name={by?.name ?? 'Front Desk'} size={40} />}
+            <span className="min-w-0">
+              <span className="block truncate text-[14px] font-semibold text-ink">{by?.name ?? 'Not on record'}</span>
+              <span className="block truncate text-[11.5px] text-muted">{by?.role ?? (v.processedBy.role === 'Receptionist' ? 'Front Desk' : v.processedBy.role)}</span>
+            </span>
+          </span>
+        </div>
+        <button type="button" disabled={v.agentId == null} onClick={() => v.agentId != null && setFocus({ kind: 'agent', id: v.agentId })} className="press min-w-0 rounded-[20px] bg-linear-to-br from-[#f7f3ff] to-[#ece5ff] p-3 text-left ring-1 ring-line/70">
+          <p className="flex items-center justify-between text-[11.5px] font-medium text-muted">
+            Referred by {v.agentId != null && <ChevronRight size={14} className="text-faint" />}
+          </p>
+          <span className="mt-2 flex items-center gap-2">
+            {v.agentId != null ? <AgentAvatar id={v.agentId} name={agent?.name ?? 'PR agent'} phone={agent?.phone} size={40} /> : <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white"><Sticker name="hospital" size={26} /></span>}
+            <span className="min-w-0">
+              <span className="block truncate text-[14px] font-semibold text-ink">{agent ? agent.name : v.agentId != null ? `PR agent #${v.agentId}` : 'Walk in'}</span>
+              <span className="block truncate text-[11.5px] text-muted">{agent?.hospital.trim() ? agent.hospital.trim().toUpperCase() : v.agentId != null ? 'PR agent' : 'No referrer'}</span>
+            </span>
+          </span>
+        </button>
+      </div>
+
+      {/* Bill as a receipt */}
+      <div className="relative mb-3 overflow-hidden rounded-[22px] bg-white ring-1 ring-line/70">
+        <div className="flex items-center justify-between bg-linear-to-r from-[#eef5ff] to-[#f7faff] px-4 py-3">
+          <span>
+            <span className="block text-[14px] font-bold text-ink">Bill</span>
+            <span className="block text-[11.5px] text-muted">
+              {v.id} · {branch?.name ?? ''} {branch?.code ? `· ${branch.code}` : ''}
+            </span>
+          </span>
+          <Sticker name="clipboard" size={34} />
+        </div>
+        <ul className="divide-y divide-dashed divide-line px-3">
           {v.services.map((s, i) => {
             const svc = serviceByName(s.name);
             return (
-              <li key={`${s.id}-${i}`} className="flex items-center gap-3 rounded-2xl bg-page p-2">
-                {svc ? <ServiceThumb service={svc} className="h-10 w-10 shrink-0 rounded-xl" /> : <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white"><Sticker name="testTube" size={26} /></span>}
+              <li key={`${s.id}-${i}`} className="flex items-center gap-3 py-2.5">
+                {svc ? <ServiceThumb service={svc} className="h-10 w-10 shrink-0 rounded-xl" /> : <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-page"><Sticker name="testTube" size={26} /></span>}
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[14px] font-semibold text-ink">{s.name}</span>
                   <span className="block text-[11.5px] text-muted">{CATEGORY.get(s.id) ?? 'Service'} · #{s.id}</span>
@@ -434,41 +544,46 @@ export function VisitSheet({ visit, onClose }: { visit: PatientVisit; onClose: (
             );
           })}
         </ul>
-        <div className="mt-3 space-y-1.5 border-t border-dashed border-line px-1 pt-3 text-[14px]">
+        <div className="relative mt-1 bg-page px-4 pb-4 pt-4 text-[14px]">
+          <span aria-hidden="true" className="absolute inset-x-0 -top-[7px] h-[14px]" style={{ background: 'radial-gradient(circle at 7px 0, transparent 6px, #f4f8fe 6.5px) repeat-x', backgroundSize: '14px 14px' }} />
           <p className="flex justify-between text-ink-2">
             Total billed <b className="text-ink">{formatMoney(v.billed, c)}</b>
           </p>
-          <p className="flex justify-between text-ink-2">
-            Amount paid{v.method ? ` · ${v.method}` : ''} <b className="text-ink">{formatMoney(v.paid, c)}</b>
+          <p className="mt-1 flex justify-between text-ink-2">
+            Paid{v.method ? ` · ${v.method}` : ''} <b className="text-good-ink">{formatMoney(v.paid, c)}</b>
           </p>
-          <p className={`flex justify-between font-semibold ${balance > 0 ? 'text-[#b42318]' : 'text-good-ink'}`}>
-            {balance > 0 ? 'Balance due' : 'Balance'} <b>{formatMoney(balance, c)}</b>
+          <p className={`mt-2 flex items-center justify-between rounded-xl px-3 py-2 font-semibold ${balance > 0 ? 'bg-[#fdecec] text-[#b42318]' : 'bg-tint-green text-good-ink'}`}>
+            {balance > 0 ? 'Balance due' : 'Fully paid'} <b>{formatMoney(balance, c)}</b>
           </p>
         </div>
       </div>
 
       {/* History */}
       {visits.length > 1 && (
-        <div className="rounded-[22px] bg-white p-3 ring-1 ring-line/70">
-          <p className="mb-2 flex items-center justify-between px-1 text-[13px] font-semibold text-ink-2">
-            Visit history <span className="text-muted">{formatMoney(totals.billed, c, true)} billed · {formatMoney(totals.billed - totals.paid, c, true)} owed</span>
+        <div className="rounded-[22px] bg-white p-4 ring-1 ring-line/70">
+          <p className="mb-3 flex items-center justify-between text-[13px] font-semibold text-ink-2">
+            Visit history <span className="font-medium text-muted">{formatMoney(totals.billed, c, true)} billed · {formatMoney(totals.billed - totals.paid, c, true)} owed</span>
           </p>
-          <ul className="space-y-1">
-            {[...visits].reverse().map((x) => (
-              <li key={x.id}>
-                <button type="button" onClick={() => setSelectedId(x.id)} aria-current={x.id === v.id} className={`press flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left ${x.id === v.id ? 'bg-brand-50 ring-1 ring-brand-200' : 'hover:bg-page'}`}>
-                  <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${x.payment === 'Paid' ? 'bg-good' : x.payment === 'Part-paid' ? 'bg-[#f59e0b]' : 'bg-[#ef4444]'}`} />
+          <ol className="relative">
+            {[...visits].reverse().map((x, i, all) => (
+              <li key={x.id} className="relative pb-2 last:pb-0">
+                {i < all.length - 1 && <span aria-hidden="true" className="absolute left-[11px] top-7 h-[calc(100%-16px)] w-0.5 bg-[#e3ebf7]" />}
+                <button type="button" onClick={() => setSelectedId(x.id)} aria-current={x.id === v.id} className={`press relative flex w-full items-center gap-3 rounded-2xl py-2 pl-0 pr-3 text-left ${x.id === v.id ? 'bg-brand-50' : ''}`}>
+                  <span className={`relative z-10 grid h-6 w-6 shrink-0 place-items-center rounded-full ring-4 ring-white ${x.payment === 'Paid' ? 'bg-good' : x.payment === 'Part-paid' ? 'bg-[#f59e0b]' : 'bg-[#ef4444]'}`}>
+                    {x.id === v.id && <span className="h-2 w-2 rounded-full bg-white" />}
+                  </span>
                   <span className="min-w-0 flex-1">
                     <span className="block text-[14px] font-semibold text-ink">{dateOf(x.at)}</span>
-                    <span className="block text-[12px] text-muted">
+                    <span className="block truncate text-[12px] text-muted">
                       {x.services.length} test{x.services.length === 1 ? '' : 's'} · {x.payment === 'Part-paid' ? 'Part paid' : x.payment}
+                      {x.id === v.id ? ' · showing' : ''}
                     </span>
                   </span>
                   <b className="shrink-0 text-[13.5px] text-ink">{formatMoney(x.billed, c, true)}</b>
                 </button>
               </li>
             ))}
-          </ul>
+          </ol>
         </div>
       )}
       {focus && <FocusSheet focus={focus} branchIds={[v.branchId]} period={{ key: 'custom', from: iso(v.at), to: iso(v.at) }} onClose={() => setFocus(null)} />}

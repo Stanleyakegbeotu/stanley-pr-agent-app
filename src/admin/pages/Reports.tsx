@@ -14,7 +14,7 @@
  *   is recorded in the Audit Log.
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ArrowDownRight, ArrowUpRight, Check, ChevronDown, ChevronRight, Download, Eye, FileSpreadsheet, Printer } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, Check, ChevronDown, ChevronRight, Download, Eye, FileSpreadsheet, Printer, ZoomIn, ZoomOut } from 'lucide-react';
 import { useApp as useCompany } from '@company/app/AppState';
 import { ACTIVE_BRANCHES, BRANCHES, getBranch } from '@company/data/company';
 import type { DateRange, PeriodSelection } from '@company/data/types';
@@ -680,10 +680,22 @@ function Pill({ on, label, onClick }: { on: boolean; label: string; onClick: () 
   );
 }
 
-/** Every page of the report, scaled to the phone's width (pinch to zoom in the browser). */
+/**
+ * Every page of the report (owner, 2026-11-25: pages are small on a phone, so
+ * the preview zooms with the fingers, without leaving it or downloading):
+ *  • two fingers pinch to zoom in or out (1× to 4×) around the pinch point;
+ *  • one finger moves around the zoomed pages (normal scrolling);
+ *  • double tap zooms to 2.5× there, or back to fit;
+ *  • − / + / Fit buttons for one-handed use.
+ * Zooming really enlarges the pages (no blurry stretched picture).
+ */
 function PreviewSheet({ doc, pages, paper, onClose, onOutput, busy }: { doc: ReturnType<ReportSpec['build']>; pages: Page[]; paper: Paper; onClose: () => void; onOutput: (o: Output) => void; busy: Output | null }) {
   const box = useRef<HTMLDivElement>(null);
   const [w, setW] = useState(340);
+  const [z, setZ] = useState(1);
+  const zRef = useRef(1);
+  zRef.current = z;
+  const pending = useRef<{ x: number; y: number; cx: number; cy: number; z0: number } | null>(null);
   useEffect(() => {
     const el = box.current;
     if (!el) return;
@@ -692,7 +704,88 @@ function PreviewSheet({ doc, pages, paper, onClose, onOutput, busy }: { doc: Ret
     return () => ro.disconnect();
   }, []);
   const { w: pw, h: ph } = paperPx(paper);
-  const scale = Math.min(1, w / pw);
+  const fit = Math.min(1, w / pw);
+  const scale = fit * z;
+  // The scrolling areas: horizontal (ours) and vertical (the slide-up's content).
+  const scrollers = () => {
+    const hx = box.current?.querySelector<HTMLElement>('[data-zoom-x]') ?? null;
+    const vy = box.current?.closest<HTMLElement>('.overflow-y-auto') ?? null;
+    return { hx, vy };
+  };
+  /** Zoom to `nz`, keeping the content under the screen point (cx, cy) where it is. */
+  const zoomAt = (nz: number, cx: number, cy: number) => {
+    const z0 = zRef.current;
+    const next = Math.min(4, Math.max(1, nz));
+    if (Math.abs(next - z0) < 0.001) return;
+    const { hx, vy } = scrollers();
+    const hr = hx?.getBoundingClientRect();
+    const vr = vy?.getBoundingClientRect();
+    const px = (hx?.scrollLeft ?? 0) + cx - (hr?.left ?? 0);
+    const py = (vy?.scrollTop ?? 0) + cy - (vr?.top ?? 0);
+    pending.current = { x: px, y: py, cx: cx - (hr?.left ?? 0), cy: cy - (vr?.top ?? 0), z0 };
+    setZ(next);
+  };
+  // After the pages grow or shrink, scroll so the pinch point stays under the fingers.
+  useEffect(() => {
+    const p = pending.current;
+    if (!p) return;
+    pending.current = null;
+    const { hx, vy } = scrollers();
+    const k = z / p.z0;
+    if (hx) hx.scrollLeft = p.x * k - p.cx;
+    if (vy) vy.scrollTop = p.y * k - p.cy;
+  }, [z]);
+  // Pinch (two fingers) and double tap.
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    let pinch: { d0: number; z0: number } | null = null;
+    let lastTap = 0;
+    const dist = (t: TouchList) => Math.hypot(t[0]!.clientX - t[1]!.clientX, t[0]!.clientY - t[1]!.clientY);
+    const mid = (t: TouchList) => ({ x: (t[0]!.clientX + t[1]!.clientX) / 2, y: (t[0]!.clientY + t[1]!.clientY) / 2 });
+    const start = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        pinch = { d0: dist(e.touches), z0: zRef.current };
+        e.preventDefault();
+      } else if (e.touches.length === 1) {
+        const now = Date.now();
+        if (now - lastTap < 300) {
+          const t = e.touches[0]!;
+          zoomAt(zRef.current > 1.2 ? 1 : 2.5, t.clientX, t.clientY);
+          lastTap = 0;
+          e.preventDefault();
+        } else lastTap = now;
+      }
+    };
+    const move = (e: TouchEvent) => {
+      if (!pinch || e.touches.length !== 2) return;
+      e.preventDefault();
+      const m = mid(e.touches);
+      zoomAt(pinch.z0 * (dist(e.touches) / pinch.d0), m.x, m.y);
+    };
+    const end = (e: TouchEvent) => {
+      if (e.touches.length < 2) pinch = null;
+    };
+    el.addEventListener('touchstart', start, { passive: false });
+    el.addEventListener('touchmove', move, { passive: false });
+    el.addEventListener('touchend', end);
+    el.addEventListener('touchcancel', end);
+    return () => {
+      el.removeEventListener('touchstart', start);
+      el.removeEventListener('touchmove', move);
+      el.removeEventListener('touchend', end);
+      el.removeEventListener('touchcancel', end);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const center = () => {
+    const r = box.current?.getBoundingClientRect();
+    return { x: (r?.left ?? 0) + (r?.width ?? 0) / 2, y: window.innerHeight / 2 };
+  };
+  const step = (k: number) => {
+    const c = center();
+    zoomAt(zRef.current * k, c.x, c.y);
+  };
   return (
     <Sheet
       back
@@ -708,15 +801,37 @@ function PreviewSheet({ doc, pages, paper, onClose, onOutput, busy }: { doc: Ret
         </div>
       }
     >
-      <div ref={box} className="space-y-3 pb-2" style={{ ['--rp-brand' as string]: BRAND, ['--rp-brand-ink' as string]: BRAND_INK }}>
+      <div ref={box} data-no-swipe className="relative pb-2" style={{ ['--rp-brand' as string]: BRAND, ['--rp-brand-ink' as string]: BRAND_INK, touchAction: 'pan-x pan-y' }}>
         <style>{REPORT_CSS}</style>
-        {pages.map((pg, i) => (
-          <div key={i} className="overflow-hidden rounded-md bg-white shadow-[0_4px_18px_rgba(11,23,48,0.14)] ring-1 ring-line" style={{ width: pw * scale, height: ph * scale }}>
-            <div style={{ width: pw, height: ph, transform: `scale(${scale})`, transformOrigin: 'top left' }}>
-              <PageView doc={doc} page={pg} index={i} count={pages.length} paper={paper} company={companyName()} />
-            </div>
+        <p className="mb-2 flex items-center gap-1.5 px-1 text-[12px] text-muted">
+          <ZoomIn size={14} /> Pinch with two fingers to zoom, or double tap a spot.
+        </p>
+        <div data-zoom-x className="overflow-x-auto overscroll-x-contain">
+          <div className="space-y-3" style={{ width: pw * scale }}>
+            {pages.map((pg, i) => (
+              <div key={i} className="overflow-hidden rounded-md bg-white shadow-[0_4px_18px_rgba(11,23,48,0.14)] ring-1 ring-line" style={{ width: pw * scale, height: ph * scale }}>
+                <div style={{ width: pw, height: ph, transform: `scale(${scale})`, transformOrigin: 'top left' }}>
+                  <PageView doc={doc} page={pg} index={i} count={pages.length} paper={paper} company={companyName()} />
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
+        </div>
+        {/* Zoom controls, always within reach of the thumb */}
+        <div className="sticky bottom-2 z-10 mt-3 flex justify-center">
+          <div className="flex items-center gap-1 rounded-full bg-ink/90 p-1 text-white shadow-[0_8px_24px_rgba(11,23,48,0.3)] backdrop-blur">
+            <button type="button" onClick={() => step(1 / 1.5)} disabled={z <= 1} aria-label="Zoom out" className="press grid h-9 w-9 place-items-center rounded-full disabled:opacity-40">
+              <ZoomOut size={18} />
+            </button>
+            <span className="min-w-[52px] text-center text-[13px] font-semibold">{Math.round(z * 100)}%</span>
+            <button type="button" onClick={() => step(1.5)} disabled={z >= 4} aria-label="Zoom in" className="press grid h-9 w-9 place-items-center rounded-full disabled:opacity-40">
+              <ZoomIn size={18} />
+            </button>
+            <button type="button" onClick={() => setZ(1)} disabled={z === 1} className="press h-9 rounded-full bg-white/15 px-3 text-[12.5px] font-semibold disabled:opacity-40">
+              Fit
+            </button>
+          </div>
+        </div>
       </div>
     </Sheet>
   );
