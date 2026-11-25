@@ -47,6 +47,9 @@ const ENTRIES = [
   'features/reports/reportCss.ts',
   // Settings: the organisation facts behind Overview, Branch management and Monitoring.
   'features/settings/admin/orgData.ts',
+  // Branch workspace: the patient receipt layout and its print / PDF / image output (same receipt as the desktop).
+  'features/receipts/Receipt.tsx',
+  'features/receipts/receiptOutput.ts',
 ];
 const KEEP_MOBILE = new Set(['app/router.ts']);
 

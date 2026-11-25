@@ -37,7 +37,7 @@ import { Chips, PageTitle } from '../branchFirst';
 
 /* ─────────────── model (desktop InventoryCatalog) ─────────────── */
 
-interface Item {
+export interface Item {
   id: number;
   name: string;
   price: number | null;
@@ -51,7 +51,7 @@ interface Item {
   recordedAs?: string;
   owner?: boolean;
 }
-interface Group {
+export interface Group {
   key: string;
   label: string;
   raw: string[];
@@ -67,7 +67,7 @@ interface Group {
 }
 type Activity = Map<number, { count: number; revenue: number }>;
 
-function buildItems(inv: InventoryChanges): Item[] {
+export function buildItems(inv: InventoryChanges): Item[] {
   const legacy = CATALOGUE_INVENTORY.map<Item>((i) => {
     const e = inv.edits[i.id];
     const name = e?.name ?? i.name;
@@ -80,7 +80,7 @@ function buildItems(inv: InventoryChanges): Item[] {
   return [...legacy, ...added];
 }
 
-function groupCategories(items: Item[], names: Record<string, string>): Group[] {
+export function groupCategories(items: Item[], names: Record<string, string>): Group[] {
   const map = new Map<string, Item[]>();
   for (const it of items) map.set(it.category, [...(map.get(it.category) ?? []), it]);
   return [...map.entries()]
@@ -119,7 +119,7 @@ const META: Record<string, { sticker: StickerKey; label: string; tint: string }>
   CARDIOLOGY: { sticker: 'heart', label: 'Cardiology consultation', tint: 'from-[#ffeef2] to-[#ffdbe4]' },
   DNA: { sticker: 'dna', label: 'DNA paternity testing', tint: 'from-[#f3eeff] to-[#e4dbff]' },
 };
-const meta = (key: string) => META[key] ?? { sticker: 'clipboard' as StickerKey, label: 'Added category', tint: 'from-[#f4f8fe] to-[#e3ebf7]' };
+export const meta = (key: string) => META[key] ?? { sticker: 'clipboard' as StickerKey, label: 'Added category', tint: 'from-[#f4f8fe] to-[#e3ebf7]' };
 const money = (n: number | null, compact = false) => (n === null ? 'No price' : formatMoney(n, 'NGN', compact));
 const rangeText = (g: Pick<Group, 'min' | 'max'>) => (g.min === null ? 'No price on file' : g.min === g.max ? money(g.min, true) : `${money(g.min, true)} to ${money(g.max, true)}`);
 const MAIN_MIN = 3;

@@ -7,12 +7,14 @@
  */
 import { useRole } from '@/domain/role';
 import { AdminApp } from '@/admin/AdminApp';
+import { StaffApp } from '@/staff/StaffApp';
 import { App } from './App';
 import { AppStoreProvider } from './store';
 
 export function Root() {
   const role = useRole();
   if (role === 'admin') return <AdminApp key="admin" />;
+  if (role === 'manager' || role === 'frontdesk') return <StaffApp key="staff" />;
   return (
     <AppStoreProvider key="clinician">
       <App />

@@ -22,7 +22,7 @@ export const firstPct = (p: Partial<Record<Currency, number | null>>) => Object.
 
 /** Transparent top bar that turns frosted when content scrolls under it; inbox and notifications on the right. */
 export function AdminTopBar({ title, back, right }: { title?: string; back?: boolean; right?: ReactNode }) {
-  const { openMenu, unread, inboxUnread } = useAdminShell();
+  const { openMenu, unread, inboxUnread, paths } = useAdminShell();
   const { navigate } = useCompany();
   const sentinel = useRef<HTMLDivElement>(null);
   const [scrolled, setScrolled] = useState(false);
@@ -49,11 +49,13 @@ export function AdminTopBar({ title, back, right }: { title?: string; back?: boo
         <h1 className={`min-w-0 flex-1 truncate text-[21px] font-bold tracking-[-0.02em] text-ink transition-opacity ${title ? '' : 'opacity-0'}`}>{title}</h1>
         {right}
         <span className="-mr-2 flex items-center gap-1">
-          <button type="button" onClick={() => navigate('/messages')} aria-label={inboxUnread ? `Inbox, ${inboxUnread} unread` : 'Inbox'} className="press relative grid h-11 w-11 place-items-center rounded-full text-ink">
+          {paths?.inbox !== null && (
+          <button type="button" onClick={() => navigate(paths?.inbox ?? '/messages')} aria-label={inboxUnread ? `Inbox, ${inboxUnread} unread` : 'Inbox'} className="press relative grid h-11 w-11 place-items-center rounded-full text-ink">
             <MessageCircle size={25} strokeWidth={1.9} />
             {inboxUnread > 0 && <span className="absolute right-0.5 top-1 grid h-[19px] min-w-[19px] place-items-center rounded-full bg-brand-600 px-1 text-[11px] font-bold leading-none text-white ring-2 ring-[#e9f1ff]">{inboxUnread > 9 ? '9+' : inboxUnread}</span>}
           </button>
-          <button type="button" onClick={() => navigate('/notifications')} aria-label={unread ? `Notifications, ${unread} unread` : 'Notifications'} className="press relative grid h-11 w-11 place-items-center rounded-full text-ink">
+          )}
+          <button type="button" onClick={() => navigate(paths?.notifications ?? '/notifications')} aria-label={unread ? `Notifications, ${unread} unread` : 'Notifications'} className="press relative grid h-11 w-11 place-items-center rounded-full text-ink">
             <Bell size={26} strokeWidth={1.9} />
             {unread > 0 && <span className="absolute right-0.5 top-1 grid h-[19px] min-w-[19px] place-items-center rounded-full bg-[#ef4444] px-1 text-[11px] font-bold text-white ring-2 ring-[#e9f1ff]">{unread > 9 ? '9+' : unread}</span>}
           </button>
