@@ -31,6 +31,7 @@ import { frontDeskId, managerId } from '../chat';
 import { photoOf, useTeam, type Who } from '../people';
 import { DutyRota } from '../duty';
 import { AddBranchSheet } from '../addBranch';
+import { StaffSheetByName } from './Staff';
 
 export function BranchesPage({ sub }: { sub?: string }) {
   useBranches(); // re-render when a branch is added or changes status
@@ -205,6 +206,7 @@ const SEVERITY: Record<Severity, { label: string; tone: string; icon: React.Reac
 };
 
 function BranchView({ branchId }: { branchId: string }) {
+  const [profile, setProfile] = useState<string | null>(null);
   const { period, navigate, agents } = useCompany();
   const team = useTeam();
   const sent = useAnnouncements();
@@ -368,6 +370,7 @@ function BranchView({ branchId }: { branchId: string }) {
 
         <DutyRota branchId={b.id} />
 
+        {profile && <StaffSheetByName name={profile} onClose={() => setProfile(null)} />}
         {/* Team */}
         <SectionTitle title="Team" action="Staff Management" onAction={() => navigate('/staff')} />
         <div className="space-y-2">
@@ -377,7 +380,7 @@ function BranchView({ branchId }: { branchId: string }) {
             const isMgr = mgr?.name === p.name;
             const conv = isMgr ? managerId(b.id) : desk.some((d) => d.id === p.id) ? frontDeskId(b.id) : null;
             return (
-              <div key={p.id} className="flex items-center gap-3 rounded-[20px] bg-white p-3 ring-1 ring-line/70">
+              <div key={p.id} role="button" tabIndex={0} onClick={() => setProfile(p.name)} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), setProfile(p.name))} aria-label={`${p.name}, open profile`} className="press flex cursor-pointer items-center gap-3 rounded-[20px] bg-white p-3 ring-1 ring-line/70">
                 <span className="relative">
                   <Face who={{ name: p.name, role: p.role, photo: photoOf(p) }} size={46} />
                   {isDuty && <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full bg-[#22c55e] ring-2 ring-white" aria-label="On duty" />}
@@ -390,7 +393,7 @@ function BranchView({ branchId }: { branchId: string }) {
                   {isDuty && <span className="mt-1 inline-flex rounded-full bg-tint-green px-2 py-0.5 text-[11.5px] font-semibold text-good-ink">On seat today</span>}
                 </span>
                 {conv && (
-                  <button type="button" onClick={() => navigate(`/messages/${conv}`)} aria-label={`Message ${p.name}`} className="press grid h-10 w-10 shrink-0 place-items-center rounded-full bg-brand-50 text-brand-600">
+                  <button type="button" onClick={(e) => (e.stopPropagation(), navigate(`/messages/${conv}`))} aria-label={`Message ${p.name}`} className="press grid h-10 w-10 shrink-0 place-items-center rounded-full bg-brand-50 text-brand-600">
                     <MessageCircle size={18} />
                   </button>
                 )}

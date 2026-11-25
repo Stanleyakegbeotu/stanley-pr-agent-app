@@ -23,6 +23,7 @@ import { useNav } from '@/app/store';
 import { InitialsAvatar, Sticker } from '@/ui/kit';
 import { LongText } from '../fields';
 import { RuleInput } from '../fields';
+import { SignInStatus } from '../settingsSections';
 import { emailProblem, nameProblem, phoneProblem } from '@/ui/fieldRules';
 import { Sheet } from '../ui';
 import { AdminTopBar, EmptyCard, PageGlow, SectionTitle } from '../kit';
@@ -345,6 +346,7 @@ export function StaffProfileSheet({ member, onClose }: { member: StaffRecord; on
               {mgr && <span className="flex items-center gap-1 rounded-full bg-[#fff4d6] px-2 py-0.5 text-[11.5px] font-semibold text-[#8a6100]"><Crown size={12} /> Head of branch</span>}
               <span className={`rounded-full px-2 py-0.5 text-[11.5px] font-semibold ${STATUS_TONE[member.status]}`}>{member.status}</span>
               {onSeatToday && <span className="rounded-full bg-brand-600 px-2 py-0.5 text-[11.5px] font-semibold text-white">On seat today</span>}
+              <SignInStatus userKey={member.id} />
             </span>
           </div>
         </div>
@@ -690,4 +692,16 @@ export function AddStaffSheet({ branchId, presetRole, onClose, onCreated }: { br
       </div>
     </Sheet>
   );
+}
+
+/** Opens the staff profile of the person with this name (as PR agent profiles open), from anywhere a staff member appears. */
+export function StaffSheetByName({ name, onClose }: { name: string; onClose: () => void }) {
+  const { staff } = useCompany();
+  const m = staff.find((s) => s.name === name);
+  return m ? <StaffProfileSheet member={m} onClose={onClose} /> : null;
+}
+/** Whether a name belongs to a staff record (the Company Admin is not one). */
+export function useIsStaff() {
+  const { staff } = useCompany();
+  return (name?: string | null) => !!name && staff.some((s) => s.name === name);
 }

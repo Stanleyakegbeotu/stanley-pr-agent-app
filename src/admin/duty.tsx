@@ -23,6 +23,7 @@ import { FocusSheet, Rows, useRowCtx, visitRow, type Focus } from './details';
 import { SectionTitle } from './kit';
 import { frontDeskId } from './chat';
 import { useTeam, type Who } from './people';
+import { StaffSheetByName } from './pages/Staff';
 
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const sameDay = (a: Date, b: Date) => iso(a) === iso(b);
@@ -36,6 +37,7 @@ export function DutyRota({ branchId }: { branchId: string }) {
   const team = useTeam();
   const { navigate } = useCompany();
   const [day, setDay] = useState<Date | null>(null);
+  const [profile, setProfile] = useState<string | null>(null);
   const picker = useRef<HTMLInputElement>(null);
   const today = TODAY;
   const desk = team.frontDesk(branchId);
@@ -44,7 +46,8 @@ export function DutyRota({ branchId }: { branchId: string }) {
   if (!desk.length)
     return (
       <>
-        <SectionTitle title="Front desk on seat" />
+        {profile && <StaffSheetByName name={profile} onClose={() => setProfile(null)} />}
+      <SectionTitle title="Front desk on seat" />
         <div className="flex items-center gap-3 rounded-[20px] bg-white p-4 ring-1 ring-line/70">
           <Sticker name="calendar" size={40} />
           <p className="text-[14px] text-muted">No front desk staff at this branch yet. Add them in Staff Management.</p>
@@ -65,6 +68,9 @@ export function DutyRota({ branchId }: { branchId: string }) {
               <span className="block text-[12px] font-semibold text-good-ink">On seat today</span>
               <span className="block truncate text-[16px] font-bold text-ink">{onSeat.name}</span>
               <span className="block text-[12.5px] text-ink-2">{onSeat.role} · see today’s work</span>
+              <span role="button" tabIndex={0} onClick={(e) => (e.stopPropagation(), setProfile(onSeat.name))} onKeyDown={(e) => e.key === 'Enter' && (e.stopPropagation(), setProfile(onSeat.name))} className="mt-1 inline-flex items-center gap-0.5 rounded-full bg-white px-2 py-0.5 text-[11.5px] font-semibold text-brand-600 shadow-sm">
+                View profile <ChevronRight size={12} />
+              </span>
             </span>
             <span
               role="button"
@@ -148,6 +154,11 @@ function DaySheet({ branchId, day, onClose }: { branchId: string; day: Date; onC
           <p className="truncate text-[18px] font-bold text-ink">{p?.name ?? 'No one on the rota'}</p>
           <p className="text-[12.5px] text-ink-2">{p ? `${p.role} · ${branch?.name} branch` : 'Add front desk staff in Staff Management'}</p>
           {mgr && <p className="mt-0.5 text-[12px] text-muted">Branch manager: {mgr.name}</p>}
+          {p && (
+            <button type="button" onClick={() => setFocus({ kind: 'staff', name: p.name })} className="press mt-1.5 inline-flex items-center gap-0.5 rounded-full bg-white px-2.5 py-1 text-[12px] font-semibold text-brand-600 shadow-sm">
+              View {p.name.split(' ')[0]}’s profile <ChevronRight size={13} />
+            </button>
+          )}
         </div>
       </div>
 

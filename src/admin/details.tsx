@@ -35,10 +35,11 @@ import { Sheet, useSheetPeriod } from './ui';
 import { useTeam, type Who } from './people';
 import { AgentProfileSheet } from './agents';
 import { AgentAvatar } from './agentPhotos';
+import { StaffSheetByName, useIsStaff } from './pages/Staff';
 
 export type DetailKind = 'revenue' | 'payments' | 'patients' | 'expenses' | 'outstanding' | 'commission' | 'referrals' | 'hospitals' | 'services';
 /** A single record opened on top of a list. */
-export type Focus = { kind: 'visit'; visit: PatientVisit } | { kind: 'service'; id: number; name: string } | { kind: 'agent'; id: number } | { kind: 'hospital'; key: string; name: string };
+export type Focus = { kind: 'visit'; visit: PatientVisit } | { kind: 'service'; id: number; name: string } | { kind: 'agent'; id: number } | { kind: 'hospital'; key: string; name: string } | { kind: 'staff'; name: string };
 
 const PAGE = 30;
 const branchName = (id: string) => getBranch(id)?.name ?? id;
@@ -286,6 +287,8 @@ export function FocusSheet({ focus, branchIds, period: start, onClose }: { focus
       return <ServiceSheet id={focus.id} name={focus.name} branchIds={branchIds} start={start} onClose={onClose} />;
     case 'agent':
       return <AgentProfileSheet id={focus.id} branchIds={branchIds} period={start} onClose={onClose} />;
+    case 'staff':
+      return <StaffSheetByName name={focus.name} onClose={onClose} />;
     case 'hospital':
       return <HospitalSheet hkey={focus.key} name={focus.name} branchIds={branchIds} start={start} onClose={onClose} />;
   }
@@ -396,6 +399,7 @@ export function VisitSheet({ visit, onClose }: { visit: PatientVisit; onClose: (
   const agent = v.agentId != null ? agents.find((a) => a.id === v.agentId) : undefined;
   const balance = v.billed - v.paid;
   const note = useBalanceNotes()(v);
+  const isStaff = useIsStaff();
   const pct = v.billed > 0 ? Math.min(1, v.paid / v.billed) : 1;
   const state = v.payment === 'Paid' ? { label: 'Paid in full', hero: 'from-[#0f7a43] via-[#16a35a] to-[#4cc98a]', ring: '#ffffff' } : v.payment === 'Part-paid' ? { label: 'Part paid', hero: 'from-[#c2410c] via-[#e0601a] to-[#f59e0b]', ring: '#ffffff' } : { label: 'Not paid', hero: 'from-[#b42318] via-[#d93036] to-[#f0646a]', ring: '#ffffff' };
   const totals = visits.reduce((s, x) => ({ billed: s.billed + x.billed, paid: s.paid + x.paid }), { billed: 0, paid: 0 });
@@ -479,7 +483,7 @@ export function VisitSheet({ visit, onClose }: { visit: PatientVisit; onClose: (
                 </span>
               )}
             </div>
-            <div className="min-w-0 rounded-2xl bg-white/85 p-2.5">
+            <button type="button" disabled={!isStaff(note.approvedBy?.name)} onClick={() => note.approvedBy && setFocus({ kind: 'staff', name: note.approvedBy.name })} className="press min-w-0 rounded-2xl bg-white/85 p-2.5 text-left">
               <p className="text-[11px] text-muted">Balance approved by</p>
               <span className="mt-1 flex items-center gap-1.5">
                 {note.approvedBy?.photo ? <img src={note.approvedBy.photo} alt="" className="h-7 w-7 shrink-0 rounded-full object-cover" /> : <InitialsAvatar name={note.approvedBy?.name ?? 'Staff'} size={28} />}
@@ -488,7 +492,7 @@ export function VisitSheet({ visit, onClose }: { visit: PatientVisit; onClose: (
                   <span className="block truncate text-[10.5px] text-muted">{note.approvedBy?.role ?? ''}</span>
                 </span>
               </span>
-            </div>
+            </button>
           </div>
           {v.phone && note.overdueDays > 0 && (
             <a href={`tel:${v.phone.replace(/\s+/g, '')}`} className="press mt-2.5 flex min-h-10 items-center justify-center gap-1.5 rounded-xl bg-white text-[13.5px] font-semibold text-[#b42318] ring-1 ring-[#f9d4d4]">
@@ -536,8 +540,10 @@ export function VisitSheet({ visit, onClose }: { visit: PatientVisit; onClose: (
 
       {/* People */}
       <div className="mb-3 grid grid-cols-2 gap-2">
-        <div className="min-w-0 rounded-[20px] bg-linear-to-br from-[#f4f8fe] to-[#e8f1ff] p-3 ring-1 ring-line/70">
-          <p className="text-[11.5px] font-medium text-muted">Processed by</p>
+        <button type="button" disabled={!isStaff(by?.name)} onClick={() => by && setFocus({ kind: 'staff', name: by.name })} className="press min-w-0 rounded-[20px] bg-linear-to-br from-[#f4f8fe] to-[#e8f1ff] p-3 text-left ring-1 ring-line/70">
+          <p className="flex items-center justify-between text-[11.5px] font-medium text-muted">
+            Processed by {isStaff(by?.name) && <ChevronRight size={14} className="text-faint" />}
+          </p>
           <span className="mt-2 flex items-center gap-2">
             {by?.photo ? <img src={by.photo} alt="" className="h-10 w-10 shrink-0 rounded-full object-cover ring-2 ring-white" /> : <InitialsAvatar name={by?.name ?? 'Front Desk'} size={40} />}
             <span className="min-w-0">
@@ -545,7 +551,7 @@ export function VisitSheet({ visit, onClose }: { visit: PatientVisit; onClose: (
               <span className="block truncate text-[11.5px] text-muted">{by?.role ?? (v.processedBy.role === 'Receptionist' ? 'Front Desk' : v.processedBy.role)}</span>
             </span>
           </span>
-        </div>
+        </button>
         <button type="button" disabled={v.agentId == null} onClick={() => v.agentId != null && setFocus({ kind: 'agent', id: v.agentId })} className="press min-w-0 rounded-[20px] bg-linear-to-br from-[#f7f3ff] to-[#ece5ff] p-3 text-left ring-1 ring-line/70">
           <p className="flex items-center justify-between text-[11.5px] font-medium text-muted">
             Referred by {v.agentId != null && <ChevronRight size={14} className="text-faint" />}
@@ -835,6 +841,8 @@ export function ExpenseRow({ e, oneDay, multi, people }: { e: ExpenseLine; oneDa
   const c = cur(e.branchId);
   const branch = getBranch(e.branchId);
   const { recordedBy, approvedBy, approvedAt } = people;
+  const isStaff = useIsStaff();
+  const [person, setPerson] = useState<string | null>(null);
   return (
     <div className={`rounded-[18px] bg-white ring-1 ${open ? 'ring-[#ffd3a8]' : 'ring-line/70'}`}>
       <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="press flex w-full items-start gap-3 p-3 text-left">
@@ -858,19 +866,21 @@ export function ExpenseRow({ e, oneDay, multi, people }: { e: ExpenseLine; oneDa
           <Detail label="What it was for" value={e.description} sub={e.category} />
           <Detail label="Amount" value={formatMoney(e.amount, c)} />
           <Detail label="Date and time" value={`${dateOf(e.at)}, ${timeOf(e.at)}`} />
-          <Detail label="Recorded by" person={recordedBy} value={recordedBy ? recordedBy.name : 'Name not on record'} sub={recordedBy?.role} />
-          <Detail label="Approved by" person={approvedBy} value={approvedBy.name} sub={`${approvedBy.role} · ${dateOf(approvedAt)}, ${timeOf(approvedAt)}`} />
+          <Detail label="Recorded by" person={recordedBy} value={recordedBy ? recordedBy.name : 'Name not on record'} sub={recordedBy?.role} onClick={isStaff(recordedBy?.name) ? () => setPerson(recordedBy!.name) : undefined} />
+          <Detail label="Approved by" person={approvedBy} value={approvedBy.name} sub={`${approvedBy.role} · ${dateOf(approvedAt)}, ${timeOf(approvedAt)}`} onClick={isStaff(approvedBy.name) ? () => setPerson(approvedBy.name) : undefined} />
           <Detail label="Branch" value={branch ? `${branch.name} · ${branch.code}` : e.branchId} />
           <Detail label="Reference" value={e.id} sub={e.status} />
         </div>
       )}
+      {person && <StaffSheetByName name={person} onClose={() => setPerson(null)} />}
     </div>
   );
 }
 
-function Detail({ label, value, sub, person }: { label: string; value: string; sub?: string; person?: Who | null }) {
+function Detail({ label, value, sub, person, onClick }: { label: string; value: string; sub?: string; person?: Who | null; onClick?: () => void }) {
+  const Tag = onClick ? 'button' : 'div';
   return (
-    <div className="flex items-start justify-between gap-3 px-3.5 py-2.5">
+    <Tag {...(onClick ? { type: 'button' as const, onClick } : {})} className={`flex w-full items-start justify-between gap-3 px-3.5 py-2.5 text-left ${onClick ? 'press' : ''}`}>
       <span className="shrink-0 pt-0.5 text-muted">{label}</span>
       <span className="flex min-w-0 items-center gap-2 text-right">
         <span className="min-w-0">
@@ -878,7 +888,8 @@ function Detail({ label, value, sub, person }: { label: string; value: string; s
           {sub && <span className="block text-[12px] text-muted">{sub}</span>}
         </span>
         {person && (person.photo ? <img src={person.photo} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" /> : <InitialsAvatar name={person.name} size={32} />)}
+        {onClick && <ChevronRight size={15} className="shrink-0 text-faint" />}
       </span>
-    </div>
+    </Tag>
   );
 }
