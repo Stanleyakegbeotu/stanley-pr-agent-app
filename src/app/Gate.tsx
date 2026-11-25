@@ -1,5 +1,7 @@
 /**
- * The app's front door (compliance, 2026-11-24). In order:
+ * The app's front door (compliance, 2026-11-24).
+ * SWITCHED OFF while the app is being built (owner, 2026-11-25): see
+ * AUTH_SCREENS_ENABLED in domain/account. When on, in order:
  *  1. No account on this device → sign in / create account (password + OTP).
  *     SWITCHED OFF for now (owner, 2026-11-25): the sample clinician is signed in automatically.
  *  2. Agreement not accepted (or a new version) → agreement screen.
@@ -17,7 +19,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Stethoscope } from 'lucide-react';
 import { COMPANY } from '@/config/org';
-import { SIGN_IN_ENABLED, checkRemoteSignOut, forgetAccount, isActive, lockApp, useAccount } from '@/domain/account';
+import { AUTH_SCREENS_ENABLED, SIGN_IN_ENABLED, checkRemoteSignOut, forgetAccount, isActive, lockApp, useAccount } from '@/domain/account';
 import { VERSIONS, clearConsentCache, hasAccepted, useConsents } from '@/domain/consent';
 import { destroyDeviceKey } from '@/domain/vault';
 import { secureWipe } from '@/domain/secureStore';
@@ -46,6 +48,7 @@ export function Gate({ children }: { children: ReactNode }) {
 
   // Auto-lock: idle for 5 minutes, or coming back from the background.
   useEffect(() => {
+    if (!AUTH_SCREENS_ENABLED) return; // switched off while the app is being built
     let last = Date.now();
     const touch = () => (last = Date.now());
     const events = ['pointerdown', 'keydown', 'wheel', 'touchstart'] as const;
@@ -70,6 +73,9 @@ export function Gate({ children }: { children: ReactNode }) {
       document.removeEventListener('visibilitychange', vis);
     };
   }, []);
+
+  // While the app is being built (domain/account AUTH_SCREENS_ENABLED = false): straight to the app.
+  if (!AUTH_SCREENS_ENABLED) return <>{children}</>;
 
   let screen: ReactNode;
   // Sign-in is switched off for now (domain/account SIGN_IN_ENABLED): a lock-out then just asks for a new PIN.

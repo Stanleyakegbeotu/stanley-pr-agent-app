@@ -120,6 +120,15 @@ export const DEMO_OTP = '123456';
  * password + one-time code sign-in (screens/auth/Auth.tsx SignIn).
  */
 export const SIGN_IN_ENABLED = false;
+
+/**
+ * Owner (2026-11-25): while the app is still being built, ALL the security
+ * screens are switched off: no sign-in, agreement, PIN, face/fingerprint or
+ * auto-lock. Opening the app goes straight to the Dashboard as the sample
+ * clinician. Encryption of patient data on the phone stays ON.
+ * Set to true to bring the whole flow back (app/Gate.tsx).
+ */
+export const AUTH_SCREENS_ENABLED = false;
 if (!SIGN_IN_ENABLED && !load()) save({ clinician: SAMPLE, status: 'active', failedPins: 0 });
 
 type Pending = { kind: 'signin'; who: string } | { kind: 'register'; clinician: Omit<Clinician, 'id' | 'memberSince'> };
