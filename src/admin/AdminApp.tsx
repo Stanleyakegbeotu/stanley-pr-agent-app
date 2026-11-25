@@ -18,6 +18,7 @@ import { ROLES, setRole, useRole } from '@/domain/role';
 import { AdminShellCtx } from './shell';
 import { AdminDashboard } from './pages/Dashboard';
 import { ComingNext } from './pages/ComingNext';
+import { BranchesPage } from './pages/Branches';
 
 interface AdminPage {
   id: string;
@@ -29,7 +30,7 @@ interface AdminPage {
 /** Desktop order (COMPANY_NAV), minus STANLEY AI and Report an issue. */
 export const ADMIN_PAGES: AdminPage[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutGrid, screen: AdminDashboard },
-  { id: 'branches', label: 'Branches', icon: Building2, screen: () => <ComingNext title="Branches" /> },
+  { id: 'branches', label: 'Branches', icon: Building2, screen: BranchesPage },
   { id: 'inventory', label: 'Inventory', icon: Package, screen: () => <ComingNext title="Inventory" /> },
   { id: 'staff', label: 'Staff Management', icon: Users, screen: () => <ComingNext title="Staff Management" /> },
   { id: 'pr', label: 'PR Management', icon: Handshake, screen: () => <ComingNext title="PR Management" /> },
