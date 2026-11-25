@@ -386,7 +386,7 @@ export function TrendChart({ labels, series }: { labels: string[]; series: { nam
       </div>
       <div className="mt-1 flex gap-[3px]">
         {labels.map((l, i) => (
-          <span key={l + i} className="min-w-0 flex-1 truncate text-center text-[9.5px] text-muted">
+          <span key={l + i} className="flex min-w-0 flex-1 justify-center overflow-visible whitespace-nowrap text-[9.5px] text-muted">
             {show(i) ? l : ''}
           </span>
         ))}

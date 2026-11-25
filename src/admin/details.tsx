@@ -663,7 +663,7 @@ function VisitRow({ v, oneDay, multi, by, agent, onOpen, amount, amountNote, at,
 }
 
 /** An expense; tap to drop down what it was for, who recorded and approved it, and when. */
-function ExpenseRow({ e, oneDay, multi, people }: { e: ExpenseLine; oneDay: boolean; multi: boolean; people: ReturnType<ReturnType<typeof useTeam>['expensePeople']> }) {
+export function ExpenseRow({ e, oneDay, multi, people }: { e: ExpenseLine; oneDay: boolean; multi: boolean; people: ReturnType<ReturnType<typeof useTeam>['expensePeople']> }) {
   const [open, setOpen] = useState(false);
   const c = cur(e.branchId);
   const branch = getBranch(e.branchId);
