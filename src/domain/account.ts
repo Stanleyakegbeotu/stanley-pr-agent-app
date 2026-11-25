@@ -113,6 +113,15 @@ const SAMPLE: Clinician = {
 /** Demo one-time code until SMS is connected. */
 export const DEMO_OTP = '123456';
 
+/**
+ * Owner (2026-11-25): the sign-in and sign-up screens are switched OFF for now.
+ * The app opens straight into the sample clinician's (verified) account; the
+ * agreement, PIN and app lock still apply. Set to true to bring back
+ * password + one-time code sign-in (screens/auth/Auth.tsx SignIn).
+ */
+export const SIGN_IN_ENABLED = false;
+if (!SIGN_IN_ENABLED && !load()) save({ clinician: SAMPLE, status: 'active', failedPins: 0 });
+
 type Pending = { kind: 'signin'; who: string } | { kind: 'register'; clinician: Omit<Clinician, 'id' | 'memberSince'> };
 let pendingAuth: Pending | null = null;
 

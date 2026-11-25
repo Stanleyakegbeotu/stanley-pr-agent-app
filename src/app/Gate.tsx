@@ -1,6 +1,7 @@
 /**
  * The app's front door (compliance, 2026-11-24). In order:
  *  1. No account on this device → sign in / create account (password + OTP).
+ *     SWITCHED OFF for now (owner, 2026-11-25): the sample clinician is signed in automatically.
  *  2. Agreement not accepted (or a new version) → agreement screen.
  *  3. No PIN yet → choose a PIN (then optional face / fingerprint).
  *  4. Locked → PIN / biometrics.
@@ -16,7 +17,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Stethoscope } from 'lucide-react';
 import { COMPANY } from '@/config/org';
-import { checkRemoteSignOut, forgetAccount, isActive, lockApp, useAccount } from '@/domain/account';
+import { SIGN_IN_ENABLED, checkRemoteSignOut, forgetAccount, isActive, lockApp, useAccount } from '@/domain/account';
 import { VERSIONS, clearConsentCache, hasAccepted, useConsents } from '@/domain/consent';
 import { destroyDeviceKey } from '@/domain/vault';
 import { secureWipe } from '@/domain/secureStore';
@@ -71,7 +72,8 @@ export function Gate({ children }: { children: ReactNode }) {
   }, []);
 
   let screen: ReactNode;
-  if (!account || account.lockedOut) screen = <SignIn />;
+  // Sign-in is switched off for now (domain/account SIGN_IN_ENABLED): a lock-out then just asks for a new PIN.
+  if (!account || (account.lockedOut && SIGN_IN_ENABLED)) screen = <SignIn />;
   else if (!hasAccepted('agreement', VERSIONS.agreement, account.clinician.id)) screen = <Agreement />;
   else if (!account.pin) screen = <SetPin />;
   else if (!unlocked) screen = <LockScreen onSignOut={() => void signOutDevice()} />;

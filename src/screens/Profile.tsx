@@ -13,7 +13,7 @@ import { useApp } from '@/app/store';
 import { BRANCH, ROLE_LABEL } from '@/config/org';
 import { shortDate } from '@/domain/format';
 import { countsFor } from '@/domain/referrals';
-import { REGULATORS, biometricsAvailable, disableBiometrics, enableBiometrics, resetPin, useAccount } from '@/domain/account';
+import { REGULATORS, SIGN_IN_ENABLED, biometricsAvailable, disableBiometrics, enableBiometrics, resetPin, useAccount } from '@/domain/account';
 import { TITLES, saveProfile, squarePhoto, tidyName, tidyPhone, useProfile, validEmail } from '@/domain/profile';
 import { signOutDevice } from '@/app/Gate';
 import { Button, Card, Field, ScreenHeader, inputClass } from '@/ui/kit';
@@ -149,7 +149,7 @@ export function Profile() {
         <div className="fixed inset-0 z-[70] flex items-end justify-center bg-[#0b1730]/40 md:items-center" onClick={() => setConfirmOut(false)}>
           <div className="w-full max-w-md rounded-t-[26px] bg-white px-5 pb-[max(18px,var(--safe-bottom))] pt-5 shadow-2xl md:rounded-[26px]" onClick={(e) => e.stopPropagation()}>
             <p className="text-[19px] font-bold text-ink">Sign out of this device?</p>
-            <p className="mb-4 mt-1 text-[14px] leading-snug text-muted">Everything this app saved on the phone is deleted, including unsent requests, drafts and chat. You’ll need your password and a one-time code to sign in again.</p>
+            <p className="mb-4 mt-1 text-[14px] leading-snug text-muted">Everything this app saved on the phone is deleted, including unsent requests, drafts and chat.{SIGN_IN_ENABLED ? ' You’ll need your password and a one-time code to sign in again.' : ' You’ll set up a new PIN next time.'}</p>
             <div className="grid grid-cols-2 gap-3">
               <Button variant="secondary" onClick={() => setConfirmOut(false)}>
                 Cancel

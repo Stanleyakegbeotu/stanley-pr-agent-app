@@ -6,7 +6,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { BadgeCheck, Delete, Fingerprint, KeyRound, Lock, LogOut, ShieldCheck, Stethoscope } from 'lucide-react';
 import { COMPANY } from '@/config/org';
-import { DEMO_OTP, MAX_PIN_TRIES, PROFESSIONS, REGULATORS, REGULATOR_FOR, biometricsAvailable, demoApprove, enableBiometrics, getAccount, setPin, startRegister, startSignIn, unlockWithBiometrics, unlockWithPin, useAccount, verifyOtp } from '@/domain/account';
+import { DEMO_OTP, MAX_PIN_TRIES, SIGN_IN_ENABLED, PROFESSIONS, REGULATORS, REGULATOR_FOR, biometricsAvailable, demoApprove, enableBiometrics, getAccount, setPin, startRegister, startSignIn, unlockWithBiometrics, unlockWithPin, useAccount, verifyOtp } from '@/domain/account';
 import { VERSIONS, recordConsent } from '@/domain/consent';
 import { canEncrypt } from '@/domain/vault';
 import { formatPersonName, isValidNgPhone } from '@/domain/format';
@@ -432,7 +432,7 @@ export function LockScreen({ onSignOut }: { onSignOut: () => void }) {
           }
         }}
       />
-      {left < MAX_PIN_TRIES && left > 0 && <p className="mt-4 text-center text-[12.5px] text-muted">After {MAX_PIN_TRIES} wrong PINs you’ll need to sign in again.</p>}
+      {left < MAX_PIN_TRIES && left > 0 && <p className="mt-4 text-center text-[12.5px] text-muted">After {MAX_PIN_TRIES} wrong PINs {SIGN_IN_ENABLED ? 'you’ll need to sign in again' : 'you’ll need to set a new PIN'}.</p>}
       <div className="mt-6 grid gap-2">
         {bio && (
           <Button variant="secondary" block onClick={() => void unlockWithBiometrics()}>
