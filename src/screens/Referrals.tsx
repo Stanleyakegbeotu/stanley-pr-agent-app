@@ -15,6 +15,7 @@ import { Button, Card, Chip, ChipRow, EmptyState, InitialsAvatar, ScreenHeader, 
 import { ReferralNoteView } from '@/screens/refer/ReferralNote';
 import { PatientMessageButton } from '@/screens/refer/PatientMessage';
 import { priceText } from '@/screens/Services';
+import { BRANCH_UPDATE_LABEL, branchUpdateText, useBranchUpdates } from '@/domain/referralStatus';
 
 type Period = 'today' | 'month' | 'all';
 type FilterKey = 'All' | ReferralStatus;
@@ -141,6 +142,7 @@ const STAGE_TIME: Record<string, (r: Referral) => string | undefined> = { Reques
 
 export function ReferralDetails({ id }: { id: string }) {
   const { referrals, navigate } = useApp();
+  const updates = useBranchUpdates();
   const r = referrals.find((x) => x.id === id);
   if (!r)
     return (
@@ -150,6 +152,7 @@ export function ReferralDetails({ id }: { id: string }) {
       </>
     );
   const s = statusOf(r);
+  const update = updates[r.id.toUpperCase()];
   const at = STAGES.indexOf(s);
   const partial = partialNote(r);
   const tests = servicesOf(r);
@@ -177,6 +180,17 @@ export function ReferralDetails({ id }: { id: string }) {
           </p>
         </div>
       </Card>
+
+      {/* The branch's update on this patient (owner, 2026-11-25): coming later, did not come, or cancelled. */}
+      {update && (
+        <div className="mb-3.5 rounded-[20px] border border-[#e4dbff] bg-[#f6f2ff] p-4">
+          <p className="text-[12.5px] font-semibold uppercase tracking-wide text-violet">Update from the branch · {BRANCH_UPDATE_LABEL[update.status]}</p>
+          <p className="mt-1 text-[15px] text-ink">{branchUpdateText(update)}</p>
+          <p className="mt-1 text-[12.5px] text-muted">
+            {update.by.role} · {shortDate(update.at)}
+          </p>
+        </div>
+      )}
 
       {s === 'ResultsReady' && (
         <Button block className="mb-3.5" onClick={() => navigate(`/results/${r.id}`)}>

@@ -21,7 +21,7 @@
  * sees it on their request. The referral ID can be copied.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, BadgeCheck, Check, ChevronRight, Clock3, Copy, FilePlus2, Hash, ListChecks, MessageCircle, Phone, Search, Siren, Stethoscope } from 'lucide-react';
+import { ArrowRight, BadgeCheck, Check, ChevronRight, Clock3, Copy, FilePlus2, Hash, ListChecks, MessageCircle, Mic, Pause, Phone, Play, Search, Siren, Stethoscope } from 'lucide-react';
 import { useApp as useCompany } from '@company/app/AppState';
 import { getBranch } from '@company/data/company';
 import { addDays, isoDate } from '@company/data/demo/generator';
@@ -57,7 +57,9 @@ export interface Incoming {
   services: SelectedService[];
   urgency: Urgency;
   indication?: string;
+  /** The PR agent's note for the branch, and their voice note (Referrer Portal). */
   note?: string;
+  voiceNote?: { duration: number };
   status: IncomingStatus;
   /** When the patient was attended (bill saved), and by whom / which invoice. */
   attended?: { at: Date; invoiceNo?: string; by?: string };
@@ -187,7 +189,8 @@ export function useIncomingMany(branchIds: string[]): Incoming[] {
             services,
             urgency: h % 23 === 0 ? 'Emergency' : h % 6 === 0 ? 'Urgent' : 'Routine',
             indication: imaging || h % 4 === 0 ? INDICATIONS[h % INDICATIONS.length] : undefined,
-            note: h % 5 === 0 ? NOTES[h % NOTES.length] : undefined,
+            note: h % 5 === 0 || h % 3 === 0 ? NOTES[h % NOTES.length] : undefined,
+            voiceNote: h % 3 === 0 ? { duration: 7 + (h % 38) } : undefined,
           });
         }
       }
@@ -422,6 +425,7 @@ export function Slip({ r, onOpen, showBranch }: { r: Incoming; onOpen: () => voi
           </span>
         </span>
         <span className="mt-1.5 flex flex-wrap gap-1.5">
+          {r.voiceNote && <span className="flex items-center gap-1 rounded-full bg-[#fff4e0] px-2 py-0.5 text-[11.5px] font-bold text-[#9a5b00]"><Mic size={11} /> Voice note</span>}
           {r.urgency !== 'Routine' && <span className={`rounded-full px-2 py-0.5 text-[11.5px] font-bold ${URGENT_TONE[r.urgency]}`}>{r.urgency}</span>}
           {r.status !== 'waiting' && (
             <span className={`rounded-full px-2 py-0.5 text-[11.5px] font-bold ${STATUS_PILL[r.status]}`}>
@@ -553,7 +557,7 @@ export function IncomingDetail({ r, onClose, onStart, onResume, onAsk }: { r: In
           </li>
         </ul>
 
-        {(r.indication || r.note) && (
+        {(r.indication || r.note || r.voiceNote) && (
           <>
             <p className="mb-1.5 mt-4 px-1 text-[13px] font-bold text-ink-2">From the referrer</p>
             <div className="space-y-2 rounded-2xl bg-[#fffaf0] p-3.5 ring-1 ring-[#f6e5bf]">
@@ -565,7 +569,12 @@ export function IncomingDetail({ r, onClose, onStart, onResume, onAsk }: { r: In
                   </span>
                 </p>
               )}
-              {r.note && <p className="text-[13.5px] text-ink-2">{r.note}</p>}
+              {r.note && (
+                <p className="text-[13.5px] text-ink-2">
+                  <b className="text-ink">Note:</b> {r.note}
+                </p>
+              )}
+              {r.voiceNote && <VoiceNote seed={Number(r.id.replace(/\D/g, ''))} duration={r.voiceNote.duration} by={r.agentName} />}
             </div>
           </>
         )}
@@ -810,5 +819,40 @@ export function ReferralHistoryCard({ branchIds, admin }: { branchIds: string[];
       </button>
       {open && <ReferralHistory branchIds={branchIds} admin={admin} onClose={() => setOpen(false)} onStart={admin ? undefined : (r) => bill(`incoming=${encodeURIComponent(r.id)}`)} onResume={admin ? undefined : (id) => bill(`draft=${encodeURIComponent(id)}`)} />}
     </>
+  );
+}
+
+
+/* ─────────────── the PR agent's voice note ─────────────── */
+
+/** The referrer's voice note: play, pause, a waveform that fills as it plays, and the time left. */
+function VoiceNote({ seed, duration, by }: { seed: number; duration: number; by: string }) {
+  const [playing, setPlaying] = useState(false);
+  const [pos, setPos] = useState(0);
+  useEffect(() => {
+    if (!playing) return;
+    const t = window.setInterval(() => setPos((p) => (p + 0.1 >= duration ? (setPlaying(false), 0) : p + 0.1)), 100);
+    return () => window.clearInterval(t);
+  }, [playing, duration]);
+  const bars = Array.from({ length: 30 }, (_, i) => 6 + (hash(seed * 31 + i) % 20));
+  const done = pos / duration;
+  const fmt = (n: number) => `${Math.floor(n / 60)}:${String(Math.floor(n % 60)).padStart(2, '0')}`;
+  return (
+    <div className="flex items-center gap-3 rounded-2xl bg-white p-2.5 ring-1 ring-[#f3dfb6]">
+      <button type="button" onClick={() => setPlaying((p) => !p)} aria-label={playing ? 'Pause the voice note' : 'Play the voice note'} className="press grid h-11 w-11 shrink-0 place-items-center rounded-full bg-linear-to-b from-[#ffb21f] to-[#f08c00] text-white shadow-[0_6px_14px_rgba(214,128,8,0.35)]">
+        {playing ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" className="ml-0.5" />}
+      </button>
+      <span className="min-w-0 flex-1">
+        <span className="flex h-7 items-center gap-[3px]" aria-hidden="true">
+          {bars.map((h, i) => (
+            <span key={i} className={`w-[3px] rounded-full transition-colors ${i / bars.length < done ? 'bg-[#f08c00]' : 'bg-[#f1dcb4]'}`} style={{ height: h }} />
+          ))}
+        </span>
+        <span className="mt-0.5 flex justify-between text-[11.5px] text-muted">
+          <span>Voice note from {by}</span>
+          <span>{fmt(playing || pos ? duration - pos : duration)}</span>
+        </span>
+      </span>
+    </div>
   );
 }

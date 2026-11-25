@@ -383,7 +383,9 @@ function ExpenseItem({ r, onOpen }: { r: XRow; onOpen: () => void }) {
         <span className="block truncate text-[12.5px] text-muted">{[r.category, timeText(r.at), r.method, r.paidTo].filter(Boolean).join(' · ')}</span>
         <span className="mt-1.5 flex flex-wrap items-center gap-1.5">
           <span className={`rounded-full px-2 py-0.5 text-[11.5px] font-semibold ${STATUS_PILL[r.status]}`}>{STATUS_LABEL[r.status]}</span>
-          {r.approvedBy && <span className="truncate text-[11.5px] text-muted">by {r.approvedBy.name}</span>}
+          <span className="min-w-0 truncate text-[11.5px] text-muted">
+            {r.status === 'Approved' ? `Approved by ${r.approvedBy ? `${r.approvedBy.name}, ${r.approvedBy.role}` : 'name not recorded'}` : r.status === 'Pending' ? 'Waiting for the Branch Manager' : `Rejected${r.rec?.rejectedBy ? ` by ${r.rec.rejectedBy.name}` : ''}`}
+          </span>
           {r.source === 'stanley' && <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-semibold text-brand-700">STANLEY</span>}
           {r.rec?.receipt && <span className="rounded-full bg-page px-2 py-0.5 text-[11px] font-semibold text-ink-2">Receipt</span>}
         </span>

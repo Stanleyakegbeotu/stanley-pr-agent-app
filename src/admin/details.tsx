@@ -36,6 +36,7 @@ import { useTeam, type Who } from './people';
 import { AgentProfileSheet } from './agents';
 import { AgentAvatar } from './agentPhotos';
 import { StaffSheetByName, useIsStaff } from './pages/Staff';
+import { useExpenses, type ExpenseRecord } from '@company/services/expenses';
 import { copyText, useViewOnly } from '@/ui/privacy';
 
 export type DetailKind = 'revenue' | 'payments' | 'patients' | 'expenses' | 'outstanding' | 'commission' | 'referrals' | 'hospitals' | 'services';
@@ -92,10 +93,11 @@ export function DetailSheet({ kind, branchIds, period, scopeText, onClose, metho
   const oneDay = range.days <= 1;
   const multi = branchIds.length > 1;
   const agentName = (id: number | null) => (id == null ? null : (agents.find((a) => a.id === id)?.name ?? `PR agent #${id}`));
+  const recorded = useExpenses();
   const body = useMemo(
-    () => build(kind, branchIds, range, { open: setFocus, team, agentName }),
+    () => build(kind, branchIds, range, { open: setFocus, team, agentName, recorded }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [kind, branchIds.join(','), range.from.getTime(), range.to.getTime(), team, agents],
+    [kind, branchIds.join(','), range.from.getTime(), range.to.getTime(), team, agents, recorded],
   );
   const methodTotals = useMemo(() => {
     if (kind !== 'payments') return null;
@@ -143,6 +145,8 @@ export interface Ctx {
   open: (f: Focus) => void;
   team: ReturnType<typeof useTeam>;
   agentName: (id: number | null) => string | null;
+  /** Expenses recorded in STANLEY (approved ones are listed with who approved them). */
+  recorded?: ExpenseRecord[];
 }
 
 function sumBy<T>(items: T[], branch: (t: T) => string, amount: (t: T) => number, fmt: (v: number, b: string) => string) {
@@ -193,7 +197,17 @@ function build(kind: DetailKind, ids: string[], range: ReturnType<typeof useShee
       };
     }
     case 'expenses': {
-      const lines = expenseLines(ids, range).sort((a, b) => b.at.getTime() - a.at.getTime());
+      // Demo activity plus approved expenses recorded in STANLEY: every one shows who approved it (owner, 2026-11-25).
+      const from = range.from.getTime();
+      const to = range.to.getTime();
+      const mine = (x.recorded ?? []).filter((r) => r.status === 'Approved' && ids.includes(r.branchId)).map((r) => {
+        const at = new Date(`${r.date}T12:00:00`);
+        const line: ExpenseLine = { id: r.id, branchId: r.branchId, at, category: r.category, description: r.description, amount: r.amount, status: 'Approved' };
+        const people = { recordedBy: { name: r.recordedBy.name, role: r.recordedBy.role }, approvedBy: { name: r.approvedBy?.name ?? 'Not recorded', role: r.approvedBy?.role ?? '' }, approvedAt: new Date(r.approvedAt ?? r.recordedAt) };
+        return { line, people };
+      }).filter((p) => p.line.at.getTime() >= from && p.line.at.getTime() <= to);
+      const recordedPeople = new Map(mine.map((p) => [p.line.id, p.people]));
+      const lines = [...expenseLines(ids, range), ...mine.map((p) => p.line)].sort((a, b) => b.at.getTime() - a.at.getTime());
       const total = lines.reduce((s, e) => s + e.amount, 0);
       return {
         total: formatMoney(total, c0),
@@ -201,7 +215,7 @@ function build(kind: DetailKind, ids: string[], range: ReturnType<typeof useShee
         countText: `${formatCount(lines.length)} expenses`,
         byBranch: sumBy(lines, (e) => e.branchId, (e) => e.amount, money),
         rows: lines.map((e) => {
-          const p = x.team.expensePeople(e);
+          const p = recordedPeople.get(e.id) ?? x.team.expensePeople(e);
           return { key: e.id, text: norm([e.description, e.category, e.id, branchName(e.branchId), p.recordedBy?.name ?? '', p.approvedBy.name].join(' ')), render: (oneDay, multi) => <ExpenseRow e={e} oneDay={oneDay} multi={multi} people={p} /> };
         }),
       };
