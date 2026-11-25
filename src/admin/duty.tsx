@@ -41,7 +41,8 @@ export function DutyRota({ branchId }: { branchId: string }) {
   const picker = useRef<HTMLInputElement>(null);
   const today = TODAY;
   const desk = team.frontDesk(branchId);
-  const days = useMemo(() => Array.from({ length: 14 }, (_, i) => addDays(today, i - 9)), [today]);
+  // Today and the days before it only (owner, 2026-11-25): who is on seat on a future day can change (sick days, swaps), so it is never shown.
+  const days = useMemo(() => Array.from({ length: 14 }, (_, i) => addDays(today, -i)), [today]);
   const onSeat = team.onDuty(branchId, today);
   if (!desk.length)
     return (
@@ -90,16 +91,15 @@ export function DutyRota({ branchId }: { branchId: string }) {
             <button type="button" onClick={() => (picker.current?.showPicker ? picker.current.showPicker() : picker.current?.focus())} className="press flex items-center gap-1.5 rounded-full bg-brand-50 px-3 py-1.5 font-semibold text-brand-600">
               <CalendarDays size={15} /> Any date
             </button>
-            <input ref={picker} type="date" min={iso(DATA_START)} max={iso(addDays(today, 30))} onChange={(e) => e.target.value && setDay(new Date(`${e.target.value}T00:00:00`))} className="pointer-events-none absolute inset-0 opacity-0" tabIndex={-1} aria-hidden="true" />
+            <input ref={picker} type="date" min={iso(DATA_START)} max={iso(today)} onChange={(e) => e.target.value && setDay(new Date(`${e.target.value}T00:00:00`))} className="pointer-events-none absolute inset-0 opacity-0" tabIndex={-1} aria-hidden="true" />
           </span>
         </p>
         <div className="-mx-3.5 flex gap-2 overflow-x-auto px-3.5 pb-1">
           {days.map((d) => {
             const p = team.onDuty(branchId, d);
             const isToday = sameDay(d, today);
-            const future = d > today;
             return (
-              <button key={iso(d)} type="button" onClick={() => setDay(d)} className={`press flex w-[74px] shrink-0 flex-col items-center gap-1 rounded-2xl px-1 py-2.5 ${isToday ? 'bg-brand-600 text-white shadow-[0_8px_18px_rgba(31,111,232,0.3)]' : future ? 'bg-page text-ink-2 ring-1 ring-dashed ring-line' : 'bg-page text-ink'}`}>
+              <button key={iso(d)} type="button" onClick={() => setDay(d)} className={`press flex w-[74px] shrink-0 flex-col items-center gap-1 rounded-2xl px-1 py-2.5 ${isToday ? 'bg-brand-600 text-white shadow-[0_8px_18px_rgba(31,111,232,0.3)]' : 'bg-page text-ink'}`}>
                 <span className={`text-[11px] font-semibold ${isToday ? 'text-white/90' : 'text-muted'}`}>{isToday ? 'Today' : d.toLocaleDateString('en-GB', { weekday: 'short' })}</span>
                 <span className="text-[13px] font-bold">{d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>
                 {p ? <Face who={p} size={32} /> : <span className="h-8 w-8 rounded-full bg-white" />}
