@@ -33,8 +33,9 @@ const isOn = () => document.documentElement.classList.contains('view-only');
 export const PRIVACY_NOTE = 'Copying, screenshots and downloads are turned off on the mobile app to protect patient privacy.';
 
 /** Copy text, unless the workspace is view only (then explain why). */
-export async function copyText(text: string, what: string, toast: (t: string) => void) {
-  if (isOn()) return toast(`${what} cannot be copied on the mobile app, to protect patient privacy.`);
+export async function copyText(text: string, what: string, toast: (t: string) => void, opts: { allow?: boolean } = {}) {
+  // allow: a reference the owner wants copyable (the referral ID), never patient details.
+  if (isOn() && !opts.allow) return toast(`${what} cannot be copied on the mobile app, to protect patient privacy.`);
   try {
     await navigator.clipboard.writeText(text);
     toast(`${what} copied`);

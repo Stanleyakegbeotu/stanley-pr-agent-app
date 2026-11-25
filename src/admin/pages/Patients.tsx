@@ -21,6 +21,7 @@ import { DetailSheet, FocusSheet, Rows, norm, useRowCtx, visitRow, type DetailKi
 import { AdminTopBar, PageGlow, SectionTitle } from '../kit';
 import { StickyTools } from '@/admin/kit';
 import { useStaffChrome } from '@/staff/chrome';
+import { ReferralHistoryCard } from '@/staff/incoming';
 
 type Filter = 'all' | 'new' | 'returning' | 'referred' | 'walkin' | 'owing';
 const FILTERS: { id: Filter; label: string; test: (v: PatientVisit) => boolean }[] = [
@@ -132,6 +133,10 @@ export function PatientsPage() {
           </>
         ) : (
           <>
+            {/* Referral history (owner, 2026-11-25): earlier weeks' referrals and their status live here. */}
+            <div className="mt-2">
+              <ReferralHistoryCard branchIds={branchIds} admin={!locked} />
+            </div>
             {/* Hero */}
             <div className="relative mt-2 overflow-hidden rounded-[24px] bg-linear-to-br from-[#4b2fc4] via-[#6a4be0] to-[#9a83f7] p-5 text-white shadow-[0_14px_34px_rgba(75,47,196,0.25)]">
               <span aria-hidden="true" className="absolute -right-16 -top-24 h-72 w-72 rounded-full bg-white/10" />

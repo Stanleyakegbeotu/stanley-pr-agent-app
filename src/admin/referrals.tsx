@@ -15,16 +15,16 @@ import { formatCount } from '@company/shared/format';
 import { Sticker } from '@/ui/kit';
 import { Sheet } from './ui';
 import { frontDeskId, managerId } from './chat';
-import { IncomingDetail, Slip, ago, useIncomingMany, type Incoming } from '@/staff/incoming';
+import { IncomingDetail, ReferralHistoryCard, Slip, ago, isOpen, thisWeek, useIncomingMany, type Incoming } from '@/staff/incoming';
 
 const DAY = 86_400_000;
 
 export function AdminReferrals() {
   const { context } = useCompany();
   const ids = useMemo(() => (context === 'all' ? ACTIVE_BRANCHES.map((b) => b.id) : [context]), [context]);
-  const list = useIncomingMany(ids);
+  const list = thisWeek(useIncomingMany(ids));
   const [open, setOpen] = useState(false);
-  const waiting = list.filter((r) => r.status !== 'attended');
+  const waiting = list.filter(isOpen);
   const late = waiting.filter((r) => Date.now() - r.sentAt.getTime() > 4 * 3_600_000).length;
   const byBranch = ids
     .map((id) => ({ id, n: waiting.filter((r) => r.branchId === id).length }))
@@ -88,7 +88,7 @@ function AdminReferralsSheet({ ids, list, onClose }: { ids: string[]; list: Inco
   const rows = ids
     .map((id) => {
       const mine = list.filter((r) => r.branchId === id);
-      const waiting = mine.filter((r) => r.status !== 'attended');
+      const waiting = mine.filter(isOpen);
       const sentToday = mine.filter((r) => isoDate(r.sentAt) === today);
       const doneToday = sentToday.filter((r) => r.status === 'attended').length;
       const oldest = waiting.reduce<Incoming | null>((o, r) => (!o || r.sentAt < o.sentAt ? r : o), null);
@@ -115,7 +115,8 @@ function AdminReferralsSheet({ ids, list, onClose }: { ids: string[]; list: Inco
           )
         ) : (
           <>
-            <p className="mb-3 px-1 text-[12.5px] leading-snug text-muted">How each branch is attending to referred patients. Ask the front desk on duty or the manager if referrals are waiting too long.</p>
+            <p className="mb-3 px-1 text-[12.5px] leading-snug text-muted">This week, branch by branch. Ask the front desk on duty or the manager if referrals are waiting too long. Earlier weeks are in Referral history.</p>
+            <ReferralHistoryCard branchIds={ids} admin />
             <ul className="space-y-3">
               {rows.map((x) => {
                 const rate = x.sentToday ? Math.round((x.doneToday / x.sentToday) * 100) : 100;

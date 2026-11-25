@@ -12,9 +12,16 @@
  * (same agents, tests and prices as the rest of the app). A referral counts
  * as attended when a saved bill carries its referral ID; a draft with it
  * shows as "Bill started".
+ *
+ * Weekly folder (owner, 2026-11-25): the folder holds this week's referrals
+ * (from Monday). Older ones move to Referral history (Records), never
+ * deleted; a past week's referral nobody updated shows as Not attended.
+ * The branch sets a status on any referral not billed: Coming later (with
+ * the day), Did not come, or Cancelled (domain/referralStatus); the PR agent
+ * sees it on their request. The referral ID can be copied.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, BadgeCheck, ChevronRight, Clock3, FilePlus2, Hash, MessageCircle, Phone, Search, Siren, Stethoscope } from 'lucide-react';
+import { ArrowRight, BadgeCheck, Check, ChevronRight, Clock3, Copy, FilePlus2, Hash, ListChecks, MessageCircle, Phone, Search, Siren, Stethoscope } from 'lucide-react';
 import { useApp as useCompany } from '@company/app/AppState';
 import { getBranch } from '@company/data/company';
 import { addDays, isoDate } from '@company/data/demo/generator';
@@ -28,9 +35,16 @@ import { Sheet } from '@/admin/ui';
 import { AgentAvatar } from '@/admin/agentPhotos';
 import { buildItems, groupCategories, type Item } from '@/admin/pages/Inventory';
 import { staffAgentId } from './chat';
+import { logAudit } from '@company/services/audit';
+import { useNav } from '@/app/store';
+import type { StickerKey } from '@/assets';
+import { copyText } from '@/ui/privacy';
+import { LongText } from '@/admin/fields';
+import { FieldErr, FieldLabel, inputCls } from '@/admin/prManage';
+import { branchUpdateText, setBranchUpdate, useBranchUpdates, type BranchUpdate, type BranchUpdateKind } from '@/domain/referralStatus';
 
 export type Urgency = 'Routine' | 'Urgent' | 'Emergency';
-export type IncomingStatus = 'waiting' | 'billing' | 'attended';
+export type IncomingStatus = 'waiting' | 'billing' | 'attended' | BranchUpdateKind;
 
 export interface Incoming {
   id: string;
@@ -49,7 +63,36 @@ export interface Incoming {
   attended?: { at: Date; invoiceNo?: string; by?: string };
   /** The open bill (draft) for this referral. */
   draftId?: string;
+  /** What the branch said (Coming later, Did not come, Cancelled). */
+  update?: BranchUpdate;
+  /** From a past week and never updated: closed as Not attended. */
+  closed?: boolean;
 }
+
+/** Still to be dealt with: waiting, bill started, or coming later. */
+export const isOpen = (r: Incoming) => r.status === 'waiting' || r.status === 'billing' || r.status === 'coming';
+/** Monday 00:00 of this week: the folder resets every week. */
+export function weekStart(d = new Date()) {
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
+  return x;
+}
+export const thisWeek = (list: Incoming[]) => {
+  const w = weekStart().getTime();
+  return list.filter((r) => r.sentAt.getTime() >= w);
+};
+export const STATUS_TEXT: Record<IncomingStatus, string> = { waiting: 'Waiting', billing: 'Bill started', attended: 'Attended', coming: 'Coming later', no_show: 'Did not come', cancelled: 'Cancelled' };
+export const STATUS_PILL: Record<IncomingStatus, string> = {
+  waiting: 'bg-[#fff1de] text-[#b45309]',
+  billing: 'bg-[#e8f1ff] text-brand-700',
+  attended: 'bg-[#e9f9ef] text-good-ink',
+  coming: 'bg-[#efe9ff] text-violet',
+  no_show: 'bg-[#f1f3f7] text-ink-2',
+  cancelled: 'bg-[#ffe9e9] text-[#b42318]',
+};
+const statusLabel = (r: Incoming) => (r.closed ? 'Not attended' : STATUS_TEXT[r.status]);
+/** Kept for Referral history (about two months of the demo). */
+const HISTORY_DAYS = 55;
 
 const hash = (n: number) => {
   let h = (n * 2654435761) >>> 0;
@@ -79,6 +122,7 @@ export const useIncoming = (branchId: string): Incoming[] => useIncomingMany(use
 export function useIncomingMany(branchIds: string[]): Incoming[] {
   const { agents, inventory } = useCompany();
   const billing = useBilling();
+  const updates = useBranchUpdates();
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const t = window.setInterval(() => setNow(new Date()), 60_000);
@@ -113,7 +157,7 @@ export function useIncomingMany(branchIds: string[]): Incoming[] {
       if (!pool.length) continue;
       const prefix = branchPrefix(branchId);
       const salt = [...branchId].reduce((x, c) => (x * 31 + c.charCodeAt(0)) >>> 0, 7) % 9973;
-      for (let d = 2; d >= 0; d--) {
+      for (let d = HISTORY_DAYS; d >= 0; d--) {
         const dayStart = today0 - d * DAY;
         const dayNo = Math.floor(dayStart / DAY);
         const n = 4 + (hash(dayNo + salt) % 4);
@@ -154,21 +198,26 @@ export function useIncomingMany(branchIds: string[]): Incoming[] {
 
   return useMemo(() => {
     const nowT = minute * 60_000;
+    const week = weekStart(new Date(nowT)).getTime();
     return base
       .map((r): Incoming => {
         const order = billing.orders.find((o) => o.branchId === r.branchId && o.referral.referralId === r.id);
         if (order) return { ...r, status: 'attended', attended: { at: new Date(order.createdAt), invoiceNo: order.invoiceNo, by: order.createdBy.name } };
         const draft = billing.drafts.find((x) => x.branchId === r.branchId && x.referralId === r.id);
         if (draft) return { ...r, status: 'billing', draftId: draft.id };
+        const u = updates[r.id.toUpperCase()];
+        if (u) return { ...r, status: u.status, update: u };
         // Demo: most patients arrive within a few hours of the referral (the older ones are already attended).
         const h = hash(Number(r.id.replace(/\D/g, '')) + r.branchId.length);
         const arrive = r.sentAt.getTime() + (40 + (h % 200)) * 60_000;
         const age = nowT - r.sentAt.getTime();
         if (age > 150 * 60_000 && h % 4 !== 0 && arrive <= nowT) return { ...r, status: 'attended', attended: { at: new Date(arrive) } };
+        // A past week's referral that nobody updated is closed as Not attended (it moves to Referral history).
+        if (r.sentAt.getTime() < week) return { ...r, status: 'no_show', closed: true };
         return { ...r, status: 'waiting' };
       })
       .sort((x, y) => y.sentAt.getTime() - x.sentAt.getTime());
-  }, [base, billing.orders, billing.drafts, minute]);
+  }, [base, billing.orders, billing.drafts, updates, minute]);
 }
 
 export const findIncoming = (list: Incoming[], id: string) => list.find((r) => r.id.toUpperCase() === id.trim().toUpperCase()) ?? null;
@@ -179,8 +228,8 @@ const STRIP: Record<Urgency, string> = { Routine: 'bg-brand-400', Urgent: 'bg-[#
 /* ─────────────── the folder on the dashboard ─────────────── */
 
 export function IncomingFolder({ branchId, onOpen }: { branchId: string; onOpen: () => void }) {
-  const list = useIncoming(branchId);
-  const waiting = list.filter((r) => r.status !== 'attended');
+  const list = thisWeek(useIncoming(branchId));
+  const waiting = list.filter(isOpen);
   const urgent = waiting.filter((r) => r.urgency !== 'Routine').length;
   const today = list.filter((r) => isoDate(r.sentAt) === isoDate(new Date()));
   const slips = waiting.slice(0, 3);
@@ -220,7 +269,7 @@ export function IncomingFolder({ branchId, onOpen }: { branchId: string; onOpen:
           <span className="min-w-0 flex-1">
             <span className="block text-[18px] font-extrabold leading-tight tracking-[-0.01em] text-[#4a2a00]">Incoming referrals</span>
             <span className="block truncate text-[13px] font-medium text-[#6b4100]">
-              {n ? `${formatCount(n)} waiting · newest ${ago(waiting[0]!.sentAt)}` : 'Everyone referred has been attended'}
+              {n ? `${formatCount(n)} waiting · newest ${ago(waiting[0]!.sentAt)}` : 'Everyone referred this week is attended'}
             </span>
             <span className="mt-1.5 flex flex-wrap items-center gap-1.5">
               {urgent > 0 && (
@@ -228,7 +277,7 @@ export function IncomingFolder({ branchId, onOpen }: { branchId: string; onOpen:
                   <Siren size={12} /> {urgent} urgent
                 </span>
               )}
-              <span className="rounded-full bg-white/55 px-2 py-0.5 text-[11.5px] font-semibold text-[#5c3700]">{formatCount(today.length)} sent today</span>
+              <span className="rounded-full bg-white/55 px-2 py-0.5 text-[11.5px] font-semibold text-[#5c3700]">{formatCount(today.length)} today · {formatCount(list.length)} this week</span>
             </span>
           </span>
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white/70 text-[#7a4a00] transition-transform group-active:translate-x-0.5">
@@ -250,28 +299,31 @@ export function IncomingFolder({ branchId, onOpen }: { branchId: string; onOpen:
 /* ─────────────── the folder opened ─────────────── */
 
 export function IncomingSheet({ branchId, onClose, onStart, onResume, onNewBill, onEnterId }: { branchId: string; onClose: () => void; onStart: (r: Incoming) => void; onResume: (draftId: string) => void; onNewBill: (name: string) => void; onEnterId: () => void }) {
-  const list = useIncoming(branchId);
+  const everything = useIncoming(branchId);
+  const list = thisWeek(everything);
   const [q, setQ] = useState('');
   const [tab, setTab] = useState<'waiting' | 'attended' | 'all'>('waiting');
+  const [history, setHistory] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
   const t = q.trim().toLowerCase();
   const digits = t.replace(/\D/g, '');
   const matches = (r: Incoming) => !t || [r.patient.name, r.patient.phone, r.id, r.agentName, r.hospital, ...r.services.map((s) => s.name)].join(' ').toLowerCase().includes(t) || (digits.length >= 3 && (r.id.replace(/\D/g, '').includes(digits) || r.patient.phone.includes(digits)));
-  const waiting = list.filter((r) => r.status !== 'attended');
+  const waiting = list.filter(isOpen);
   const attended = list.filter((r) => r.status === 'attended');
-  const base = t ? list : tab === 'waiting' ? waiting : tab === 'attended' ? attended : list;
+  // A search looks through older weeks too, so a patient with last week's referral is still found.
+  const base = t ? everything : tab === 'waiting' ? waiting : tab === 'attended' ? attended : list;
   const shown = base.filter(matches);
-  const current = open ? list.find((r) => r.id === open) ?? null : null;
+  const current = open ? everything.find((r) => r.id === open) ?? null : null;
   return (
-    <Sheet title="Incoming referrals" subtitle={`${formatCount(waiting.length)} waiting · ${getBranch(branchId)?.name ?? ''} branch`} onClose={onClose} tall search={{ value: q, onChange: setQ, placeholder: 'Patient name, phone, referral ID or agent' }}>
+    <Sheet title="Incoming referrals" subtitle={`This week · ${formatCount(waiting.length)} waiting · ${getBranch(branchId)?.name ?? ''} branch`} onClose={onClose} tall search={{ value: q, onChange: setQ, placeholder: 'Patient name, phone, referral ID or agent' }}>
       <div className="px-1 pb-4">
         {!t && (
           <div className="mb-3 grid grid-cols-3 gap-1 rounded-2xl bg-page p-1" role="tablist">
             {(
               [
-                ['waiting', `Waiting ${waiting.length}`],
+                ['waiting', `Open ${waiting.length}`],
                 ['attended', `Attended ${attended.length}`],
-                ['all', `All ${list.length}`],
+                ['all', `This week ${list.length}`],
               ] as const
             ).map(([k, label]) => (
               <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => setTab(k)} className={`press min-h-10 rounded-xl text-[13.5px] font-semibold ${tab === k ? 'bg-white text-brand-700 shadow-sm' : 'text-muted'}`}>
@@ -313,7 +365,17 @@ export function IncomingSheet({ branchId, onClose, onStart, onResume, onNewBill,
           </div>
         )}
         {!t && (
-          <button type="button" onClick={onEnterId} className="press mt-4 flex w-full items-center gap-3 rounded-2xl border border-dashed border-brand-300 bg-brand-50/60 px-4 py-3.5 text-left">
+          <button type="button" onClick={() => setHistory(true)} className="press mt-4 flex w-full items-center gap-3 rounded-2xl bg-white px-4 py-3.5 text-left ring-1 ring-line/70">
+            <Sticker name="books" size={36} />
+            <span className="min-w-0 flex-1">
+              <span className="block text-[14.5px] font-semibold text-ink">Referral history</span>
+              <span className="text-[12.5px] text-muted">Earlier weeks and their status. The folder starts fresh every Monday.</span>
+            </span>
+            <ChevronRight size={18} className="text-muted" />
+          </button>
+        )}
+        {!t && (
+          <button type="button" onClick={onEnterId} className="press mt-2.5 flex w-full items-center gap-3 rounded-2xl border border-dashed border-brand-300 bg-brand-50/60 px-4 py-3.5 text-left">
             <span className="grid h-10 w-10 place-items-center rounded-full bg-white text-brand-600 shadow-sm">
               <Hash size={18} />
             </span>
@@ -326,15 +388,16 @@ export function IncomingSheet({ branchId, onClose, onStart, onResume, onNewBill,
         )}
       </div>
       {current && <IncomingDetail r={current} onClose={() => setOpen(null)} onStart={() => onStart(current)} onResume={() => current.draftId && onResume(current.draftId)} />}
+      {history && <ReferralHistory branchIds={[branchId]} onClose={() => setHistory(false)} onStart={onStart} onResume={onResume} />}
     </Sheet>
   );
 }
 
 export function Slip({ r, onOpen, showBranch }: { r: Incoming; onOpen: () => void; showBranch?: boolean }) {
-  const done = r.status === 'attended';
+  const done = !isOpen(r);
   return (
     <button type="button" onClick={onOpen} className={`press relative flex w-full gap-3 overflow-hidden rounded-[20px] bg-white p-3.5 pl-4 text-left ring-1 ${done ? 'ring-line/70' : 'ring-[#f3dfb6] shadow-[0_6px_16px_rgba(214,128,8,0.1)]'}`}>
-      <span aria-hidden="true" className={`absolute inset-y-0 left-0 w-1.5 ${done ? 'bg-good' : STRIP[r.urgency]}`} />
+      <span aria-hidden="true" className={`absolute inset-y-0 left-0 w-1.5 ${r.status === 'attended' ? 'bg-good' : done ? 'bg-[#c3cede]' : STRIP[r.urgency]}`} />
       <InitialsAvatar name={r.patient.name} size={44} />
       <span className="min-w-0 flex-1">
         <span className="flex items-start justify-between gap-2">
@@ -360,8 +423,13 @@ export function Slip({ r, onOpen, showBranch }: { r: Incoming; onOpen: () => voi
         </span>
         <span className="mt-1.5 flex flex-wrap gap-1.5">
           {r.urgency !== 'Routine' && <span className={`rounded-full px-2 py-0.5 text-[11.5px] font-bold ${URGENT_TONE[r.urgency]}`}>{r.urgency}</span>}
-          {r.status === 'billing' && <span className="rounded-full bg-[#e8f1ff] px-2 py-0.5 text-[11.5px] font-bold text-brand-700">Bill started</span>}
-          {done && <span className="rounded-full bg-[#e9f9ef] px-2 py-0.5 text-[11.5px] font-bold text-good-ink">Attended{r.attended?.invoiceNo ? ` · ${r.attended.invoiceNo}` : ''}</span>}
+          {r.status !== 'waiting' && (
+            <span className={`rounded-full px-2 py-0.5 text-[11.5px] font-bold ${STATUS_PILL[r.status]}`}>
+              {statusLabel(r)}
+              {r.status === 'attended' && r.attended?.invoiceNo ? ` · ${r.attended.invoiceNo}` : ''}
+              {r.status === 'coming' && r.update?.date ? ` · ${new Date(`${r.update.date}T00:00:00`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}` : ''}
+            </span>
+          )}
           {r.status === 'waiting' && Date.now() - r.sentAt.getTime() > DAY && <span className="rounded-full bg-[#fff1de] px-2 py-0.5 text-[11.5px] font-bold text-[#b45309]">Not arrived yet</span>}
         </span>
       </span>
@@ -371,6 +439,9 @@ export function Slip({ r, onOpen, showBranch }: { r: Incoming; onOpen: () => voi
 
 export function IncomingDetail({ r, onClose, onStart, onResume, onAsk }: { r: Incoming; onClose: () => void; onStart: () => void; onResume: () => void; /** Company Admin: ask the branch about this referral instead of billing it. */ onAsk?: () => void }) {
   const { navigate } = useCompany();
+  const { showToast } = useNav();
+  const [statusOpen, setStatusOpen] = useState(false);
+  const canUpdate = !onAsk && r.status !== 'attended' && r.status !== 'billing';
   const branch = getBranch(r.branchId)!;
   const money = (n: number) => formatMoney(n, branch.currency);
   const total = r.services.reduce((s, x) => s + x.price, 0);
@@ -393,31 +464,65 @@ export function IncomingDetail({ r, onClose, onStart, onResume, onAsk }: { r: In
             Continue the bill <ArrowRight size={18} />
           </button>
         ) : (
-          <button type="button" onClick={onStart} className="press flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl bg-linear-to-b from-brand-500 to-brand-600 text-[15.5px] font-bold text-white shadow-[0_12px_26px_rgba(31,111,232,0.35)]">
-            <FilePlus2 size={19} /> Patient is here: start the bill
-          </button>
+          <div className="grid grid-cols-[auto_1fr] gap-2">
+            <button type="button" onClick={() => setStatusOpen(true)} className="press flex min-h-[52px] items-center justify-center gap-1.5 rounded-2xl bg-white px-4 text-[14px] font-semibold text-ink ring-1 ring-line">
+              <ListChecks size={18} /> Status
+            </button>
+            <button type="button" onClick={onStart} className="press flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-linear-to-b from-brand-500 to-brand-600 text-[15.5px] font-bold text-white shadow-[0_12px_26px_rgba(31,111,232,0.35)]">
+              Continue to billing <ArrowRight size={19} />
+            </button>
+          </div>
         )
       }
     >
       <div className="px-1 pb-4">
         <div className={`relative overflow-hidden rounded-[24px] p-4 ${r.urgency === 'Emergency' ? 'bg-linear-to-br from-[#fff0f0] to-[#ffd9d9]' : r.urgency === 'Urgent' ? 'bg-linear-to-br from-[#fff8ec] to-[#ffe6bf]' : 'bg-linear-to-br from-[#f2f7ff] to-[#dfeaff]'}`}>
           <Sticker name={r.urgency === 'Routine' ? 'clipboard' : 'heartPulse'} size={70} className="absolute right-3 top-3" />
-          <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-bold ring-1 ring-white ${r.status === 'attended' ? 'bg-[#e9f9ef] text-good-ink' : r.status === 'billing' ? 'bg-white text-brand-700' : URGENT_TONE[r.urgency]}`}>
+          <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-bold ring-1 ring-white ${r.status === 'waiting' ? URGENT_TONE[r.urgency] : STATUS_PILL[r.status]}`}>
             {r.status === 'attended' ? <BadgeCheck size={14} /> : r.urgency === 'Routine' ? <Clock3 size={14} /> : <Siren size={14} />}
-            {r.status === 'attended' ? 'Attended' : r.status === 'billing' ? 'Bill started' : `${r.urgency} · waiting`}
+            {r.status === 'waiting' ? `${r.urgency} · waiting` : statusLabel(r)}
           </span>
           <p className="mt-2.5 max-w-[70%] text-[22px] font-extrabold leading-tight text-ink">{r.patient.name}</p>
           <p className="mt-0.5 text-[13px] text-ink-2">
             {r.patient.gender}, {r.patient.age} years · {r.patient.phone}
           </p>
-          <div className="mt-3 inline-flex items-center gap-2 rounded-2xl bg-white/80 px-3 py-2">
-            <Hash size={15} className="text-brand-600" />
-            <span>
-              <span className="block text-[11px] font-semibold uppercase tracking-wide text-muted">Referral ID</span>
-              <span className="block text-[16px] font-bold tracking-wide text-brand-700">{r.id}</span>
-            </span>
+          <div className="mt-3 flex items-center gap-2">
+            <div className="inline-flex items-center gap-2 rounded-2xl bg-white/80 px-3 py-2">
+              <Hash size={15} className="text-brand-600" />
+              <span>
+                <span className="block text-[11px] font-semibold uppercase tracking-wide text-muted">Referral ID</span>
+                <span className="block text-[16px] font-bold tracking-wide text-brand-700">{r.id}</span>
+              </span>
+            </div>
+            <button type="button" onClick={() => void copyText(r.id, 'Referral ID', showToast, { allow: true })} aria-label="Copy the referral ID" className="press flex min-h-11 items-center gap-1.5 rounded-2xl bg-white px-3 text-[13px] font-semibold text-brand-600 shadow-sm">
+              <Copy size={15} /> Copy
+            </button>
           </div>
         </div>
+
+        {(r.update || r.closed || canUpdate) && (
+          <div className={`mt-3 rounded-2xl p-3.5 ring-1 ${r.update ? 'bg-[#f6f2ff] ring-[#e4dbff]' : r.closed ? 'bg-page ring-line/70' : 'bg-white ring-line/70'}`}>
+            <div className="flex items-start gap-3">
+              <span className="min-w-0 flex-1">
+                <span className="block text-[12px] font-semibold uppercase tracking-wide text-muted">Referral status</span>
+                <b className="block text-[15px] text-ink">{statusLabel(r)}</b>
+                <span className="block text-[12.5px] leading-snug text-ink-2">
+                  {r.update ? branchUpdateText(r.update) : r.closed ? 'Not updated during its week, so it closed as not attended.' : 'No update yet. Set one if the patient will come later or will not come.'}
+                </span>
+                {r.update && (
+                  <span className="mt-1 block text-[11.5px] text-muted">
+                    {r.update.by.name}, {r.update.by.role} · {new Date(r.update.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}, {new Date(r.update.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })} · the PR agent sees this
+                  </span>
+                )}
+              </span>
+              {canUpdate && (
+                <button type="button" onClick={() => setStatusOpen(true)} className="press shrink-0 rounded-full bg-brand-50 px-3 py-1.5 text-[12.5px] font-semibold text-brand-700">
+                  Update
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         <p className="mb-1.5 mt-4 px-1 text-[13px] font-bold text-ink-2">Referred by</p>
         <div className="flex items-center gap-3 rounded-2xl bg-white p-3 ring-1 ring-line/70">
@@ -468,13 +573,18 @@ export function IncomingDetail({ r, onClose, onStart, onResume, onAsk }: { r: In
         <p className="mb-1.5 mt-4 px-1 text-[13px] font-bold text-ink-2">Progress</p>
         <ol className="relative ml-2 border-l-2 border-line pl-4">
           <Step on title="Referral sent" sub={`${r.sentAt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}, ${r.sentAt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })} by ${r.agentName}`} />
-          <Step on={r.status !== 'waiting'} title={r.status === 'waiting' ? 'Waiting for the patient to arrive' : 'Patient arrived, bill started'} sub={r.status === 'waiting' ? 'Start the bill when they come in' : undefined} />
+          {r.update ? (
+            <Step on title={STATUS_TEXT[r.update.status]} sub={branchUpdateText(r.update)} />
+          ) : (
+            <Step on={r.status === 'billing' || r.status === 'attended'} title={r.status === 'billing' || r.status === 'attended' ? 'Patient arrived, bill started' : r.closed ? 'Closed as not attended' : 'Waiting for the patient to arrive'} sub={r.status === 'waiting' ? 'Start the bill when they come in' : undefined} />
+          )}
           <Step on={r.status === 'attended'} title="Attended" sub={r.attended ? `${r.attended.at.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}${r.attended.invoiceNo ? ` · ${r.attended.invoiceNo}` : ''}${r.attended.by ? ` · ${r.attended.by}` : ''}` : 'Saved bill with this referral ID'} />
         </ol>
         <a href={`tel:${r.patient.phone}`} className="press mt-4 flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-white text-[14px] font-semibold text-brand-600 ring-1 ring-line">
           <Phone size={16} /> Call the patient
         </a>
       </div>
+      {statusOpen && <StatusSheet r={r} onClose={() => setStatusOpen(false)} />}
     </Sheet>
   );
 }
@@ -510,6 +620,195 @@ export function IncomingEntry({ branchId }: { branchId: string }) {
           onEnterId={() => bill('refid=1')}
         />
       )}
+    </>
+  );
+}
+
+
+/* ─────────────── status update ─────────────── */
+
+const STATUS_CHOICES: { k: BranchUpdateKind | 'waiting'; title: string; sub: string; sticker: StickerKey }[] = [
+  { k: 'waiting', title: 'Still waiting', sub: 'No news yet. Keeps it in the folder.', sticker: 'watch' },
+  { k: 'coming', title: 'Coming later', sub: 'The patient said when they will come', sticker: 'calendar' },
+  { k: 'no_show', title: 'Did not come', sub: 'Closes it as not attended', sticker: 'bell' },
+  { k: 'cancelled', title: 'Cancelled', sub: 'The patient or the referrer cancelled', sticker: 'clipboard' },
+];
+
+/** The front desk or manager says what happened. The PR agent sees it on their request. */
+function StatusSheet({ r, onClose }: { r: Incoming; onClose: () => void }) {
+  const { user } = useCompany();
+  const { showToast } = useNav();
+  const [k, setK] = useState<BranchUpdateKind | 'waiting'>(r.update?.status ?? 'waiting');
+  const [date, setDate] = useState(r.update?.date ?? '');
+  const [note, setNote] = useState(r.update?.note ?? '');
+  const [tried, setTried] = useState(false);
+  const today = isoDate(new Date());
+  const err = k === 'coming' && !date ? 'Choose the day the patient said they will come.' : k === 'cancelled' && note.trim().length < 3 ? 'Say why it was cancelled.' : null;
+  const save = () => {
+    if (err) return setTried(true);
+    setBranchUpdate(r.id, k === 'waiting' ? null : { status: k, date: k === 'coming' ? date : undefined, note: note.trim() || undefined, by: { name: user.name, role: user.role }, at: new Date().toISOString() });
+    logAudit({ category: 'PR agents', action: k === 'waiting' ? 'Referral status cleared' : `Referral status: ${STATUS_TEXT[k]}`, record: `${r.patient.name} (${r.id})`, details: [k === 'coming' && date ? `coming on ${date}` : '', note.trim(), `referred by ${r.agentName}`].filter(Boolean).join(' · '), branchId: r.branchId });
+    showToast(k === 'waiting' ? 'Status cleared' : `${STATUS_TEXT[k]} saved. ${r.agentName} can see it.`);
+    onClose();
+  };
+  return (
+    <Sheet
+      back
+      title="Referral status"
+      subtitle={`${r.patient.name} · ${r.id}`}
+      onClose={onClose}
+      footer={
+        <button type="button" onClick={save} className="press min-h-12 w-full rounded-2xl bg-brand-600 text-[15px] font-semibold text-white">
+          Save status
+        </button>
+      }
+    >
+      <div className="px-1 pb-3">
+        <div role="radiogroup" aria-label="Status" className="space-y-2">
+          {STATUS_CHOICES.map((c) => (
+            <button key={c.k} type="button" role="radio" aria-checked={k === c.k} onClick={() => setK(c.k)} className={`press flex w-full items-center gap-3 rounded-2xl p-3 text-left ${k === c.k ? 'bg-brand-50 ring-2 ring-brand-500' : 'bg-[#f8fafd] ring-1 ring-[#e3eaf4]'}`}>
+              <Sticker name={c.sticker} size={34} />
+              <span className="min-w-0 flex-1">
+                <b className="block text-[14.5px] text-ink">{c.title}</b>
+                <span className="block text-[12.5px] text-muted">{c.sub}</span>
+              </span>
+              <span className={`grid h-5 w-5 place-items-center rounded-full ${k === c.k ? 'bg-brand-600 text-white' : 'ring-2 ring-[#d3dce9]'}`}>{k === c.k && <Check size={12} strokeWidth={3} />}</span>
+            </button>
+          ))}
+        </div>
+        {k === 'coming' && (
+          <label className="mt-3 block">
+            <FieldLabel label="The day they will come" required />
+            <input type="date" value={date} min={today} onChange={(e) => setDate(e.target.value)} className={inputCls(tried && !date ? err : null)} />
+          </label>
+        )}
+        {k !== 'waiting' && (
+          <div className="mt-3">
+            <LongText label={k === 'cancelled' ? 'Reason' : 'Note'} required={k === 'cancelled'} optional={k !== 'cancelled'} value={note} onChange={setNote} max={200} minRows={2} placeholder={k === 'coming' ? 'For example: will come after work on Friday' : k === 'no_show' ? 'For example: called twice, no answer' : 'For example: the doctor changed the tests'} />
+          </div>
+        )}
+        {tried && err && <FieldErr msg={err} />}
+        <p className="mt-3 text-[12.5px] text-muted">The PR agent who referred the patient sees this status, so they can follow up.</p>
+      </div>
+    </Sheet>
+  );
+}
+
+/* ─────────────── referral history ─────────────── */
+
+/**
+ * Every referral, week by week (owner, 2026-11-25): the folder only holds
+ * this week; older referrals are kept here with their status, never deleted.
+ */
+export function ReferralHistory({ branchIds, onClose, onStart, onResume, admin }: { branchIds: string[]; onClose: () => void; onStart?: (r: Incoming) => void; onResume?: (draftId: string) => void; admin?: boolean }) {
+  const { navigate } = useCompany();
+  const list = useIncomingMany(branchIds);
+  const [q, setQ] = useState('');
+  const [filter, setFilter] = useState<'all' | 'open' | 'attended' | 'not'>('all');
+  const [open, setOpen] = useState<string | null>(null);
+  const [shownWeeks, setShownWeeks] = useState(4);
+  const t = q.trim().toLowerCase();
+  const pass = (r: Incoming) =>
+    (filter === 'all' || (filter === 'open' && isOpen(r)) || (filter === 'attended' && r.status === 'attended') || (filter === 'not' && (r.status === 'no_show' || r.status === 'cancelled'))) &&
+    (!t || [r.patient.name, r.patient.phone, r.id, r.agentName, r.hospital, getBranch(r.branchId)?.name ?? ''].join(' ').toLowerCase().includes(t));
+  const weeks = useMemo(() => {
+    const m = new Map<number, Incoming[]>();
+    for (const r of list) {
+      const w = weekStart(r.sentAt).getTime();
+      m.set(w, [...(m.get(w) ?? []), r]);
+    }
+    return [...m.entries()].sort((a, b) => b[0] - a[0]);
+  }, [list]);
+  const multi = branchIds.length > 1;
+  const current = open ? list.find((r) => `${r.id}|${r.branchId}` === open) ?? null : null;
+  const thisMonday = weekStart().getTime();
+  return (
+    <Sheet back title="Referral history" subtitle={`${formatCount(list.length)} referrals · last ${weeks.length} weeks`} onClose={onClose} tall search={{ value: q, onChange: setQ, placeholder: 'Patient, phone, referral ID or agent' }}>
+      <div className="px-1 pb-4">
+        <div className="-mx-1 mb-3 flex gap-2 overflow-x-auto px-1 pb-0.5" role="group" aria-label="Status">
+          {(
+            [
+              ['all', 'All'],
+              ['open', 'Open'],
+              ['attended', 'Attended'],
+              ['not', 'Not attended or cancelled'],
+            ] as const
+          ).map(([k, l]) => (
+            <button key={k} type="button" aria-pressed={filter === k} onClick={() => setFilter(k)} className={`press min-h-9 shrink-0 rounded-full px-3.5 text-[13px] font-semibold ${filter === k ? 'bg-brand-600 text-white' : 'bg-white text-ink-2 ring-1 ring-line'}`}>
+              {l}
+            </button>
+          ))}
+        </div>
+        {weeks.slice(0, t ? weeks.length : shownWeeks).map(([w, rows]) => {
+          const shown = rows.filter(pass);
+          if (!shown.length) return null;
+          const att = rows.filter((r) => r.status === 'attended').length;
+          const rate = rows.length ? Math.round((att / rows.length) * 100) : 0;
+          const end = new Date(w + 6 * DAY);
+          return (
+            <section key={w} className="mb-4">
+              <div className="mb-2 rounded-2xl bg-white p-3 ring-1 ring-line/70">
+                <div className="flex items-baseline justify-between gap-2">
+                  <b className="text-[14.5px] text-ink">{w === thisMonday ? 'This week' : `Week of ${new Date(w).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} to ${end.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`}</b>
+                  <span className="text-[12.5px] text-muted">
+                    {formatCount(att)} of {formatCount(rows.length)} attended
+                  </span>
+                </div>
+                <span className="mt-2 block h-1.5 overflow-hidden rounded-full bg-page">
+                  <span className={`block h-full rounded-full ${rate >= 70 ? 'bg-good' : rate >= 45 ? 'bg-[#f59e0b]' : 'bg-[#ef4444]'}`} style={{ width: `${rate}%` }} />
+                </span>
+              </div>
+              <ul className="space-y-2">
+                {shown.map((r) => (
+                  <li key={`${r.id}|${r.branchId}`}>
+                    <Slip r={r} showBranch={multi} onOpen={() => setOpen(`${r.id}|${r.branchId}`)} />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          );
+        })}
+        {!t && shownWeeks < weeks.length && (
+          <button type="button" onClick={() => setShownWeeks((n) => n + 4)} className="press min-h-12 w-full rounded-2xl bg-white text-[14px] font-semibold text-brand-600 ring-1 ring-line">
+            Show earlier weeks
+          </button>
+        )}
+        {!list.some(pass) && <p className="py-10 text-center text-[14px] text-muted">No referral matches these filters.</p>}
+      </div>
+      {current && (
+        <IncomingDetail
+          r={current}
+          onClose={() => setOpen(null)}
+          onStart={() => onStart?.(current)}
+          onResume={() => current.draftId && onResume?.(current.draftId)}
+          onAsk={admin ? () => navigate(`/messages/adm-fd-${current.branchId}`) : undefined}
+        />
+      )}
+    </Sheet>
+  );
+}
+
+/** Records page entry (staff and admin): opens Referral history. */
+export function ReferralHistoryCard({ branchIds, admin }: { branchIds: string[]; admin?: boolean }) {
+  const { navigate } = useCompany();
+  const [open, setOpen] = useState(false);
+  const list = useIncomingMany(branchIds);
+  const older = list.filter((r) => r.sentAt < weekStart());
+  const att = older.filter((r) => r.status === 'attended').length;
+  const bill = (q: string) => navigate(`/branch/${branchIds[0]}/billing?${q}`);
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)} className="press mb-3 flex w-full items-center gap-3 rounded-[22px] bg-linear-to-br from-[#fff9ec] to-[#ffefcc] p-3.5 text-left ring-1 ring-[#f6e1b3]">
+        <Sticker name="books" size={46} />
+        <span className="min-w-0 flex-1">
+          <b className="block text-[15.5px] text-ink">Referral history</b>
+          <span className="block text-[12.5px] text-[#7a4a00]">
+            {formatCount(older.length)} earlier referrals · {older.length ? Math.round((att / older.length) * 100) : 0}% attended
+          </span>
+        </span>
+        <ChevronRight size={19} className="text-[#b07a1e]" />
+      </button>
+      {open && <ReferralHistory branchIds={branchIds} admin={admin} onClose={() => setOpen(false)} onStart={admin ? undefined : (r) => bill(`incoming=${encodeURIComponent(r.id)}`)} onResume={admin ? undefined : (id) => bill(`draft=${encodeURIComponent(id)}`)} />}
     </>
   );
 }
