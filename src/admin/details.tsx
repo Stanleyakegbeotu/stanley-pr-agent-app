@@ -19,6 +19,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { CalendarDays, ChevronDown, ChevronRight, Clock3, Copy, CreditCard, Handshake, MapPin, MessageCircle, Phone, Sparkles, UserCheck, Users } from 'lucide-react';
 import { useNav } from '@/app/store';
 import { useSeen } from './charts';
+import { promiseText, useBalanceNotes } from './balance';
 import { useApp as useCompany } from '@company/app/AppState';
 import { SERVICES, getBranch } from '@company/data/company';
 import type { Currency, PaymentMethod, PeriodSelection } from '@company/data/types';
@@ -394,6 +395,7 @@ export function VisitSheet({ visit, onClose }: { visit: PatientVisit; onClose: (
   const by = team.processedBy(v);
   const agent = v.agentId != null ? agents.find((a) => a.id === v.agentId) : undefined;
   const balance = v.billed - v.paid;
+  const note = useBalanceNotes()(v);
   const pct = v.billed > 0 ? Math.min(1, v.paid / v.billed) : 1;
   const state = v.payment === 'Paid' ? { label: 'Paid in full', hero: 'from-[#0f7a43] via-[#16a35a] to-[#4cc98a]', ring: '#ffffff' } : v.payment === 'Part-paid' ? { label: 'Part paid', hero: 'from-[#c2410c] via-[#e0601a] to-[#f59e0b]', ring: '#ffffff' } : { label: 'Not paid', hero: 'from-[#b42318] via-[#d93036] to-[#f0646a]', ring: '#ffffff' };
   const totals = visits.reduce((s, x) => ({ billed: s.billed + x.billed, paid: s.paid + x.paid }), { billed: 0, paid: 0 });
@@ -413,8 +415,8 @@ export function VisitSheet({ visit, onClose }: { visit: PatientVisit; onClose: (
     { icon: <UserCheck size={15} />, title: `Registered and billed by ${by ? by.name : 'the front desk'}`, sub: by ? by.role : 'Name not on record', tone: 'bg-violet' },
     { icon: <Sparkles size={15} />, title: `${v.services.length} test${v.services.length === 1 ? '' : 's'} requested`, sub: v.services.map((s) => s.name).slice(0, 3).join(', ') + (v.services.length > 3 ? ` +${v.services.length - 3} more` : ''), tone: 'bg-[#0ea5e9]' },
     v.paid > 0
-      ? { icon: <CreditCard size={15} />, title: `${formatMoney(v.paid, c)} paid${v.method ? ` by ${v.method}` : ''}`, sub: balance > 0 ? `${formatMoney(balance, c)} still owed` : 'Bill settled', tone: balance > 0 ? 'bg-[#f59e0b]' : 'bg-good' }
-      : { icon: <Clock3 size={15} />, title: 'Payment pending', sub: `${formatMoney(balance, c)} owed`, tone: 'bg-[#ef4444]' },
+      ? { icon: <CreditCard size={15} />, title: `${formatMoney(v.paid, c)} paid${v.method ? ` by ${v.method}` : ''}`, sub: balance > 0 ? `${formatMoney(balance, c)} still owed${note ? ` · ${promiseText(note)}` : ''}` : 'Bill settled', tone: balance > 0 ? 'bg-[#f59e0b]' : 'bg-good' }
+      : { icon: <Clock3 size={15} />, title: 'Payment pending', sub: `${formatMoney(balance, c)} owed${note ? ` · ${promiseText(note)}` : ''}`, tone: 'bg-[#ef4444]' },
   ];
   return (
     <Sheet back title="Patient visit" subtitle={`${v.patientRef} · ${dateOf(v.at)}`} onClose={onClose} tall>
@@ -455,6 +457,46 @@ export function VisitSheet({ visit, onClose }: { visit: PatientVisit; onClose: (
           </div>
         </div>
       </div>
+
+      {/* Why there is a balance (desktop: reason, approver and promised date on the bill) */}
+      {note && (
+        <div className="mb-3 overflow-hidden rounded-[22px] bg-linear-to-br from-[#fff7ec] to-[#ffeccf] p-4 ring-1 ring-[#ffe0b8]">
+          <p className="flex items-center justify-between gap-2 text-[12.5px] font-semibold text-[#9a4a07]">
+            {v.paid > 0 ? 'Why the rest is unpaid' : 'Why nothing was paid'}
+            {note.sample && <span className="rounded-full bg-white/80 px-2 py-0.5 text-[10.5px] font-semibold text-[#b45309]">Sample note</span>}
+          </p>
+          <p className="mt-1 text-[15.5px] font-semibold leading-snug text-ink">“{note.reason}”</p>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <div className="min-w-0 rounded-2xl bg-white/85 p-2.5">
+              <p className="text-[11px] text-muted">Expected payment</p>
+              <p className="text-[14px] font-bold text-ink">{note.promise ? note.promise.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) : 'Not given'}</p>
+              {note.promise && (
+                <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${note.overdueDays > 0 ? 'bg-[#fdecec] text-[#b42318]' : 'bg-tint-green text-good-ink'}`}>
+                  {note.overdueDays > 0 ? `Overdue by ${note.overdueDays} day${note.overdueDays === 1 ? '' : 's'}` : (() => {
+                    const d = Math.round((note.promise.getTime() - new Date(new Date().toDateString()).getTime()) / 86_400_000);
+                    return d === 0 ? 'Due today' : `In ${d} day${d === 1 ? '' : 's'}`;
+                  })()}
+                </span>
+              )}
+            </div>
+            <div className="min-w-0 rounded-2xl bg-white/85 p-2.5">
+              <p className="text-[11px] text-muted">Balance approved by</p>
+              <span className="mt-1 flex items-center gap-1.5">
+                {note.approvedBy?.photo ? <img src={note.approvedBy.photo} alt="" className="h-7 w-7 shrink-0 rounded-full object-cover" /> : <InitialsAvatar name={note.approvedBy?.name ?? 'Staff'} size={28} />}
+                <span className="min-w-0">
+                  <span className="block truncate text-[13px] font-bold text-ink">{note.approvedBy?.name ?? 'Not recorded'}</span>
+                  <span className="block truncate text-[10.5px] text-muted">{note.approvedBy?.role ?? ''}</span>
+                </span>
+              </span>
+            </div>
+          </div>
+          {v.phone && note.overdueDays > 0 && (
+            <a href={`tel:${v.phone.replace(/\s+/g, '')}`} className="press mt-2.5 flex min-h-10 items-center justify-center gap-1.5 rounded-xl bg-white text-[13.5px] font-semibold text-[#b42318] ring-1 ring-[#f9d4d4]">
+              <Phone size={15} /> Call to remind {v.patientName.split(' ')[0]}
+            </a>
+          )}
+        </div>
+      )}
 
       {/* Quick actions */}
       <div className="mb-3 grid grid-cols-3 gap-2">
@@ -732,6 +774,7 @@ export interface VisitRowProps {
 /** A patient visit card; tap for the full visit record. */
 function VisitRow({ v, oneDay, multi, by, agent, onOpen, amount, amountNote, at, tag, method, danger, longDate }: VisitRowProps) {
   const c = cur(v.branchId);
+  const note = useBalanceNotes()(v);
   const status = v.paid >= v.billed ? { t: 'Paid', cls: 'bg-tint-green text-good-ink' } : v.paid > 0 ? { t: 'Part paid', cls: 'bg-[#fff1e0] text-[#b45309]' } : { t: 'Not paid', cls: 'bg-[#fdecec] text-[#b42318]' };
   const tests = v.services.map((s) => s.name);
   return (
@@ -754,6 +797,15 @@ function VisitRow({ v, oneDay, multi, by, agent, onOpen, amount, amountNote, at,
             {method && <span className="rounded-full bg-page px-2 py-0.5 text-[11.5px] font-medium text-ink-2">{method}</span>}
             {tag && <span className="rounded-full bg-page px-2 py-0.5 text-[11.5px] font-medium text-ink-2">{tag}</span>}
           </span>
+          {note && (
+            <span className={`mt-1.5 flex items-start gap-1.5 rounded-xl px-2 py-1.5 text-[11.5px] leading-snug ${note.overdueDays > 0 ? 'bg-[#fdecec] text-[#9b1c1c]' : 'bg-[#fff7ec] text-[#9a4a07]'}`}>
+              <Clock3 size={13} className="mt-px shrink-0" />
+              <span className="min-w-0">
+                <b className="font-semibold">{promiseText(note)}{note.overdueDays > 0 ? ` · ${note.overdueDays} day${note.overdueDays === 1 ? '' : 's'} late` : ''}</b>
+                <span className="block truncate">{note.reason}</span>
+              </span>
+            </span>
+          )}
           <span className="mt-2 flex flex-col gap-0.5 border-t border-line/80 pt-2 text-[12px] text-muted">
             <span className="flex items-start gap-1.5">
               <UserCheck size={13} className="mt-0.5 shrink-0" />

@@ -113,7 +113,10 @@ function AdminFrame() {
         <AdminMenu open={menu} current={page.id} onClose={() => setMenu(false)} />
         <div ref={scroller} className="h-dvh overflow-y-auto md:ml-[264px]">
           <main className={`mx-auto w-full max-w-[860px] px-5 md:px-8 ${chat ? 'pb-10' : 'pb-32 md:pb-12'}`}>
-            <Screen sub={sub} />
+            {/* Each page pops in like the desktop (blur to sharp, small rise, slight scale). */}
+            <div key={route.path} className="page-pop">
+              <Screen sub={sub} />
+            </div>
           </main>
         </div>
         {!chat && <AdminTabs current={page.id} onMore={() => setMenu((m) => !m)} moreOpen={menu} />}

@@ -83,7 +83,9 @@ export function App() {
         <Drawer open={menu} onClose={() => setMenu(false)} />
         <div ref={scroller} className="h-dvh overflow-y-auto md:ml-[264px]">
           <main className={`mx-auto w-full max-w-[760px] px-5 md:px-8 ${tabs ? 'pb-32 md:pb-12' : 'pb-10'}`}>
-            <Screen />
+            <div key={route.path} className="page-pop">
+              <Screen />
+            </div>
           </main>
         </div>
         {tabs && <BottomNav onMore={() => setMenu((m) => !m)} moreOpen={menu} />}
