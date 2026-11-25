@@ -29,6 +29,7 @@ import { PatientsPage } from './pages/Patients';
 import { FinancePage } from './pages/Finance';
 import { PRPage } from './pages/PR';
 import { StaffPage } from './pages/Staff';
+import { InventoryPage } from './pages/Inventory';
 
 interface AdminPage {
   id: string;
@@ -41,7 +42,7 @@ interface AdminPage {
 export const ADMIN_PAGES: AdminPage[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutGrid, screen: AdminDashboard },
   { id: 'branches', label: 'Branches', icon: Building2, screen: BranchesPage },
-  { id: 'inventory', label: 'Inventory', icon: Package, screen: () => <ComingNext title="Inventory" /> },
+  { id: 'inventory', label: 'Inventory', icon: Package, screen: InventoryPage },
   { id: 'staff', label: 'Staff Management', icon: Users, screen: StaffPage },
   { id: 'pr', label: 'PR Management', icon: Handshake, screen: PRPage },
   { id: 'patients', label: 'Patients', icon: UserRound, screen: PatientsPage },
