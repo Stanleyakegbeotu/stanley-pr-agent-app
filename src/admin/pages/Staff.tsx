@@ -27,7 +27,7 @@ import { DutyRota } from '../duty';
 import { frontDeskId, managerId } from '../chat';
 import { photoOf, useTeam } from '../people';
 import { FieldErr, FieldLabel, TrashSheet, inputCls, nameCase } from '../prManage';
-import { BranchCrumb, BranchPick, Chips, Facts, PageTitle, useBranchFirst } from '../branchFirst';
+import { PICK_THEME, BranchCrumb, BranchPick, Chips, Facts, PageTitle, useBranchFirst } from '../branchFirst';
 
 const STATUS_TONE: Record<StaffStatus, string> = { Active: 'bg-tint-green text-good-ink', 'On leave': 'bg-[#fff1e0] text-[#b45309]', Suspended: 'bg-[#fdecec] text-[#b42318]', Left: 'bg-page text-muted' };
 const longDate = (iso: string) => (iso ? new Date(`${iso}T00:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Not on record');
@@ -68,7 +68,8 @@ function Choose() {
       <BranchPick
         page="staff"
         sticker="womanHealthWorker"
-        go="View manager and staff"
+        go="Open"
+        theme={PICK_THEME.staff}
         note="Each branch has one manager who heads its staff. Choose a branch."
         stats={(b) => {
           const people = staff.filter((s) => s.branchId === b.id && s.status !== 'Left');

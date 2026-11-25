@@ -29,7 +29,7 @@ import { AgentsSheet, ComposeSheet } from '../agents';
 import { AgentAvatar } from '../agentPhotos';
 import { periodWord } from '../insights';
 import { AddAgentSheet, RateSheet } from '../prManage';
-import { BranchCrumb, BranchPick, Chips, PageTitle, useBranchFirst } from '../branchFirst';
+import { PICK_THEME, BranchCrumb, BranchPick, Chips, PageTitle, useBranchFirst } from '../branchFirst';
 
 type Sort = 'agents' | 'referrals' | 'name';
 const PAGE = 12;
@@ -55,7 +55,8 @@ function Choose() {
       <BranchPick
         page="pr"
         sticker="stethoscope"
-        go="View hospitals and agents"
+        go="Open"
+        theme={PICK_THEME.pr}
         note="Each branch has its own hospitals and PR agents. Choose a branch."
         stats={(b) => {
           const network = b.id === LEGACY_BRANCH_ID ? agents : [];
@@ -63,8 +64,8 @@ function Choose() {
           return [
             { label: 'PR agents', value: formatCount(network.length) },
             { label: 'Hospitals', value: formatCount(buildHospitalDirectory(network).length) },
-            { label: `Referrals ${periodWord(period)}`, value: formatCount(ranked.reduce((s, a) => s + a.referrals, 0)) },
-            { label: 'Referral revenue', value: formatMoney(ranked.reduce((s, a) => s + (a.revenue[b.currency] ?? 0), 0), b.currency, true) },
+            { label: 'Referrals', value: formatCount(ranked.reduce((s, a) => s + a.referrals, 0)) },
+            { label: 'Revenue', value: formatMoney(ranked.reduce((s, a) => s + (a.revenue[b.currency] ?? 0), 0), b.currency, true) },
           ];
         }}
         foot={(b) => {
@@ -236,70 +237,102 @@ function Workspace({ branchId, crumb }: { branchId: string; crumb: boolean }) {
           {hospitals.length === 0 ? (
             <EmptyCard sticker="hospital" text={`No hospitals or agents match “${q}”.`} />
           ) : (
-            <div className="space-y-3">
-              {hospitals.slice(0, shown).map((h) => {
-                const st = stat(h);
-                const people = h.agentIds.map((id) => byId.get(id)).filter((a): a is NonNullable<typeof a> => !!a);
-                const lead = [...people].sort((x, y) => (act.get(y.id)?.referrals ?? 0) - (act.get(x.id)?.referrals ?? 0) || x.order - y.order);
-                const r = rank.get(h.key) ?? 0;
-                const hits = agentHits(h);
-                const top = lead[0] && act.get(lead[0].id) ? lead[0] : null;
-                return (
-                  <button key={h.key} type="button" onClick={() => setList({ hospital: h.key })} className="press block w-full rounded-[22px] bg-white p-3.5 text-left shadow-[0_6px_20px_rgba(30,74,160,0.07)] ring-1 ring-line/70">
-                    <span className="flex items-start gap-3">
-                      <span className={`grid h-[52px] w-[52px] shrink-0 place-items-center rounded-[16px] text-[15px] font-extrabold tracking-[-0.02em] ${r <= 3 ? 'bg-linear-to-br from-[#4b2fc4] to-[#8b6ff0] text-white' : 'bg-tint-purple text-violet'}`}>{monogram(h.key)}</span>
-                      <span className="min-w-0 flex-1">
-                        <span className="flex items-start justify-between gap-2">
-                          <span className="truncate text-[16.5px] font-bold text-ink">{h.key}</span>
-                          <span className="shrink-0 rounded-full bg-page px-2 py-0.5 text-[11.5px] font-bold text-ink-2">#{r}</span>
+            <>
+            <div>
+              {/* The three leading hospitals as swipeable cards (owner, 2026-11-25: mobile cards, not desktop tiles). */}
+              {!t && hospitals.length > 3 && (
+                <div className="-mx-5 mb-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-5 pb-2 md:-mx-8 md:px-8" data-no-swipe>
+                  {hospitals.slice(0, 3).map((h, i) => {
+                    const st = stat(h);
+                    const people = h.agentIds.map((id) => byId.get(id)).filter((a): a is NonNullable<typeof a> => !!a);
+                    const lead = [...people].sort((x, y) => (act.get(y.id)?.referrals ?? 0) - (act.get(x.id)?.referrals ?? 0) || x.order - y.order);
+                    const top = lead[0] && act.get(lead[0].id) ? lead[0] : null;
+                    return (
+                      <button
+                        key={h.key}
+                        type="button"
+                        onClick={() => setList({ hospital: h.key })}
+                        className={`press relative w-[84%] max-w-[330px] shrink-0 snap-start overflow-hidden rounded-[26px] bg-linear-to-br p-4 text-left text-white shadow-[0_14px_30px_rgba(40,30,120,0.25)] ${['from-[#4b2fc4] via-[#6a4be0] to-[#9a83f7]', 'from-[#1b5fd6] via-[#2b78e8] to-[#5ea6f7]', 'from-[#0c7f86] via-[#139aa0] to-[#4cc5bd]'][i]}`}
+                        style={{ animation: `pick-in 520ms cubic-bezier(0.22,0.8,0.24,1) ${i * 100}ms both` }}
+                      >
+                        <span aria-hidden="true" className="absolute -right-12 -top-16 h-48 w-48 rounded-full bg-white/10" />
+                        <Sticker name={i === 0 ? 'trophy' : 'hospital'} size={70} className="absolute right-2 top-2 drop-shadow-[0_8px_14px_rgba(0,0,0,0.2)]" />
+                        <span className="relative flex items-center gap-2">
+                          <span className="grid h-7 min-w-7 place-items-center rounded-full bg-white px-1.5 text-[12.5px] font-extrabold text-ink">#{i + 1}</span>
+                          <span className="truncate text-[12.5px] font-medium text-white/85">{sort === 'referrals' ? `Most referrals ${when}` : sort === 'name' ? 'Partner hospital' : 'Most PR agents'}</span>
                         </span>
-                        <span className="block truncate text-[12.5px] text-muted">{h.rawVariants.length > 1 ? `Recorded as ${h.rawVariants.join(', ')}` : 'Partner hospital'}</span>
-                      </span>
-                    </span>
-                    <span className="mt-3 flex items-center gap-3">
-                      <span className="shrink-0">
-                        <b className="block text-[24px] font-bold leading-none text-ink">{formatCount(h.agentCount)}</b>
-                        <span className="text-[12px] text-muted">PR agent{h.agentCount === 1 ? '' : 's'}</span>
-                      </span>
-                      <span className="flex -space-x-2">
-                        {lead.slice(0, 4).map((a) => (
-                          <span key={a.id} className="rounded-full ring-2 ring-white">
-                            <AgentAvatar id={a.id} name={a.name} phone={a.phone} size={32} />
+                        <span className="relative mt-3 block max-w-[70%] truncate text-[22px] font-bold leading-tight">{h.key}</span>
+                        <span className="relative mt-0.5 block text-[12.5px] text-white/85">
+                          {formatCount(h.agentCount)} PR agents · {formatCount(st.active)} referred {when}
+                        </span>
+                        <span className="relative mt-3 flex items-center gap-2">
+                          <span className="flex -space-x-2">
+                            {lead.slice(0, 4).map((a) => (
+                              <span key={a.id} className="rounded-full ring-2 ring-white/80">
+                                <AgentAvatar id={a.id} name={a.name} phone={a.phone} size={30} />
+                              </span>
+                            ))}
                           </span>
-                        ))}
-                        {people.length > 4 && <span className="grid h-8 min-w-8 place-items-center rounded-full bg-page px-1.5 text-[11px] font-bold text-ink-2 ring-2 ring-white">+{people.length - 4}</span>}
-                      </span>
-                    </span>
-                    <span className="mt-2.5 block h-1.5 overflow-hidden rounded-full bg-[#eef2f8]">
-                      <span className="block h-full rounded-full bg-violet" style={{ width: `${Math.max(3, (h.agentCount / maxAgents) * 100)}%` }} />
-                    </span>
-                    <span className="mt-3 grid grid-cols-3 gap-2">
-                      {[
-                        { l: 'Referrals', v: formatCount(st.referrals) },
-                        { l: 'Active', v: `${formatCount(st.active)}/${formatCount(h.agentCount)}` },
-                        { l: 'Revenue', v: formatMoney(st.revenue, c, true) },
-                      ].map((x) => (
-                        <span key={x.l} className="min-w-0 rounded-2xl bg-page px-2.5 py-2">
-                          <span className="block text-[11px] text-muted">{x.l}</span>
-                          <b className="block truncate text-[14px] text-ink">{x.v}</b>
+                          {people.length > 4 && <span className="text-[12px] font-semibold text-white/85">+{formatCount(people.length - 4)}</span>}
                         </span>
-                      ))}
-                    </span>
-                    {(hits > 0 || h.notes.length > 0) && (
-                      <span className="mt-2 flex flex-wrap gap-1.5">
-                        {hits > 0 && <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[11.5px] font-semibold text-brand-700">{`${hits} matching agent${hits === 1 ? '' : 's'}`}</span>}
-                        {h.notes.length > 0 && <span className="rounded-full bg-[#fff1e0] px-2 py-0.5 text-[11.5px] font-semibold text-[#b45309]">Code needs review</span>}
+                        <span className="relative mt-3 grid grid-cols-2 gap-2">
+                          <span className="rounded-2xl bg-white/15 px-2.5 py-2 ring-1 ring-white/20">
+                            <span className="block text-[11px] text-white/80">Referrals</span>
+                            <b className="block text-[16px]">{formatCount(st.referrals)}</b>
+                          </span>
+                          <span className="rounded-2xl bg-white/15 px-2.5 py-2 ring-1 ring-white/20">
+                            <span className="block text-[11px] text-white/80">Billed</span>
+                            <b className="block truncate text-[16px]">{formatMoney(st.revenue, c, true)}</b>
+                          </span>
+                        </span>
+                        <span className="relative mt-2.5 block truncate text-[12px] text-white/85">{top ? `Top agent: ${top.name}` : `No referrals ${when}`}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              <div className="overflow-hidden rounded-[24px] bg-white shadow-[0_6px_20px_rgba(30,74,160,0.06)] ring-1 ring-line/70">
+                {hospitals.slice(!t && hospitals.length > 3 ? 3 : 0, shown).map((h) => {
+                  const st = stat(h);
+                  const people = h.agentIds.map((id) => byId.get(id)).filter((a): a is NonNullable<typeof a> => !!a);
+                  const lead = [...people].sort((x, y) => (act.get(y.id)?.referrals ?? 0) - (act.get(x.id)?.referrals ?? 0) || x.order - y.order);
+                  const r = rank.get(h.key) ?? 0;
+                  const hits = agentHits(h);
+                  return (
+                    <button key={h.key} type="button" onClick={() => setList({ hospital: h.key })} className="press flex w-full items-center gap-3 border-b border-line px-3.5 py-3 text-left last:border-0">
+                      <span className="relative shrink-0">
+                        <span className="grid h-12 w-12 place-items-center rounded-full bg-linear-to-br from-[#f3eeff] to-[#e0d6ff] text-[13px] font-extrabold tracking-[-0.02em] text-violet">{monogram(h.key)}</span>
+                        <span className="absolute -bottom-1 -right-1 grid h-5 min-w-5 place-items-center rounded-full bg-white px-1 text-[10px] font-bold text-ink-2 shadow ring-1 ring-line">{r}</span>
                       </span>
-                    )}
-                    <span className="mt-3 flex items-center justify-between gap-2 border-t border-line pt-2.5 text-[12.5px]">
-                      <span className="min-w-0 truncate text-muted">{top ? `Top: ${top.name}` : `No referrals ${when}`}</span>
-                      <span className="flex shrink-0 items-center gap-0.5 font-semibold text-brand-600">
-                        View agents <ChevronRight size={15} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[15px] font-semibold text-ink">{h.key}</span>
+                        <span className="block truncate text-[12px] text-muted">
+                          {formatCount(h.agentCount)} agents · {formatCount(st.active)} active
+                          {st.revenue > 0 ? ` · ${formatMoney(st.revenue, c, true)}` : ''}
+                        </span>
+                        <span className="mt-1 flex items-center gap-1.5">
+                          <span className="flex -space-x-1.5">
+                            {lead.slice(0, 3).map((a) => (
+                              <span key={a.id} className="rounded-full ring-2 ring-white">
+                                <AgentAvatar id={a.id} name={a.name} phone={a.phone} size={24} />
+                              </span>
+                            ))}
+                          </span>
+                          {hits > 0 && <span className="rounded-full bg-brand-50 px-1.5 py-0.5 text-[10.5px] font-semibold text-brand-700">{`${hits} match${hits === 1 ? '' : 'es'}`}</span>}
+                          {h.notes.length > 0 && <span className="rounded-full bg-[#fff1e0] px-1.5 py-0.5 text-[10.5px] font-semibold text-[#b45309]">Review code</span>}
+                        </span>
                       </span>
-                    </span>
-                  </button>
-                );
-              })}
+                      <span className="shrink-0 text-right">
+                        <b className={`block text-[18px] leading-none ${st.referrals ? 'text-violet' : 'text-faint'}`}>{formatCount(st.referrals)}</b>
+                        <span className="text-[11px] text-muted">referrals</span>
+                      </span>
+                      <ChevronRight size={16} className="shrink-0 text-faint" />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="mt-3 space-y-3">
               {shown < hospitals.length && (
                 <button type="button" onClick={() => setShown((n) => n + PAGE)} className="press mx-auto block rounded-full bg-white px-5 py-2.5 text-[14px] font-semibold text-brand-600 ring-1 ring-line">
                   Show more hospitals ({formatCount(hospitals.length - shown)} more)
@@ -318,6 +351,7 @@ function Workspace({ branchId, crumb }: { branchId: string; crumb: boolean }) {
                 </button>
               )}
             </div>
+            </>
           )}
           <p className="mt-6 flex items-start gap-2 text-[12px] leading-relaxed text-muted">
             <Users size={15} className="mt-0.5 shrink-0" />

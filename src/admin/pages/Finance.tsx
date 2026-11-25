@@ -32,7 +32,7 @@ import { BarList, Sheet, TrendChart, periodText, useSheetPeriod } from '../ui';
 import { DetailSheet, ExpenseRow, FocusSheet, Rows, norm, useRowCtx, visitRow, type DetailKind, type Focus, type Row } from '../details';
 import { AdminTopBar, PageGlow, SectionTitle } from '../kit';
 import { Donut, LineChart, useSeen } from '../charts';
-import { BranchCrumb, BranchPick, Chips, Facts, PageTitle, Panel, PeriodChip, useBranchFirst } from '../branchFirst';
+import { PICK_THEME, BranchCrumb, BranchPick, Chips, Facts, PageTitle, Panel, PeriodChip, useBranchFirst } from '../branchFirst';
 
 const BASE: PeriodSelection = { key: 'month' };
 const KIND_LABEL: Record<LedgerEntry['kind'], string> = { visit: 'Patient bill', recovery: 'Recovered', expense: 'Expense', commission: 'PR commission' };
@@ -63,7 +63,8 @@ function Choose() {
       <BranchPick
         page="finance"
         sticker="moneyBag"
-        go="View finance"
+        go="Open"
+        theme={PICK_THEME.finance}
         note="Each branch keeps its own books, in its recorded currency. Choose a branch."
         stats={(b) => {
           const f = (n: number) => formatMoney(n, b.currency, true);
@@ -72,8 +73,8 @@ function Choose() {
           const year = financeTotals(b.id, resolveRange({ key: 'year' }));
           return [
             { label: 'Money in today', value: f(today.income) },
-            { label: month.net < 0 ? 'Net loss this month' : 'Net profit this month', value: f(Math.abs(month.net)), danger: month.net < 0 },
-            { label: year.net < 0 ? 'Net loss this year' : 'Net profit this year', value: f(Math.abs(year.net)), danger: year.net < 0 },
+            { label: month.net < 0 ? 'Loss, month' : 'Profit, month', value: f(Math.abs(month.net)), danger: month.net < 0 },
+            { label: year.net < 0 ? 'Loss, year' : 'Profit, year', value: f(Math.abs(year.net)), danger: year.net < 0 },
             { label: 'Outstanding', value: f(today.outstanding) },
           ];
         }}
