@@ -38,6 +38,13 @@ const ENTRIES = [
   'services/config.ts',
   'services/receiptProfile.ts',
   'data/serviceGuide/index.ts',
+  // Reports: the same report definitions, document model, page layout and print styles,
+  // so a report made on the phone is identical to the desktop's (print, PDF, spreadsheet).
+  'features/reports/specs.ts',
+  'features/reports/model.ts',
+  'features/reports/access.ts',
+  'features/reports/ReportPages.tsx',
+  'features/reports/reportCss.ts',
 ];
 const KEEP_MOBILE = new Set(['app/router.ts']);
 
