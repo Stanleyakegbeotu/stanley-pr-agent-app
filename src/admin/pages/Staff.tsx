@@ -32,6 +32,7 @@ import { frontDeskId, managerId } from '../chat';
 import { photoOf, useTeam } from '../people';
 import { FieldErr, FieldLabel, TrashSheet, inputCls, nameCase } from '../prManage';
 import { PICK_THEME, BranchCrumb, BranchPick, Chips, Facts, PageTitle, useBranchFirst } from '../branchFirst';
+import { StickyTools } from '@/admin/kit';
 
 const STATUS_TONE: Record<StaffStatus, string> = { Active: 'bg-tint-green text-good-ink', 'On leave': 'bg-[#fff1e0] text-[#b45309]', Suspended: 'bg-[#fdecec] text-[#b42318]', Left: 'bg-page text-muted' };
 const longDate = (iso: string) => (iso ? new Date(`${iso}T00:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Not on record');
@@ -186,7 +187,8 @@ function Workspace({ branchId, crumb }: { branchId: string; crumb: boolean }) {
       <DutyRota branchId={branchId} />
 
       <SectionTitle title={`Team · ${formatCount(others.length)}`} />
-      <div className="relative mb-3">
+      <StickyTools>
+      <div className="relative mb-2.5">
         <Search size={18} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-muted" />
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, role, phone, email or ID" aria-label="Search staff" className="min-h-12 w-full rounded-full bg-white pl-11 pr-11 text-[15px] text-ink shadow-sm outline-none ring-1 ring-line focus:ring-2 focus:ring-brand-500" />
         {q && (
@@ -196,6 +198,7 @@ function Workspace({ branchId, crumb }: { branchId: string; crumb: boolean }) {
         )}
       </div>
       <Chips label="Role" value={role} onChange={setRole} options={[{ value: 'all', label: 'All roles' }, ...STAFF_ROLES.filter((r) => r.value !== MANAGER_ROLE).map((r) => ({ value: r.value, label: r.value, count: others.filter((s) => s.role === r.value).length }))]} />
+      </StickyTools>
       <Chips label="Status" value={status} onChange={setStatus} options={[{ value: 'all' as const, label: 'Any status' }, ...STAFF_STATUSES.map((s) => ({ value: s, label: s, count: others.filter((x) => x.status === s).length }))]} />
 
       {shown.length === 0 ? (

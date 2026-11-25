@@ -25,7 +25,7 @@ import { useNav } from '@/app/store';
 import type { StickerKey } from '@/assets';
 import { InitialsAvatar, Sticker } from '@/ui/kit';
 import { Sheet, periodText } from '@/admin/ui';
-import { AdminTopBar, EmptyCard, PageGlow } from '@/admin/kit';
+import { AdminTopBar, EmptyCard, PageGlow, StickyTools } from '@/admin/kit';
 import { Chips, Facts, Panel, PageTitle, PeriodChip } from '@/admin/branchFirst';
 import { CountUp, Donut, useSeen } from '@/admin/charts';
 import { BarList } from '@/admin/ui';
@@ -275,7 +275,8 @@ export function ExpensesPage() {
             </button>
           )}
         </div>
-        <label className="mt-2 flex min-h-12 items-center gap-2 rounded-2xl bg-white px-3.5 ring-1 ring-line focus-within:ring-2 focus-within:ring-brand-400">
+        <StickyTools>
+        <label className="mb-2.5 flex min-h-12 items-center gap-2 rounded-2xl bg-white px-3.5 ring-1 ring-line focus-within:ring-2 focus-within:ring-brand-400">
           <Search size={18} className="shrink-0 text-muted" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Description, supplier, person, receipt no." aria-label="Search expenses" className="min-w-0 flex-1 bg-transparent text-[15px] text-ink outline-none" />
           {q && (
@@ -284,7 +285,6 @@ export function ExpensesPage() {
             </button>
           )}
         </label>
-        <div className="mt-3">
           <Chips
             label="Status"
             value={status}
@@ -296,6 +296,8 @@ export function ExpensesPage() {
               { value: 'Rejected', label: 'Rejected', count: periodRows.filter((r) => r.status === 'Rejected').length },
             ]}
           />
+        </StickyTools>
+        <div className="mt-1">
           <Chips label="Category" value={category} onChange={setCategory} options={[{ value: 'all', label: 'All categories' }, ...RECORD_CATEGORIES.map((c) => ({ value: c, label: c === OUTSOURCED ? 'Outsourced' : c }))]} />
           <Chips
             label="Source"

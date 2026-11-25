@@ -16,13 +16,13 @@ import { Banknote, ChartColumn, CheckCircle2, FilePenLine, FolderOpen, Handshake
 import { AppStateProvider, useApp as useCompany } from '@company/app/AppState';
 import { getBranch } from '@company/data/company';
 import { branchRoute } from '@company/app/router';
-import { isRead, useNotifications } from '@company/services/notifications';
+import { isRead } from '@company/services/notifications';
 import { usePermissions } from '@company/services/permissions';
 import { ROLES, setActingStaff, setRole, staffBranch, useActingStaff, useRole } from '@/domain/role';
 import { NavCtx } from '@/app/store';
 import { InitialsAvatar } from '@/ui/kit';
 import { AdminShellCtx } from '@/admin/shell';
-import { AdminNotifications } from '@/admin/pages/Notifications';
+import { AdminNotifications, useScopedNotes } from '@/admin/pages/Notifications';
 import { PatientsPage } from '@/admin/pages/Patients';
 import { ComingNext } from '@/admin/pages/ComingNext';
 import { photoOf, useTeam } from '@/admin/people';
@@ -76,7 +76,7 @@ function StaffFrame() {
   const [menu, setMenu] = useState(false);
   const [focus, setFocus] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
-  const { notes } = useNotifications();
+  const notes = useScopedNotes(branchId);
   const unread = useMemo(() => notes.filter((n) => !isRead(n)).length, [notes]);
   const [toast, setToast] = useState<string | null>(null);
 

@@ -19,6 +19,8 @@ import { InitialsAvatar, SearchField, Sticker } from '@/ui/kit';
 import { ScopeBar } from '../ui';
 import { DetailSheet, FocusSheet, Rows, norm, useRowCtx, visitRow, type DetailKind, type Focus } from '../details';
 import { AdminTopBar, PageGlow, SectionTitle } from '../kit';
+import { StickyTools } from '@/admin/kit';
+import { useStaffChrome } from '@/staff/chrome';
 
 type Filter = 'all' | 'new' | 'returning' | 'referred' | 'walkin' | 'owing';
 const FILTERS: { id: Filter; label: string; test: (v: PatientVisit) => boolean }[] = [
@@ -31,7 +33,10 @@ const FILTERS: { id: Filter; label: string; test: (v: PatientVisit) => boolean }
 ];
 
 export function PatientsPage() {
-  const { context, period, route } = useCompany();
+  const { context: ctx0, period, route } = useCompany();
+  // Staff workspace: always the person's own branch, whatever the shared scope says.
+  const locked = useStaffChrome().branchId;
+  const context = locked || ctx0;
   const branchIds = useMemo(() => resolveBranchIds(context), [context]);
   const range = resolveRange(period);
   const [q, setQ] = useState(() => route.query.get('q') ?? '');
@@ -72,10 +77,21 @@ export function PatientsPage() {
             {formatCount(onRecord)} patients on record · {scopeText}
           </p>
         </section>
-        <div className="mb-3">
-          <SearchField value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name or Patient ID..." aria-label="Search patients" />
-        </div>
-        <ScopeBar />
+        <StickyTools>
+          <div className="mb-2.5">
+            <SearchField value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name or Patient ID..." aria-label="Search patients" />
+          </div>
+          <ScopeBar />
+          {t.length < 2 && (
+              <div className="-mx-5 flex gap-2 overflow-x-auto px-5 pb-2 md:-mx-8 md:px-8" role="group" aria-label="Filter visits">
+                {FILTERS.map((f) => (
+                  <button key={f.id} type="button" onClick={() => setFilter(f.id)} aria-pressed={filter === f.id} className={`press min-h-10 shrink-0 rounded-full px-4 text-[13.5px] font-semibold ${filter === f.id ? 'bg-brand-600 text-white shadow-[0_6px_16px_rgba(31,111,232,0.28)]' : 'bg-white text-ink-2 ring-1 ring-line'}`}>
+                    {f.label} <span className={filter === f.id ? 'text-white/80' : 'text-muted'}>{formatCount(counts[f.id])}</span>
+                  </button>
+                ))}
+              </div>
+          )}
+        </StickyTools>
 
         {t.length >= 2 ? (
           <>
@@ -117,7 +133,7 @@ export function PatientsPage() {
         ) : (
           <>
             {/* Hero */}
-            <div className="relative overflow-hidden rounded-[24px] bg-linear-to-br from-[#4b2fc4] via-[#6a4be0] to-[#9a83f7] p-5 text-white shadow-[0_14px_34px_rgba(75,47,196,0.25)]">
+            <div className="relative mt-2 overflow-hidden rounded-[24px] bg-linear-to-br from-[#4b2fc4] via-[#6a4be0] to-[#9a83f7] p-5 text-white shadow-[0_14px_34px_rgba(75,47,196,0.25)]">
               <span aria-hidden="true" className="absolute -right-16 -top-24 h-72 w-72 rounded-full bg-white/10" />
               <div className="relative max-w-[64%]">
                 <p className="text-[13px] font-medium text-white/90">Patient visits · {periodLabel(period)}</p>
@@ -134,13 +150,6 @@ export function PatientsPage() {
               </div>
             </div>
 
-            <div className="-mx-5 mt-4 flex gap-2 overflow-x-auto px-5 pb-1 md:-mx-8 md:px-8" role="group" aria-label="Filter visits">
-              {FILTERS.map((f) => (
-                <button key={f.id} type="button" onClick={() => setFilter(f.id)} aria-pressed={filter === f.id} className={`press min-h-10 shrink-0 rounded-full px-4 text-[13.5px] font-semibold ${filter === f.id ? 'bg-brand-600 text-white shadow-[0_6px_16px_rgba(31,111,232,0.28)]' : 'bg-white text-ink-2 ring-1 ring-line'}`}>
-                  {f.label} <span className={filter === f.id ? 'text-white/80' : 'text-muted'}>{formatCount(counts[f.id])}</span>
-                </button>
-              ))}
-            </div>
 
             <SectionTitle title={filter === 'all' ? 'Every visit' : `${FILTERS.find((f) => f.id === filter)!.label} patients`} action="Billing view" onAction={() => setDetail('revenue')} />
             <Rows rows={rows} oneDay={range.days <= 1} multi={branchIds.length > 1} empty="No patient visits in this period." />

@@ -297,3 +297,27 @@ export function SlideCarousel({ slides, label = 'Announcements' }: { slides: Sli
     </section>
   );
 }
+
+/**
+ * Search and filters that stay put (owner, 2026-11-25): on every list, the
+ * search box and its filter chips stick just below the header bar while the
+ * list scrolls under them, so people can search again without scrolling back
+ * up. Frosted once it is stuck; transparent while it sits in its place.
+ */
+export function StickyTools({ children, className = '' }: { children: ReactNode; className?: string }) {
+  const sentinel = useRef<HTMLDivElement>(null);
+  const [stuck, setStuck] = useState(false);
+  useEffect(() => {
+    const el = sentinel.current;
+    if (!el) return;
+    const io = new IntersectionObserver(([e]) => setStuck(!e!.isIntersecting && e!.boundingClientRect.top < 120), { rootMargin: '-72px 0px 0px 0px', threshold: 0 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  return (
+    <>
+      <div ref={sentinel} aria-hidden="true" className="h-px" />
+      <div className={`sticky top-[calc(var(--safe-top)+4rem)] z-20 -mx-5 px-5 pb-1 pt-2 transition-[background-color,box-shadow] duration-300 md:-mx-8 md:px-8 ${stuck ? 'bg-[#eef4fe]/92 shadow-[0_10px_18px_-12px_rgba(30,74,160,0.28)] backdrop-blur-xl' : 'bg-transparent'} ${className}`}>{children}</div>
+    </>
+  );
+}

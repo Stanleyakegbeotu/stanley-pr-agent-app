@@ -30,6 +30,7 @@ import { AgentAvatar } from '../agentPhotos';
 import { periodWord } from '../insights';
 import { AddAgentSheet, RateSheet } from '../prManage';
 import { PICK_THEME, BranchCrumb, BranchPick, Chips, PageTitle, useBranchFirst } from '../branchFirst';
+import { StickyTools } from '@/admin/kit';
 
 type Sort = 'agents' | 'referrals' | 'name';
 const PAGE = 12;
@@ -192,7 +193,8 @@ function Workspace({ branchId, crumb }: { branchId: string; crumb: boolean }) {
           <div id="pr-hospitals" className="scroll-mt-20">
             <SectionTitle title="Partner hospitals" />
           </div>
-          <div className="relative mb-3">
+          <StickyTools>
+          <div className="relative mb-2.5">
             <Search size={18} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-muted" />
             <input value={q} onChange={(e) => (setQ(e.target.value), setShown(PAGE))} placeholder="Search hospitals or PR agents" aria-label="Search hospitals or PR agents" className="min-h-12 w-full rounded-full bg-white pl-11 pr-11 text-[15px] text-ink shadow-sm outline-none ring-1 ring-line focus:ring-2 focus:ring-brand-500" />
             {q && (
@@ -211,6 +213,7 @@ function Workspace({ branchId, crumb }: { branchId: string; crumb: boolean }) {
               { value: 'name', label: 'Code A to Z' },
             ]}
           />
+          </StickyTools>
 
           {matchingAgents.length > 0 && (
             <div className="mb-3 rounded-[20px] bg-white p-2 ring-1 ring-line/70">

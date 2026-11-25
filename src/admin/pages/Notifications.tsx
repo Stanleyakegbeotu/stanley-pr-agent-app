@@ -9,9 +9,12 @@ import { isRead, markAllRead, markRead, useNotifications, type Note } from '@com
 import { branchLabel } from '@company/services/notifications';
 import { EmptyState, ScreenHeader, Sticker } from '@/ui/kit';
 import { NOTE_LOOK, NoteSheet, noteWhen } from '../notes';
+import { useApp as useCompany } from '@company/app/AppState';
+import { can, usePermissions } from '@company/services/permissions';
+import { useStaffChrome } from '@/staff/chrome';
 
 export function AdminNotifications() {
-  const { notes } = useNotifications();
+  const notes = useScopedNotes();
   const [show, setShow] = useState<'all' | 'unread'>('all');
   const [open, setOpen] = useState<Note | null>(null);
   const [shown, setShown] = useState(30);
@@ -74,4 +77,19 @@ export function AdminNotifications() {
       {open && <NoteSheet note={open} onClose={() => setOpen(null)} />}
     </>
   );
+}
+
+/**
+ * The notifications this person may see. The Company Admin sees every branch;
+ * a Branch Manager or Front Desk sees only their own branch (owner,
+ * 2026-11-25), and commission payouts only with "See commission".
+ */
+export function useScopedNotes(branchId?: string): Note[] {
+  const { notes } = useNotifications();
+  const { user } = useCompany();
+  const chrome = useStaffChrome().branchId;
+  const locked = branchId ?? chrome;
+  usePermissions();
+  const seeCommission = can(user.role, 'referral.commission');
+  return useMemo(() => (locked ? notes.filter((n) => n.branchId === locked && (n.kind !== 'payout' || seeCommission)) : notes), [notes, locked, seeCommission]);
 }

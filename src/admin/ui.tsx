@@ -14,6 +14,7 @@ import { PERIOD_OPTIONS, periodLabel, resolveRange } from '@company/services/ana
 import { formatMoney, moneyEntries } from '@company/shared/format';
 import { useAdminShell } from './shell';
 import { useSeen } from './charts';
+import { useStaffChrome } from '@/staff/chrome';
 
 const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(' ');
 
@@ -47,8 +48,10 @@ export function AdminHeader({ title, back, right, scope = true }: { title: strin
 }
 
 /** "All branches · Today": the branch scope and the reporting period (desktop: context + period). */
-export function ScopeBar({ branchOnly, periodOnly }: { branchOnly?: boolean; periodOnly?: boolean }) {
+export function ScopeBar({ branchOnly, periodOnly: periodOnly0 }: { branchOnly?: boolean; periodOnly?: boolean }) {
   const { context, setContext, period, setPeriod } = useCompany();
+  // Branch Manager and Front Desk only ever see their own branch (owner, 2026-11-25): no branch choice at all.
+  const periodOnly = periodOnly0 || !!useStaffChrome().branchId;
   const [sheet, setSheet] = useState<'branch' | 'period' | null>(null);
   const [from, setFrom] = useState(period.from ?? '');
   const [to, setTo] = useState(period.to ?? '');

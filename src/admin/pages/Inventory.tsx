@@ -34,6 +34,7 @@ import { AdminTopBar, EmptyCard, PageGlow, SectionTitle } from '../kit';
 import { periodWord } from '../insights';
 import { FieldErr, FieldLabel, TrashSheet, inputCls } from '../prManage';
 import { Chips, PageTitle } from '../branchFirst';
+import { StickyTools } from '@/admin/kit';
 
 /* ─────────────── model (desktop InventoryCatalog) ─────────────── */
 
@@ -222,8 +223,9 @@ export function InventoryPage() {
           })}
         </div>
 
-        {/* Search */}
-        <div className="relative mt-4">
+        {/* Search (sticks under the header) */}
+        <StickyTools className="mt-2">
+        <div className="relative mb-2">
           <Search size={18} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-muted" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search every service, category or ID" aria-label="Search services" className="min-h-12 w-full rounded-full bg-white pl-11 pr-11 text-[15px] text-ink shadow-sm outline-none ring-1 ring-line focus:ring-2 focus:ring-brand-500" />
           {q && (
@@ -232,6 +234,7 @@ export function InventoryPage() {
             </button>
           )}
         </div>
+        </StickyTools>
 
         {t ? (
           <>

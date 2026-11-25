@@ -23,6 +23,7 @@ import { InitialsAvatar, Sticker } from '@/ui/kit';
 import { ScopeBar, Sheet } from '../ui';
 import { AdminTopBar, EmptyCard, PageGlow } from '../kit';
 import { Chips, Facts, PageTitle } from '../branchFirst';
+import { StickyTools } from '@/admin/kit';
 
 const DAY = 86_400_000;
 const branchName = (id: string | null) => (id ? (getBranch(id)?.name ?? id) : 'Company wide');
@@ -138,7 +139,8 @@ export function AuditPage() {
           <Sticker name="clipboard" size={108} className="absolute right-1 top-4" />
         </div>
 
-        <div className="mt-4">
+        <StickyTools className="mt-2">
+        <div className="mb-2.5">
           <SearchBox
             value={q}
             onChange={(v) => (setQ(v), setShown(40))}
@@ -152,6 +154,7 @@ export function AuditPage() {
           />
         </div>
         <Chips label="Area" value={category} onChange={(v) => (setCategory(v), setShown(40))} options={[{ value: 'all', label: 'All areas' }, ...AUDIT_CATEGORIES.filter((c) => inScope.some((e) => e.category === c)).map((c) => ({ value: c, label: c, count: inScope.filter((e) => e.category === c).length }))]} />
+        </StickyTools>
         <div className="mb-2 flex items-center justify-between gap-2 text-[12.5px] text-muted">
           <span>
             {formatCount(rows.length)} of {formatCount(inScope.length)} entries · newest first
@@ -326,10 +329,12 @@ export function TrashPage() {
           <Fig label="People and catalogue" value={formatCount(inScope.filter((x) => x.kind === 'staff' || x.kind === 'agent' || x.kind === 'service').length)} sub="Staff, PR agents and services" />
         </div>
 
-        <div className="mt-4">
-          <SearchBox value={q} onChange={setQ} placeholder="Search name, type, reason or who deleted it" />
-        </div>
-        <Chips label="Type" value={kind} onChange={setKind} options={[{ value: 'all' as const, label: 'All types', count: inScope.length }, ...(Object.keys(KIND) as TrashItem['kind'][]).map((k) => ({ value: k, label: KIND[k].label, count: inScope.filter((x) => x.kind === k).length }))]} />
+        <StickyTools className="mt-2">
+          <div className="mb-2.5">
+            <SearchBox value={q} onChange={setQ} placeholder="Search name, type, reason or who deleted it" />
+          </div>
+          <Chips label="Type" value={kind} onChange={setKind} options={[{ value: 'all' as const, label: 'All types', count: inScope.length }, ...(Object.keys(KIND) as TrashItem['kind'][]).map((k) => ({ value: k, label: KIND[k].label, count: inScope.filter((x) => x.kind === k).length }))]} />
+        </StickyTools>
 
         {rows.length === 0 ? (
           inScope.length ? (
