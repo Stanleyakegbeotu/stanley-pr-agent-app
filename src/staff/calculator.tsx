@@ -21,6 +21,7 @@ import { onlyName } from '@/ui/fieldRules';
 import { Sheet } from '@/admin/ui';
 import { inputCls } from '@/admin/prManage';
 import { buildItems, groupCategories, meta, type Item } from '@/admin/pages/Inventory';
+import { useBranchItems } from '@/admin/branchCatalogue';
 
 interface Line {
   id: number;
@@ -57,7 +58,8 @@ export function PriceCalculator({ branchId, onClose }: { branchId: string; onClo
   const billing = useBilling();
   const branch = getBranch(branchId)!;
   const money = (n: number) => formatMoney(n, branch.currency);
-  const items = useMemo(() => buildItems(inventory), [inventory]);
+  // The branch's own price list.
+  const items = useBranchItems(branchId);
   const groups = useMemo(() => groupCategories(items, inventory.categoryNames), [items, inventory.categoryNames]);
   const labelOf = (key: string) => groups.find((g) => g.key === key)?.label ?? key;
   const [q, setQ] = useState('');
@@ -72,7 +74,7 @@ export function PriceCalculator({ branchId, onClose }: { branchId: string; onClo
     const byId = new Map(items.map((i) => [i.id, i]));
     return frequentServices(branchId, recent, 24)
       .map((f) => byId.get(f.id))
-      .filter((i): i is Item => !!i && i.price !== null)
+      .filter((i): i is NonNullable<typeof i> => !!i && i.price !== null)
       .slice(0, 8);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [branchId, items, billing.orders]);

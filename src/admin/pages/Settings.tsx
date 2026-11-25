@@ -9,7 +9,7 @@
  * those rows go there.
  */
 import { useState, type ComponentType } from 'react';
-import { Bell, BookOpenText, Building2, ChevronRight, ClipboardCheck, CreditCard, Database, Gauge, Handshake, Info, KeyRound, LayoutDashboard, Package, Palette, Plug, ScrollText, Search, ShieldCheck, Stethoscope, Store, UserRound, UserSquare2, Users, X, type LucideIcon } from 'lucide-react';
+import { Bell, BookOpenText, Building2, Check, ChevronRight, ClipboardCheck, CreditCard, Database, Gauge, Handshake, Info, KeyRound, LayoutDashboard, Package, Palette, Plug, ScrollText, Search, ShieldCheck, Stethoscope, Store, UserRound, UserSquare2, Users, X, type LucideIcon } from 'lucide-react';
 import { useApp as useCompany } from '@company/app/AppState';
 import { useProfile } from '@company/services/settingsStore';
 import { useOrgFacts } from '@company/features/settings/admin/orgData';
@@ -19,6 +19,11 @@ import { AdminTopBar, PageGlow } from '../kit';
 import { PageTitle } from '../branchFirst';
 import * as S from '../settingsSections';
 import { useSignIn } from '../signin';
+import { PERMISSION_GROUPS, can, usePermissions } from '@company/services/permissions';
+import { getBranch } from '@company/data/company';
+import { useStaffChrome } from '@/staff/chrome';
+import { useInBranch, useRight } from '../access';
+import { photoOf } from '../people';
 
 interface Section {
   id: string;
@@ -79,6 +84,8 @@ const ALL = GROUPS.flatMap((g) => g.sections);
 
 function AboutSection() {
   const { user } = useCompany();
+  usePermissions();
+  if (user.role !== 'Company Admin') return <MyAccess />;
   return (
     <>
       <div className="rounded-[22px] bg-linear-to-br from-[#e8f1ff] to-[#cfe2ff] p-4">
@@ -101,7 +108,67 @@ function AboutSection() {
   );
 }
 
+/** Branch roles: what this role can do, straight from Roles and Permissions. */
+function MyAccess() {
+  const { user } = useCompany();
+  usePermissions();
+  const role = user.role as 'Branch Manager' | 'Front Desk';
+  const groups = PERMISSION_GROUPS.map((g) => ({ g, perms: g.perms.filter((p) => !p.adminOnly) })).filter((x) => x.perms.length);
+  return (
+    <>
+      <div className="rounded-[22px] bg-linear-to-br from-[#e8f1ff] to-[#cfe2ff] p-4">
+        <p className="text-[12.5px] text-ink-2">You are</p>
+        <p className="text-[20px] font-bold text-ink">{user.role}</p>
+        <p className="mt-1 text-[13px] leading-snug text-ink-2">{role === 'Branch Manager' ? 'You run your branch: its team, its money, its PR agents and its price list.' : 'You receive patients, bill them and keep the branch records.'} What you can do is set by the Company Admin in Roles and Permissions.</p>
+      </div>
+      <div className="mt-3 space-y-3">
+        {groups.map(({ g, perms }) => (
+          <div key={g.id}>
+            <p className="mb-1.5 px-1 text-[12.5px] font-bold uppercase tracking-[0.06em] text-muted">{g.label}</p>
+            <ul className="divide-y divide-line overflow-hidden rounded-2xl bg-white ring-1 ring-line/70">
+              {perms.map((p) => {
+                const on = can(user.role, p.id);
+                return (
+                  <li key={p.id} className="flex items-start gap-3 px-3.5 py-2.5">
+                    <span className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full ${on ? 'bg-good text-white' : 'bg-page text-faint ring-1 ring-line'}`}>{on ? <Check size={12} strokeWidth={3} /> : <X size={11} strokeWidth={3} />}</span>
+                    <span className="min-w-0">
+                      <b className={`block text-[13.5px] ${on ? 'text-ink' : 'text-muted'}`}>{p.label}</b>
+                      <span className="block text-[12px] text-muted">{p.description}</span>
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+/** My branch: its details; contact and hours editable with "Edit branch details". */
+function MyBranchSection() {
+  const { branchId } = useStaffChrome();
+  const right = useRight();
+  const [open, setOpen] = useState(true);
+  const b = getBranch(branchId);
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)} className="press flex w-full items-center gap-3 rounded-2xl bg-page p-3.5 text-left">
+        <Store size={20} className="text-brand-600" />
+        <span className="min-w-0 flex-1">
+          <b className="block text-[14.5px] text-ink">{b?.name} branch · {b?.code}</b>
+          <span className="block text-[12.5px] text-muted">{right('branch.settings') ? 'Contact details and opening hours (printed on receipts)' : 'View the branch details'}</span>
+        </span>
+        <ChevronRight size={17} className="text-faint" />
+      </button>
+      {open && branchId && <S.BranchSettingsSheet branchId={branchId} limited canEdit={right('branch.settings')} onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+
 const BODY: Record<string, ComponentType<{ go: S.Go }>> = {
+  mybranch: () => <MyBranchSection />,
   overview: ({ go }) => <S.OverviewSection go={go} />,
   profile: () => <S.ProfileSection />,
   about: () => <AboutSection />,
@@ -125,8 +192,26 @@ const BODY: Record<string, ComponentType<{ go: S.Go }>> = {
   system: () => <S.SystemSection />,
 };
 
+/** Branch workspace (owner, 2026-11-25): personal settings, the branch's details, and only what the role allows. */
+const BRANCH_GROUPS = (right: (p: string) => boolean): { label: string; sections: Section[] }[] => [
+  { label: 'My account', sections: ALL.filter((s) => s.id === 'profile' || s.id === 'signin' || s.id === 'about').map((s) => (s.id === 'about' ? { ...s, label: 'My access', hint: 'What your role can do, from Roles and Permissions.' } : s)) },
+  {
+    label: 'My branch',
+    sections: [
+      { id: 'mybranch', label: 'Branch details', icon: Store, tint: 'bg-tint-purple text-violet', hint: 'Address, phone and hours printed on receipts.', keywords: 'branch address phone email hours receipt' },
+      ...ALL.filter((s) => s.id === 'approvals' && right('expenses.approve')),
+    ],
+  },
+  { label: 'This phone', sections: ALL.filter((s) => s.id === 'appearance' || (s.id === 'audit' && right('audit.view'))) },
+];
+
 export function SettingsPage() {
-  const { navigate, user } = useCompany();
+  const { navigate, user, staff } = useCompany();
+  const inBranch = useInBranch();
+  const { branchId } = useStaffChrome();
+  const right = useRight();
+  const groups = inBranch ? BRANCH_GROUPS(right) : GROUPS;
+  const allShown = groups.flatMap((g) => g.sections);
   const facts = useOrgFacts();
   const p = useProfile(user.key);
   const [q, setQ] = useState('');
@@ -140,15 +225,17 @@ export function SettingsPage() {
     company: facts.companyGaps.length ? 1 : 0,
   };
   const go = (id: string) => {
-    const s = ALL.find((x) => x.id === id);
-    if (s?.page) return navigate(s.page);
+    const s = allShown.find((x) => x.id === id) ?? ALL.find((x) => x.id === id);
+    if (s?.page) return navigate(inBranch ? `/branch/${branchId}${s.page}` : s.page);
     setOpen(id);
   };
   const t = q.trim().toLowerCase();
-  const hits = t ? ALL.map((s) => ({ s, n: s.label.toLowerCase().includes(t) ? 0 : s.hint.toLowerCase().includes(t) ? 1 : s.keywords.includes(t) ? 2 : 9 })).filter((x) => x.n < 9).sort((a, b) => a.n - b.n).map((x) => x.s) : [];
-  const cur = open ? ALL.find((s) => s.id === open) : null;
+  const hits = t ? allShown.map((s) => ({ s, n: s.label.toLowerCase().includes(t) ? 0 : s.hint.toLowerCase().includes(t) ? 1 : s.keywords.includes(t) ? 2 : 9 })).filter((x) => x.n < 9).sort((a, b) => a.n - b.n).map((x) => x.s) : [];
+  const cur = open ? (allShown.find((s) => s.id === open) ?? null) : null;
   const Body = open ? BODY[open] : null;
-  const photo = p.photo === undefined ? user.photo : p.photo || undefined;
+  // Staff: their Staff Management photo (team pictures resolve through people.photoOf).
+  const me = staff.find((x) => x.id === user.staffId);
+  const photo = p.photo === undefined ? (me ? photoOf(me) : user.photo) : p.photo || undefined;
 
   const row = (s: Section) => (
     <button key={s.id} type="button" onClick={() => go(s.id)} className="press flex w-full items-center gap-3 px-3.5 py-3 text-left">
@@ -169,7 +256,7 @@ export function SettingsPage() {
       <PageGlow />
       <AdminTopBar />
       <div className="relative">
-        <PageTitle title="Settings" sub="Company configuration · whole organisation" />
+        <PageTitle title="Settings" sub={inBranch ? `Your account and ${getBranch(branchId)?.name ?? ''} branch` : 'Company configuration · whole organisation'} />
 
         <button type="button" onClick={() => go('profile')} className="press relative mb-4 flex w-full items-center gap-3 overflow-hidden rounded-[24px] bg-linear-to-br from-[#1b5fd6] via-[#2b78e8] to-[#5ea6f7] p-4 text-left text-white shadow-[0_14px_30px_rgba(31,99,214,0.25)]">
           <span aria-hidden="true" className="absolute -right-12 -top-16 h-48 w-48 rounded-full bg-white/10" />
@@ -196,7 +283,7 @@ export function SettingsPage() {
         {t ? (
           <div className="overflow-hidden rounded-[22px] bg-white ring-1 ring-line/70 divide-y divide-line">{hits.length ? hits.map(row) : <p className="px-4 py-6 text-center text-[13.5px] text-muted">No setting matches “{q}”.</p>}</div>
         ) : (
-          GROUPS.map((g) => (
+          groups.map((g) => (
             <section key={g.label} className="mb-4">
               <h2 className="mb-2 px-1 text-[12.5px] font-bold uppercase tracking-[0.06em] text-muted">{g.label}</h2>
               <div className="divide-y divide-line overflow-hidden rounded-[22px] bg-white shadow-[0_6px_20px_rgba(30,74,160,0.05)] ring-1 ring-line/70">{g.sections.map(row)}</div>

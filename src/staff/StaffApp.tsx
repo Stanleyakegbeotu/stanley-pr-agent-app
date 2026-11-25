@@ -24,7 +24,12 @@ import { InitialsAvatar } from '@/ui/kit';
 import { AdminShellCtx } from '@/admin/shell';
 import { AdminNotifications, useScopedNotes } from '@/admin/pages/Notifications';
 import { PatientsPage } from '@/admin/pages/Patients';
-import { ComingNext } from '@/admin/pages/ComingNext';
+import { InventoryPage } from '@/admin/pages/Inventory';
+import { PRPage } from '@/admin/pages/PR';
+import { ReportsPage } from '@/admin/pages/Reports';
+import { StaffPage } from '@/admin/pages/Staff';
+import { SettingsPage } from '@/admin/pages/Settings';
+import { AuditPage, TrashPage } from '@/admin/pages/Logs';
 import { photoOf, useTeam } from '@/admin/people';
 import { StaffChromeCtx } from './chrome';
 import { StaffHome, canOpenPage } from './pages/Home';
@@ -49,14 +54,14 @@ const PAGES: StaffPage[] = [
   { id: 'billing', label: 'Billing', icon: ReceiptText, screen: BillingPage },
   { id: 'drafts', label: 'Drafts', icon: FilePenLine, screen: DraftsPage },
   { id: 'records', label: 'Records', icon: FolderOpen, screen: () => <PatientsPage /> },
-  { id: 'inventory', label: 'Inventory', icon: Package, screen: () => <ComingNext title="Inventory" /> },
-  { id: 'pr', label: 'PR Management', icon: Handshake, screen: () => <ComingNext title="PR Management" /> },
-  { id: 'analysis', label: 'Analysis', icon: ChartColumn, screen: () => <ComingNext title="Analysis" /> },
+  { id: 'inventory', label: 'Inventory', icon: Package, screen: InventoryPage },
+  { id: 'pr', label: 'PR Management', icon: Handshake, screen: () => <PRPage /> },
+  { id: 'analysis', label: 'Analysis', icon: ChartColumn, screen: ReportsPage },
   { id: 'expenses', label: 'Expenses', icon: Banknote, screen: ExpensesPage },
-  { id: 'staff', label: 'Staff Management', icon: Users, screen: () => <ComingNext title="Staff Management" /> },
-  { id: 'settings', label: 'Settings', icon: Settings, screen: () => <ComingNext title="Settings" /> },
-  { id: 'audit', label: 'Audit', icon: ScrollText, screen: () => <ComingNext title="Audit" /> },
-  { id: 'trash', label: 'Trash', icon: Trash2, screen: () => <ComingNext title="Trash" /> },
+  { id: 'staff', label: 'Staff Management', icon: Users, screen: () => <StaffPage /> },
+  { id: 'settings', label: 'Settings', icon: Settings, screen: SettingsPage },
+  { id: 'audit', label: 'Audit', icon: ScrollText, screen: AuditPage },
+  { id: 'trash', label: 'Trash', icon: Trash2, screen: TrashPage },
 ];
 const EXTRA: StaffPage[] = [
   { id: 'notifications', label: 'Notifications', icon: LayoutGrid, screen: AdminNotifications },

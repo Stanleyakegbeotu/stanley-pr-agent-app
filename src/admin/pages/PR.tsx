@@ -31,6 +31,7 @@ import { periodWord } from '../insights';
 import { AddAgentSheet, RateSheet } from '../prManage';
 import { PICK_THEME, BranchCrumb, BranchPick, Chips, PageTitle, useBranchFirst } from '../branchFirst';
 import { StickyTools } from '@/admin/kit';
+import { useRight } from '../access';
 
 type Sort = 'agents' | 'referrals' | 'name';
 const PAGE = 12;
@@ -105,6 +106,10 @@ function Workspace({ branchId, crumb }: { branchId: string; crumb: boolean }) {
   const [rate, setRate] = useState(false);
   const [adding, setAdding] = useState(false);
   const [announce, setAnnounce] = useState(false);
+  // Roles and Permissions (owner, 2026-11-25): add and edit agents; see commission.
+  const right = useRight();
+  const canManage = right('referral.manage');
+  const seeMoney = right('referral.commission');
 
   const stat = (h: HospitalEntry) => {
     let referrals = 0;
@@ -136,7 +141,7 @@ function Workspace({ branchId, crumb }: { branchId: string; crumb: boolean }) {
         title="PR Management"
         sub={`${b.name} branch · referral network`}
         action={
-          inScope && (
+          inScope && canManage && (
             <button type="button" onClick={() => setAdding(true)} aria-label="Add PR agent" className="press flex min-h-11 items-center gap-1.5 rounded-full bg-brand-600 pl-3 pr-4 text-[14px] font-semibold text-white shadow-[0_8px_18px_rgba(31,111,232,0.3)]">
               <Plus size={18} /> Add
             </button>
@@ -156,7 +161,7 @@ function Workspace({ branchId, crumb }: { branchId: string; crumb: boolean }) {
               <p className="text-[13px] font-medium text-white/90">Patients referred {when}</p>
               <p className="mt-1 text-[32px] font-bold leading-none tracking-[-0.02em]">{formatCount(totals.referrals)}</p>
               <p className="mt-2 text-[12.5px] leading-snug text-white/90">
-                {formatCount(ranked.length)} of {formatCount(agents.length)} agents referred · {formatMoney(totals.revenue, c, true)} billed · {formatMoney(totals.commission, c, true)} commission
+                {formatCount(ranked.length)} of {formatCount(agents.length)} agents referred · {formatMoney(totals.revenue, c, true)} billed{seeMoney ? ` · ${formatMoney(totals.commission, c, true)} commission` : ''}
               </p>
               <span className="mt-3.5 flex flex-wrap gap-2">
                 <button type="button" onClick={() => setAnnounce(true)} className="press relative z-10 inline-flex min-h-9 items-center gap-1.5 rounded-xl bg-white px-3 text-[13px] font-semibold text-violet shadow-[0_6px_16px_rgba(0,0,0,0.12)]">
@@ -175,7 +180,7 @@ function Workspace({ branchId, crumb }: { branchId: string; crumb: boolean }) {
             <Quick tint="bg-tint-purple border-[#e2d8ff]" sticker="womanHealthWorker" label="PR agents" value={formatCount(agents.length)} sub={`${formatCount(agents.length - unassigned.length)} with a hospital${added ? ` · ${added} added` : ''}`} onClick={() => setList({})} />
             <Quick tint="bg-tint-blue border-[#d6e7ff]" sticker="hospital" label="Partner hospitals" value={formatCount(directory.length)} sub={directory.some((h) => h.notes.length) ? `${directory.filter((h) => h.notes.length).length} codes need review` : 'From agent assignments'} onClick={() => document.getElementById('pr-hospitals')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} />
             <Quick tint="bg-[#fdecec] border-[#f9d4d4]" icon={<UserX size={26} className="text-[#d93036]" />} label="No hospital" value={formatCount(unassigned.length)} sub="Assign them from their profile" onClick={() => setList({ hospital: null })} />
-            <Quick tint="bg-[#eef1ff] border-[#dfe3ff]" icon={<Percent size={26} className="text-[#4f46e5]" strokeWidth={2.4} />} label="Commission rate" value={pct(commission.rate)} sub={rateSummary().replace(/^Company rate [\d.]+%;?\s*/, '') || 'Tap to change'} onClick={() => setRate(true)} />
+            {seeMoney && <Quick tint="bg-[#eef1ff] border-[#dfe3ff]" icon={<Percent size={26} className="text-[#4f46e5]" strokeWidth={2.4} />} label="Commission rate" value={pct(commission.rate)} sub={rateSummary().replace(/^Company rate [\d.]+%;?\s*/, '') || 'Tap to change'} onClick={() => setRate(true)} />}
           </div>
           {edited > 0 && (
             <button type="button" onClick={() => setList({ show: 'edited' })} className="press mt-2.5 flex w-full items-center gap-3 rounded-[18px] bg-[#fff7ec] p-3 text-left ring-1 ring-[#ffe0b8]">
@@ -187,7 +192,7 @@ function Workspace({ branchId, crumb }: { branchId: string; crumb: boolean }) {
             </button>
           )}
 
-          {ranked.length > 0 && <TopAgents title={`Top PR agents ${when}`} agents={ranked} onPick={setFocus} onAll={() => setList({})} action="View all" />}
+          {ranked.length > 0 && <TopAgents money={seeMoney} title={`Top PR agents ${when}`} agents={ranked} onPick={setFocus} onAll={() => setList({})} action="View all" />}
 
           {/* Hospitals */}
           <div id="pr-hospitals" className="scroll-mt-20">

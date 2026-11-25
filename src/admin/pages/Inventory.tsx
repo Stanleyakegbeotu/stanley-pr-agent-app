@@ -13,9 +13,18 @@
  * The legacy catalogue is read only: renames, edits and added services are
  * kept separately (this session until the database exists) and the recorded
  * values always stay visible.
+ *
+ * Company and branch (owner, 2026-11-25): on "All branches" this is the
+ * company's master catalogue. On one branch (and always in the Branch Manager
+ * and Front Desk workspace) it is THAT branch's price list (branchCatalogue):
+ * imported from the company, with its own prices, tests it does not offer and
+ * tests only it does. Editing follows Roles and Permissions ("Edit the
+ * catalogue"). New tests and categories get a picture: automatic, from the
+ * icon library, or a photo (catalogueIcons). The catalogue's own categories
+ * keep their images.
  */
 import { useMemo, useState } from 'react';
-import { BookOpen, ChevronRight, CircleAlert, Pencil, Plus, RotateCcw, Search, Tag, Trash2, Users, X } from 'lucide-react';
+import { BookOpen, ChevronRight, CircleAlert, Image as ImageIcon, Pencil, Plus, RotateCcw, Search, Tag, Trash2, Users, X } from 'lucide-react';
 import { useApp as useCompany } from '@company/app/AppState';
 import { getBranch } from '@company/data/company';
 import { CATALOGUE_CATEGORIES, CATALOGUE_INVENTORY, ITEM_REASSIGN } from '@company/data/catalogueRules';
@@ -35,6 +44,10 @@ import { periodWord } from '../insights';
 import { FieldErr, FieldLabel, TrashSheet, inputCls } from '../prManage';
 import { Chips, PageTitle } from '../branchFirst';
 import { StickyTools } from '@/admin/kit';
+import { useRight } from '../access';
+import { useStaffChrome } from '@/staff/chrome';
+import { AFTER_IMPORT, addBranchService, branchItems, importCompanyCatalogue, setBranchPrice, setOffered, useBranchCatalogue, type BranchItem } from '../branchCatalogue';
+import { Art, IconPicker, autoIcon, categoryIconOf, resolveIcon, serviceIconOf, setCategoryIcon, setServiceIcon, useIcons, type IconChoice } from '../catalogueIcons';
 
 /* ─────────────── model (desktop InventoryCatalog) ─────────────── */
 
@@ -120,7 +133,13 @@ const META: Record<string, { sticker: StickerKey; label: string; tint: string }>
   CARDIOLOGY: { sticker: 'heart', label: 'Cardiology consultation', tint: 'from-[#ffeef2] to-[#ffdbe4]' },
   DNA: { sticker: 'dna', label: 'DNA paternity testing', tint: 'from-[#f3eeff] to-[#e4dbff]' },
 };
-export const meta = (key: string) => META[key] ?? { sticker: 'clipboard' as StickerKey, label: 'Added category', tint: 'from-[#f4f8fe] to-[#e3ebf7]' };
+export const meta = (key: string): { sticker: StickerKey; label: string; tint: string; photo?: string } => {
+  const base = META[key];
+  const chosen = categoryIconOf(key);
+  if (base && !chosen) return base;
+  const r = resolveIcon(chosen, key, base?.sticker);
+  return { sticker: r.sticker, photo: r.photo, label: base?.label ?? 'Added category', tint: base?.tint ?? 'from-[#f4f8fe] to-[#e3ebf7]' };
+};
 const money = (n: number | null, compact = false) => (n === null ? 'No price' : formatMoney(n, 'NGN', compact));
 const rangeText = (g: Pick<Group, 'min' | 'max'>) => (g.min === null ? 'No price on file' : g.min === g.max ? money(g.min, true) : `${money(g.min, true)} to ${money(g.max, true)}`);
 const MAIN_MIN = 3;
@@ -134,9 +153,16 @@ const SMART: Record<Smart, { label: string; test: (i: Item) => boolean; note: st
 
 function useCatalogue() {
   const { inventory, context, period } = useCompany();
-  const items = useMemo(() => buildItems(inventory), [inventory]);
+  useIcons();
+  const locked = useStaffChrome().branchId;
+  const branchId = locked || (context === 'all' ? null : context);
+  const bc = useBranchCatalogue(branchId ?? '');
+  const company = useMemo(() => buildItems(inventory), [inventory]);
+  const all = useMemo<BranchItem[]>(() => (branchId ? branchItems(company, bc, true) : company.map((i) => ({ ...i, companyPrice: i.price, branchPrice: false, branchOnly: false, off: false }))), [branchId, company, bc]);
+  const items = useMemo(() => all.filter((i) => !i.off), [all]);
+  const offItems = useMemo(() => all.filter((i) => i.off), [all]);
   const groups = useMemo(() => groupCategories(items, inventory.categoryNames), [items, inventory.categoryNames]);
-  const ids = useMemo(() => (context === 'all' ? resolveBranchIds('all') : [context]), [context]);
+  const ids = useMemo(() => (branchId ? [branchId] : resolveBranchIds('all')), [branchId]);
   const range = resolveRange(period);
   const activity = useMemo(() => {
     const map: Activity = new Map();
@@ -144,14 +170,17 @@ function useCatalogue() {
     return map;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ids.join(','), range.from.getTime(), range.to.getTime()]);
-  return { items, groups, ids, activity, period, inventory };
+  return { items, all, offItems, groups, ids, activity, period, inventory, branchId, bc };
 }
 
 /* ─────────────── page ─────────────── */
 
 export function InventoryPage() {
-  const { items, groups, ids, activity, period } = useCatalogue();
+  const { items, groups, ids, activity, period, branchId, bc, offItems } = useCatalogue();
   const { context } = useCompany();
+  const right = useRight();
+  const canEdit = right('services.edit');
+  const [offOpen, setOffOpen] = useState(false);
   const [q, setQ] = useState('');
   const [sort, setSort] = useState<'size' | 'name' | 'performed' | 'price'>('size');
   const [cat, setCat] = useState<string | null>(null);
@@ -177,14 +206,16 @@ export function InventoryPage() {
       <div className="relative">
         <PageTitle
           title="Inventory"
-          sub={`Service catalogue · ${scopeText}`}
+          sub={branchId ? `Price list · ${scopeText}` : `Company catalogue · ${scopeText}`}
           action={
-            <button type="button" onClick={() => setAdding('')} aria-label="Add service" className="press flex min-h-11 items-center gap-1.5 rounded-full bg-brand-600 pl-3 pr-4 text-[14px] font-semibold text-white shadow-[0_8px_18px_rgba(31,111,232,0.3)]">
+            canEdit && (!branchId || bc.imported || bc.added.length >= 0) && <button type="button" onClick={() => setAdding('')} aria-label="Add service" className="press flex min-h-11 items-center gap-1.5 rounded-full bg-brand-600 pl-3 pr-4 text-[14px] font-semibold text-white shadow-[0_8px_18px_rgba(31,111,232,0.3)]">
               <Plus size={18} /> Add
             </button>
           }
         />
         <ScopeBar />
+
+        {branchId && <BranchListCard branchId={branchId} canEdit={canEdit} offCount={offItems.length} onOff={() => setOffOpen(true)} />}
 
         {/* Hero */}
         <div className="relative overflow-hidden rounded-[24px] bg-linear-to-br from-[#0c7f86] via-[#139aa0] to-[#4cc5bd] p-5 text-white shadow-[0_14px_34px_rgba(12,127,134,0.25)]">
@@ -271,7 +302,7 @@ export function InventoryPage() {
                 const n = performed(g);
                 return (
                   <button key={g.key} type="button" onClick={() => setCat(g.key)} className={`press relative flex min-h-[176px] min-w-0 flex-col items-start overflow-hidden rounded-[22px] bg-linear-to-br p-3.5 text-left ring-1 ring-white ${m.tint}`}>
-                    <Sticker name={m.sticker} size={46} />
+                    <Art photo={m.photo} sticker={m.sticker} size={46} />
                     <span className="mt-2 w-full truncate text-[15.5px] font-bold text-ink">{g.label}</span>
                     <span className="w-full truncate text-[11.5px] text-ink-2">{g.label === g.key ? m.label : g.key}</span>
                     <span className="mt-auto pt-2 text-[22px] font-bold leading-none text-ink">{formatCount(g.items.length)}</span>
@@ -296,7 +327,7 @@ export function InventoryPage() {
                     return (
                       <button key={g.key} type="button" onClick={() => setCat(g.key)} className="press flex w-full items-center gap-3 rounded-[18px] bg-white p-3 text-left ring-1 ring-line/70">
                         <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-linear-to-br ${m.tint}`}>
-                          <Sticker name={m.sticker} size={30} />
+                          <Art photo={m.photo} sticker={m.sticker} size={30} />
                         </span>
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-[14.5px] font-semibold text-ink">{g.label}</span>
@@ -315,23 +346,27 @@ export function InventoryPage() {
             )}
           </>
         )}
-        <p className="mt-6 text-[12px] leading-relaxed text-muted">Prices are in NGN, as in the legacy catalogue, which is read only. Renames, edits and added services are kept separately and the recorded values stay visible. They last for this session until the database is connected.</p>
+        <p className="mt-6 text-[12px] leading-relaxed text-muted">{branchId ? 'Prices are this branch’s own. Changing one here never changes the company price or other branches.' : 'Prices are in NGN, as in the legacy catalogue, which is read only. Renames, edits and added services are kept separately and the recorded values stay visible.'}</p>
       </div>
 
       {cat && <CategorySheet gkey={cat} ids={ids} onClose={() => setCat(null)} onAdd={(k) => setAdding(k)} />}
+      {offOpen && <OffSheet onClose={() => setOffOpen(false)} />}
       {smart && <SmartSheet smart={smart} ids={ids} onClose={() => setSmart(null)} />}
       {svc != null && <ServiceSheet id={svc} ids={ids} onClose={() => setSvc(null)} />}
-      {adding !== null && <AddServiceSheet category={adding} onClose={() => setAdding(null)} onAdded={(id) => setSvc(id)} />}
+      {adding !== null && <AddServiceSheet category={adding} branchId={branchId} onClose={() => setAdding(null)} onAdded={(id) => setSvc(id)} />}
     </div>
   );
 }
 
 function ServiceLine({ i, act, label, onClick }: { i: Item; act?: { count: number; revenue: number }; label?: string; onClick: () => void }) {
-  const m = meta(i.category);
+  const cm = meta(i.category);
+  const own = serviceIconOf(i.id);
+  const m = own ? { ...cm, ...resolveIcon(own, i.name, cm.sticker) } : cm;
+  const b = i as Partial<BranchItem>;
   return (
     <button type="button" onClick={onClick} className="press flex w-full items-start gap-3 rounded-[18px] bg-white p-3 text-left ring-1 ring-line/70">
       <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-linear-to-br ${m.tint}`}>
-        <Sticker name={m.sticker} size={28} />
+        <Art photo={m.photo} sticker={m.sticker} size={28} />
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex items-start justify-between gap-2">
@@ -342,10 +377,12 @@ function ServiceLine({ i, act, label, onClick }: { i: Item; act?: { count: numbe
           {label ?? i.category} · #{i.id}
           {act ? ` · ×${formatCount(act.count)} · ${money(act.revenue, true)} billed` : ''}
         </span>
-        {(i.edited || i.source === 'user' || i.note || i.owner) && (
+        {(i.edited || i.source === 'user' || i.note || i.owner || b.branchPrice || b.branchOnly) && (
           <span className="mt-1 flex flex-wrap gap-1.5">
+            {b.branchPrice && <span className="rounded-full bg-[#fff1de] px-2 py-0.5 text-[11px] font-semibold text-[#b45309]">Branch price · company {money(b.companyPrice ?? null)}</span>}
+            {b.branchOnly && <span className="rounded-full bg-[#efe9ff] px-2 py-0.5 text-[11px] font-semibold text-violet">This branch only</span>}
             {i.edited && <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-semibold text-brand-700">Edited</span>}
-            {i.source === 'user' && <span className="rounded-full bg-tint-green px-2 py-0.5 text-[11px] font-semibold text-good-ink">Added in STANLEY</span>}
+            {i.source === 'user' && !b.branchOnly && <span className="rounded-full bg-tint-green px-2 py-0.5 text-[11px] font-semibold text-good-ink">Added in STANLEY</span>}
             {i.owner && <span className="rounded-full bg-tint-purple px-2 py-0.5 text-[11px] font-semibold text-violet">Added by the owner</span>}
             {i.note && <span className="rounded-full bg-[#fdecec] px-2 py-0.5 text-[11px] font-semibold text-[#b42318]">Needs review</span>}
           </span>
@@ -375,7 +412,11 @@ function CategorySheet({ gkey, ids, onClose, onAdd }: { gkey: string; ids: strin
   const [sort, setSort] = useState<'order' | 'performed' | 'name' | 'priceDesc' | 'priceAsc'>('order');
   const [svc, setSvc] = useState<number | null>(null);
   const [rename, setRename] = useState(false);
+  const [picture, setPicture] = useState(false);
   const [shown, setShown] = useState(40);
+  const right = useRight();
+  const { branchId } = useCatalogue();
+  const canEdit = right('services.edit');
   if (!g) return null;
   const m = meta(g.key);
   const t = q.trim().toLowerCase();
@@ -394,14 +435,23 @@ function CategorySheet({ gkey, ids, onClose, onAdd }: { gkey: string; ids: strin
       tall
       search={{ value: q, onChange: setQ, placeholder: `Search ${g.label}` }}
       footer={
-        <div className="flex gap-2">
-          <button type="button" onClick={() => setRename(true)} className="press flex min-h-12 items-center gap-1.5 rounded-2xl bg-page px-4 text-[14.5px] font-semibold text-ink-2 ring-1 ring-line">
-            <Pencil size={16} /> Rename
-          </button>
-          <button type="button" onClick={() => onAdd(g.key)} className="press flex min-h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-brand-600 text-[15px] font-semibold text-white">
-            <Plus size={18} /> Add service here
-          </button>
-        </div>
+        canEdit ? (
+          <div className="flex gap-2">
+            {!branchId && (
+              <button type="button" onClick={() => setRename(true)} className="press flex min-h-12 items-center gap-1.5 rounded-2xl bg-page px-4 text-[14.5px] font-semibold text-ink-2 ring-1 ring-line">
+                <Pencil size={16} /> Rename
+              </button>
+            )}
+            {!branchId && (
+              <button type="button" onClick={() => setPicture(true)} aria-label="Change the category picture" className="press grid min-h-12 w-12 place-items-center rounded-2xl bg-page text-ink-2 ring-1 ring-line">
+                <ImageIcon size={18} />
+              </button>
+            )}
+            <button type="button" onClick={() => onAdd(g.key)} className="press flex min-h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-brand-600 text-[15px] font-semibold text-white">
+              <Plus size={18} /> {branchId ? 'Add a test here' : 'Add service here'}
+            </button>
+          </div>
+        ) : undefined
       }
     >
       <div className={`relative mb-3 overflow-hidden rounded-[22px] bg-linear-to-br p-4 ${m.tint}`}>
@@ -412,7 +462,9 @@ function CategorySheet({ gkey, ids, onClose, onAdd }: { gkey: string; ids: strin
           {formatCount(g.priced)} priced{g.noPrice ? ` · ${formatCount(g.noPrice)} without a price` : ''}
         </p>
         <p className="mt-1 max-w-[70%] text-[12px] text-ink-2/85">{n ? `Done ${formatCount(n)} times ${periodWord(period)}, ${money(rev, true)} billed.` : `Not done ${periodWord(period)}.`}</p>
-        <Sticker name={m.sticker} size={84} className="absolute -bottom-1 right-1" />
+        <span className="absolute -bottom-1 right-1">
+          <Art photo={m.photo} sticker={m.sticker} size={84} />
+        </span>
       </div>
       <Chips
         label="Show"
@@ -455,6 +507,7 @@ function CategorySheet({ gkey, ids, onClose, onAdd }: { gkey: string; ids: strin
       )}
       {svc != null && <ServiceSheet id={svc} ids={ids} onClose={() => setSvc(null)} />}
       {rename && <RenameSheet g={g} onClose={() => setRename(false)} />}
+      {picture && <PictureSheet title={`Picture for ${g.label}`} text={g.label} value={categoryIconOf(g.key) ?? { kind: 'auto' }} onSave={(c) => setCategoryIcon(g.key, c)} onClose={() => setPicture(false)} />}
     </Sheet>
   );
 }
@@ -487,16 +540,24 @@ function SmartSheet({ smart, ids, onClose }: { smart: Smart; ids: string[]; onCl
 /* ─────────────── a service ─────────────── */
 
 function ServiceSheet({ id, ids, onClose }: { id: number; ids: string[]; onClose: () => void }) {
-  const { items, groups, activity, period } = useCatalogue();
+  const { all, groups, activity, period, branchId } = useCatalogue();
+  const items = all;
   const { revertService, moveServiceToTrash } = useCompany();
   const { showToast } = useNav();
+  const right = useRight();
+  const canEdit = right('services.edit');
   const [edit, setEdit] = useState(false);
+  const [bprice, setBprice] = useState(false);
+  const [picture, setPicture] = useState(false);
   const [trash, setTrash] = useState(false);
   const [focus, setFocus] = useState<Focus | null>(null);
   const i = items.find((x) => x.id === id);
   if (!i) return null;
   const g = groups.find((x) => x.key === i.category);
-  const m = meta(i.category);
+  const cm = meta(i.category);
+  const own = serviceIconOf(i.id);
+  const m = own ? { ...cm, ...resolveIcon(own, i.name, cm.sticker) } : cm;
+  const b = i as BranchItem;
   const act = activity.get(i.id);
   const guide = guideFor(i.name, i.category);
   return (
@@ -507,16 +568,38 @@ function ServiceSheet({ id, ids, onClose }: { id: number; ids: string[]; onClose
       onClose={onClose}
       tall
       footer={
-        <div className="flex gap-2">
-          {i.source === 'user' && (
-            <button type="button" onClick={() => setTrash(true)} aria-label="Move to trash" className="press grid min-h-12 w-12 place-items-center rounded-2xl bg-[#fdecec] text-[#b42318]">
-              <Trash2 size={19} />
+        !canEdit ? undefined : branchId ? (
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setOffered(branchId, i, b.off);
+                showToast(b.off ? `${i.name} is offered again at this branch` : `${i.name} is no longer offered at this branch`);
+                if (!b.off) onClose();
+              }}
+              className={`press flex min-h-12 items-center gap-1.5 rounded-2xl px-3.5 text-[14px] font-semibold ring-1 ${b.off ? 'bg-tint-green text-good-ink ring-[#bfe9d0]' : 'bg-page text-ink-2 ring-line'}`}
+            >
+              {b.off ? 'Offer again' : 'Not offered here'}
             </button>
-          )}
-          <button type="button" onClick={() => setEdit(true)} className="press flex min-h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-brand-600 text-[15px] font-semibold text-white">
-            <Pencil size={17} /> Edit name or price
-          </button>
-        </div>
+            <button type="button" onClick={() => setBprice(true)} className="press flex min-h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-brand-600 text-[15px] font-semibold text-white">
+              <Tag size={17} /> Branch price
+            </button>
+          </div>
+        ) : (
+          <div className="flex gap-2">
+            {i.source === 'user' && (
+              <button type="button" onClick={() => setTrash(true)} aria-label="Move to trash" className="press grid min-h-12 w-12 place-items-center rounded-2xl bg-[#fdecec] text-[#b42318]">
+                <Trash2 size={19} />
+              </button>
+            )}
+            <button type="button" onClick={() => setPicture(true)} aria-label="Change the picture" className="press grid min-h-12 w-12 place-items-center rounded-2xl bg-page text-ink-2 ring-1 ring-line">
+              <ImageIcon size={18} />
+            </button>
+            <button type="button" onClick={() => setEdit(true)} className="press flex min-h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-brand-600 text-[15px] font-semibold text-white">
+              <Pencil size={17} /> Edit name or price
+            </button>
+          </div>
+        )
       }
     >
       <div className={`relative mb-3 overflow-hidden rounded-[22px] bg-linear-to-br p-4 ${m.tint}`}>
@@ -525,10 +608,15 @@ function ServiceSheet({ id, ids, onClose }: { id: number; ids: string[]; onClose
         <p className="mt-0.5 max-w-[68%] text-[12.5px] text-ink-2">{act ? `Done ${formatCount(act.count)} times ${periodWord(period)} · ${money(act.revenue, true)} billed` : `Not done ${periodWord(period)}`}</p>
         <span className="mt-2 flex max-w-[68%] flex-wrap gap-1.5">
           {i.edited && <span className="rounded-full bg-white/85 px-2 py-0.5 text-[11px] font-semibold text-brand-700">Edited</span>}
-          {i.source === 'user' && <span className="rounded-full bg-white/85 px-2 py-0.5 text-[11px] font-semibold text-good-ink">Added in STANLEY</span>}
+          {i.source === 'user' && !b.branchOnly && <span className="rounded-full bg-white/85 px-2 py-0.5 text-[11px] font-semibold text-good-ink">Added in STANLEY</span>}
+          {b.branchPrice && <span className="rounded-full bg-white/85 px-2 py-0.5 text-[11px] font-semibold text-[#b45309]">Branch price · company {money(b.companyPrice)}</span>}
+          {b.branchOnly && <span className="rounded-full bg-white/85 px-2 py-0.5 text-[11px] font-semibold text-violet">This branch only</span>}
+          {b.off && <span className="rounded-full bg-white/85 px-2 py-0.5 text-[11px] font-semibold text-[#b42318]">Not offered here</span>}
           {i.owner && <span className="rounded-full bg-white/85 px-2 py-0.5 text-[11px] font-semibold text-violet">Added by the owner</span>}
         </span>
-        <Sticker name={m.sticker} size={88} className="absolute -bottom-1 right-1" />
+        <span className="absolute -bottom-1 right-1">
+          <Art photo={m.photo} sticker={m.sticker} size={88} />
+        </span>
       </div>
 
       <button type="button" onClick={() => setFocus({ kind: 'service', id: i.id, name: i.name })} className="press mb-3 flex w-full items-center gap-3 rounded-[18px] bg-white p-3.5 text-left ring-1 ring-line/70">
@@ -606,6 +694,8 @@ function ServiceSheet({ id, ids, onClose }: { id: number; ids: string[]; onClose
 
       {focus && <FocusSheet focus={focus} branchIds={ids} period={period} onClose={() => setFocus(null)} />}
       {edit && <EditServiceSheet item={i} onClose={() => setEdit(false)} />}
+      {bprice && branchId && <BranchPriceSheet branchId={branchId} item={b} onClose={() => setBprice(false)} />}
+      {picture && <PictureSheet title={`Picture for ${i.name}`} text={`${i.name} ${i.category}`} value={serviceIconOf(i.id) ?? { kind: 'auto' }} onSave={(c) => setServiceIcon(i.id, c)} onClose={() => setPicture(false)} />}
       {trash && (
         <TrashSheet
           name={i.name}
@@ -743,8 +833,10 @@ function RenameSheet({ g, onClose }: { g: Group; onClose: () => void }) {
   );
 }
 
-function AddServiceSheet({ category: initial, onClose, onAdded }: { category: string; onClose: () => void; onAdded?: (id: number) => void }) {
+function AddServiceSheet({ category: initial, branchId, onClose, onAdded }: { category: string; branchId?: string | null; onClose: () => void; onAdded?: (id: number) => void }) {
   const { addService, inventory } = useCompany();
+  const [pic, setPic] = useState<IconChoice>({ kind: 'auto' });
+  const [catPic, setCatPic] = useState<IconChoice>({ kind: 'auto' });
   const { showToast } = useNav();
   const [name, setName] = useState('');
   const [category, setCategory] = useState(initial);
@@ -766,7 +858,7 @@ function AddServiceSheet({ category: initial, onClose, onAdded }: { category: st
   return (
     <Sheet
       title={name.trim() ? `Add ${name.trim()}` : 'Add a diagnostic service'}
-      subtitle="A billable service, stored separately from the legacy catalogue"
+      subtitle={branchId ? 'A test only this branch does. The company catalogue is not changed.' : 'A billable service, stored separately from the legacy catalogue'}
       onClose={onClose}
       tall
       footer={
@@ -775,9 +867,20 @@ function AddServiceSheet({ category: initial, onClose, onAdded }: { category: st
           onClick={() => {
             setTried(true);
             if (Object.values(errs).some(Boolean)) return;
-            const rec = addService({ name: name.trim(), category: category.trim().toUpperCase(), price: value, turnaround: turnaround.trim() || undefined, sample: sample.trim() || undefined, notes: notes.trim() || undefined });
-            showToast(`${rec.name} added to ${rec.category} at ${formatMoney(rec.price, 'NGN')} (this session)`);
-            onAdded?.(rec.id);
+            const cat = category.trim().toUpperCase();
+            const isNewCat = !options.some((o) => o.key === cat);
+            let id: number;
+            if (branchId) {
+              id = addBranchService(branchId, { name: name.trim(), category: cat, price: value });
+              showToast(`${name.trim()} added to this branch at ${formatMoney(value, 'NGN')}`);
+            } else {
+              const rec = addService({ name: name.trim(), category: cat, price: value, turnaround: turnaround.trim() || undefined, sample: sample.trim() || undefined, notes: notes.trim() || undefined });
+              id = rec.id;
+              showToast(`${rec.name} added to ${rec.category} at ${formatMoney(rec.price, 'NGN')}`);
+            }
+            if (pic.kind !== 'auto' && !(pic.kind === 'photo' && !pic.src)) setServiceIcon(id, pic);
+            if (isNewCat && catPic.kind !== 'auto' && !(catPic.kind === 'photo' && !catPic.src)) setCategoryIcon(cat, catPic);
+            onAdded?.(id);
             onClose();
           }}
           className="press min-h-12 w-full rounded-2xl bg-brand-600 text-[15px] font-semibold text-white"
@@ -788,10 +891,13 @@ function AddServiceSheet({ category: initial, onClose, onAdded }: { category: st
     >
       <div className="space-y-4 px-1 pb-2">
         <div className="flex items-center gap-3 rounded-[20px] bg-linear-to-br from-[#e6f8ee] to-[#cfeedd] p-3.5">
-          <Sticker name={meta(category.toUpperCase()).sticker} size={44} />
+          {(() => {
+            const r = pic.kind === 'auto' ? { sticker: autoIcon(`${name} ${category}`) } : resolveIcon(pic, name);
+            return <Art photo={'photo' in r ? r.photo : undefined} sticker={r.sticker} size={44} />;
+          })()}
           <div className="min-w-0 text-[13px] text-ink-2">
             <p>
-              Service ID <b className="text-ink">#{nextServiceId(inventory.added)}</b> · {category ? category.toUpperCase() : 'no category yet'}
+              {branchId ? 'This branch only' : <>Service ID <b className="text-ink">#{nextServiceId(inventory.added)}</b></>} · {category ? category.toUpperCase() : 'no category yet'}
             </p>
             <p>{validPrice ? formatMoney(value, 'NGN') : 'Price not set'} · prices are in NGN</p>
           </div>
@@ -824,6 +930,12 @@ function AddServiceSheet({ category: initial, onClose, onAdded }: { category: st
           <input value={price} onChange={(e) => setPrice(e.target.value.replace(/[^\d.,]/g, ''))} placeholder="For example 25,000" inputMode="decimal" className={inputCls(tried ? errs.price : null)} />
           <FieldErr msg={tried ? errs.price : null} />
         </label>
+        {category.trim() && !options.some((o) => o.key === category.trim().toUpperCase()) && (
+          <div className="rounded-2xl bg-[#faf7ff] p-3 ring-1 ring-[#e4dbff]">
+            <IconPicker title={`Picture for the new category ${category.trim().toUpperCase()}`} text={category} value={catPic} onChange={setCatPic} />
+          </div>
+        )}
+        <IconPicker title="Picture for this test" text={`${name} ${category}`} value={pic} onChange={setPic} />
         <label className="block">
           <FieldLabel label="Turnaround" optional />
           <input value={turnaround} onChange={(e) => setTurnaround(e.target.value)} placeholder="For example same day, 48 hours" className={inputCls()} />
@@ -834,6 +946,169 @@ function AddServiceSheet({ category: initial, onClose, onAdded }: { category: st
         </label>
         <LongText label="Notes" optional value={notes} onChange={setNotes} max={400} placeholder={"For example: patient should fast for 8 hours.\nKeep the sample cold."} hint="Preparation or handling notes for staff." />
         <p className="text-[12px] text-muted">New services are kept for this session until the database is connected.</p>
+      </div>
+    </Sheet>
+  );
+}
+
+
+/* ─────────────── branch price list ─────────────── */
+
+/** The branch's list: imported from the company (with what to check), or empty with Import. */
+function BranchListCard({ branchId, canEdit, offCount, onOff }: { branchId: string; canEdit: boolean; offCount: number; onOff: () => void }) {
+  const { user, inventory } = useCompany();
+  const { showToast } = useNav();
+  const bc = useBranchCatalogue(branchId);
+  const [guide, setGuide] = useState(false);
+  const branch = getBranch(branchId);
+  const companyCount = useMemo(() => buildItems(inventory).length, [inventory]);
+  const changed = Object.keys(bc.prices).length;
+  if (!bc.imported)
+    return (
+      <div className="mb-3 rounded-[22px] bg-linear-to-br from-[#fff9ec] to-[#ffefcc] p-4 ring-1 ring-[#f6e1b3]">
+        <div className="flex items-start gap-3">
+          <Sticker name="books" size={48} />
+          <span className="min-w-0 flex-1">
+            <b className="block text-[16px] text-ink">{branch?.name} has no price list yet</b>
+            <span className="block text-[13px] leading-snug text-[#7a4a00]">Import the company inventory ({formatCount(companyCount)} tests with their categories and prices), then change what is different here. Or add this branch’s tests one by one.</span>
+          </span>
+        </div>
+        {canEdit && (
+          <button
+            type="button"
+            onClick={() => {
+              importCompanyCatalogue(branchId, branch?.name ?? branchId, user.name);
+              showToast('Company inventory imported. Check the prices for this branch next.');
+              setGuide(true);
+            }}
+            className="press mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-brand-600 text-[15px] font-semibold text-white"
+          >
+            Import the company inventory
+          </button>
+        )}
+        <p className="mt-2 text-[12px] text-[#7a4a00]">PR agents and hospitals are never imported: each branch has its own.</p>
+        {guide && <AfterImportSheet onClose={() => setGuide(false)} />}
+      </div>
+    );
+  return (
+    <div className="mb-3 rounded-[22px] bg-white p-3.5 ring-1 ring-line/70">
+      <div className="flex items-start gap-3">
+        <Sticker name="books" size={40} />
+        <span className="min-w-0 flex-1">
+          <b className="block text-[14.5px] text-ink">{branch?.name} branch price list</b>
+          <span className="block text-[12.5px] leading-snug text-muted">
+            {bc.importedAt ? `Imported from the company on ${new Date(bc.importedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}${bc.importedBy ? ` by ${bc.importedBy}` : ''}` : 'Uses the company inventory'} · {formatCount(changed)} branch price{changed === 1 ? '' : 's'} · {formatCount(bc.added.length)} branch only
+          </span>
+        </span>
+      </div>
+      <div className="mt-2.5 flex flex-wrap gap-2">
+        <button type="button" onClick={() => setGuide(true)} className="press rounded-full bg-brand-50 px-3 py-1.5 text-[12.5px] font-semibold text-brand-700">
+          What to check
+        </button>
+        <button type="button" disabled={!offCount} onClick={onOff} className="press rounded-full bg-page px-3 py-1.5 text-[12.5px] font-semibold text-ink-2 ring-1 ring-line disabled:opacity-50">
+          Not offered here · {formatCount(offCount)}
+        </button>
+      </div>
+      {guide && <AfterImportSheet onClose={() => setGuide(false)} />}
+    </div>
+  );
+}
+
+function AfterImportSheet({ onClose }: { onClose: () => void }) {
+  return (
+    <Sheet back title="After importing" subtitle="Make the company list this branch’s own" onClose={onClose}>
+      <ol className="space-y-2.5 px-1 pb-3">
+        {AFTER_IMPORT.map((t, i) => (
+          <li key={i} className="flex gap-3 rounded-2xl bg-page p-3">
+            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-brand-600 text-[13px] font-bold text-white">{i + 1}</span>
+            <span className="text-[13.5px] leading-snug text-ink">{t}</span>
+          </li>
+        ))}
+      </ol>
+    </Sheet>
+  );
+}
+
+function OffSheet({ onClose }: { onClose: () => void }) {
+  const { offItems, groups, ids } = useCatalogue();
+  const [svc, setSvc] = useState<number | null>(null);
+  return (
+    <Sheet back title="Not offered here" subtitle={`${formatCount(offItems.length)} tests hidden from this branch’s billing`} onClose={onClose} tall>
+      <ul className="space-y-2 px-1 pb-3">
+        {offItems.map((i) => (
+          <li key={i.id}>
+            <ServiceLine i={i} label={groups.find((g) => g.key === i.category)?.label ?? i.category} onClick={() => setSvc(i.id)} />
+          </li>
+        ))}
+      </ul>
+      {svc != null && <ServiceSheet id={svc} ids={ids} onClose={() => setSvc(null)} />}
+    </Sheet>
+  );
+}
+
+function BranchPriceSheet({ branchId, item, onClose }: { branchId: string; item: BranchItem; onClose: () => void }) {
+  const { showToast } = useNav();
+  const [price, setPrice] = useState(item.price === null ? '' : String(item.price));
+  const [tried, setTried] = useState(false);
+  const value = price.trim() === '' ? null : Number(price.replace(/,/g, ''));
+  const err = value !== null && !(Number.isFinite(value) && value > 0) ? 'Enter a price greater than 0, or leave it blank.' : null;
+  const save = (v: number | null) => {
+    setBranchPrice(branchId, item, v, item.branchOnly ? item.price : item.companyPrice);
+    showToast(`${item.name}: ${v === null ? 'no price' : money(v)} at this branch`);
+    onClose();
+  };
+  return (
+    <Sheet
+      back
+      title={`Price at ${getBranch(branchId)?.name ?? 'this branch'}`}
+      subtitle={item.name}
+      onClose={onClose}
+      footer={
+        <div className="flex gap-2">
+          {item.branchPrice && (
+            <button type="button" onClick={() => save(item.companyPrice)} className="press min-h-12 rounded-2xl bg-page px-4 text-[14px] font-semibold text-ink-2 ring-1 ring-line">
+              Use company price
+            </button>
+          )}
+          <button type="button" onClick={() => (setTried(true), !err && save(value))} className="press min-h-12 flex-1 rounded-2xl bg-brand-600 text-[15px] font-semibold text-white">
+            Save branch price
+          </button>
+        </div>
+      }
+    >
+      <div className="space-y-3 px-1 pb-2">
+        <label className="block">
+          <FieldLabel label="Price at this branch (NGN)" />
+          <input value={price} onChange={(e) => setPrice(e.target.value.replace(/[^\d.,]/g, ''))} placeholder="No price" inputMode="decimal" className={inputCls(tried ? err : null)} />
+          <FieldErr msg={tried ? err : null} />
+        </label>
+        {!item.branchOnly && (
+          <p className="rounded-2xl bg-page px-3.5 py-2.5 text-[13px] text-ink-2">
+            Company price: <b className="text-ink">{money(item.companyPrice)}</b>. Changing it here only affects this branch; other branches and the company list stay the same.
+          </p>
+        )}
+      </div>
+    </Sheet>
+  );
+}
+
+function PictureSheet({ title, text, value, onSave, onClose }: { title: string; text: string; value: IconChoice; onSave: (c: IconChoice) => void; onClose: () => void }) {
+  const { showToast } = useNav();
+  const [c, setC] = useState<IconChoice>(value);
+  return (
+    <Sheet
+      back
+      title={title}
+      subtitle="Automatic, an icon from the library, or a photo"
+      onClose={onClose}
+      footer={
+        <button type="button" disabled={c.kind === 'photo' && !c.src} onClick={() => (onSave(c), showToast('Picture saved'), onClose())} className="press min-h-12 w-full rounded-2xl bg-brand-600 text-[15px] font-semibold text-white disabled:opacity-40">
+          Save picture
+        </button>
+      }
+    >
+      <div className="px-1 pb-2">
+        <IconPicker title="Picture" text={text} value={c} onChange={setC} />
       </div>
     </Sheet>
   );

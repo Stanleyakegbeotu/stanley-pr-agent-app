@@ -33,10 +33,13 @@ import { useNav } from '@/app/store';
 import { Sticker } from '@/ui/kit';
 import { BarList, ScopeBar, Sheet } from '../ui';
 import { FocusSheet, type Focus } from '../details';
-import { AdminTopBar, PageGlow, SectionTitle } from '../kit';
+import { AdminTopBar, EmptyCard, PageGlow, SectionTitle } from '../kit';
 import { CountUp, Donut, LineChart, Spark, useSeen } from '../charts';
 import { useAgentBanks } from '../agentBanks';
 import { Chips, PageTitle } from '../branchFirst';
+import { maxDaysFor, reportsFor, reportsLocked } from '@company/features/reports/access';
+import { usePermissions } from '@company/services/permissions';
+import { useInBranch } from '../access';
 
 const BRAND = '#1f6fe8';
 const BRAND_INK = '#1449a6';
@@ -45,7 +48,15 @@ const SHORT: Partial<Record<PeriodSelection['key'], string>> = { today: 'Today',
 const rangeText = (r: DateRange) => (r.days <= 1 ? `${formatShortDate(r.from)} ${r.from.getFullYear()}` : `${formatShortDate(r.from)} to ${formatShortDate(r.to)} ${r.to.getFullYear()}`);
 
 export function ReportsPage() {
-  const { context } = useCompany();
+  const { context, user } = useCompany();
+  usePermissions();
+  // Branch roles (owner, 2026-11-25): the same page as "Analysis", with the reports their role may create (desktop access rules),
+  // never net profit, and one month at a time unless they have "Yearly analysis".
+  const inBranch = useInBranch();
+  const admin = user.role === 'Company Admin';
+  const list = admin ? REPORTS : reportsFor(user.role);
+  const locked = admin ? [] : reportsLocked(user.role);
+  const long = admin || maxDaysFor(user.role) === undefined;
   const ids = useMemo(() => (context === 'all' ? ACTIVE_BRANCHES.map((b) => b.id) : [context]), [context]);
   const scopeLabel = context === 'all' ? 'All branches' : `${getBranch(context)?.name ?? ''} branch`;
   const [open, setOpen] = useState<ReportSpec | null>(null);
@@ -54,26 +65,32 @@ export function ReportsPage() {
       <PageGlow />
       <AdminTopBar />
       <div className="relative">
-        <PageTitle title="Reports" sub={`Reports and exports · ${scopeLabel}`} />
-        <ScopeBar branchOnly />
-        <Analysis ids={ids} />
+        <PageTitle title={inBranch ? 'Analysis' : 'Reports'} sub={`${inBranch ? 'Figures and reports' : 'Reports and exports'} · ${scopeLabel}`} />
+        {!inBranch && <ScopeBar branchOnly />}
+        <Analysis ids={ids} profit={admin} long={long} />
 
         <SectionTitle title="Choose a report" />
         <p className="-mt-1 mb-3 text-[13px] text-muted">Create report lets you choose the period, branch and content, then preview it before printing, downloading or exporting.</p>
         <div className="grid grid-cols-2 gap-3">
-          {REPORTS.map((r, i) => (
-            <ReportCard key={r.id} i={i} spec={r} onCreate={() => setOpen(r)} />
+          {list.map((r, i) => (
+            <ReportCard key={r.id} i={REPORTS.findIndex((x) => x.id === r.id)} spec={r} onCreate={() => setOpen(r)} />
           ))}
         </div>
+        {!list.length && <EmptyCard sticker="chart" text="Your role does not create reports. Ask the Branch Manager for one." />}
+        {locked.length > 0 && (
+          <p className="mt-3 rounded-2xl bg-page px-3.5 py-3 text-[12.5px] leading-snug text-muted">
+            Kept for the Branch Manager: {locked.map((l) => (l.partial ? `part of ${l.spec.title}` : l.spec.title)).join(', ')}.
+          </p>
+        )}
       </div>
-      {open && <BuilderSheet spec={open} initialBranch={context === 'all' ? 'all' : context} onClose={() => setOpen(null)} />}
+      {open && <BuilderSheet spec={open} initialBranch={context === 'all' ? 'all' : context} lockBranch={inBranch} long={long} onClose={() => setOpen(null)} />}
     </div>
   );
 }
 
 /* ─────────────── analysis ─────────────── */
 
-function Analysis({ ids }: { ids: string[] }) {
+function Analysis({ ids, profit = true, long = true }: { ids: string[]; /** Net profit (Company Admin only). */ profit?: boolean; /** Periods longer than a month. */ long?: boolean }) {
   const { version } = useCommission();
   const [key, setKey] = useState<PeriodSelection['key']>('month');
   const [focus, setFocus] = useState<Focus | null>(null);
@@ -90,7 +107,7 @@ function Analysis({ ids }: { ids: string[] }) {
   }, [ids.join('|'), range, prior, version]);
   const glance = useMemo(
     () =>
-      (['today', 'week', 'month', 'year'] as const).map((k) => {
+      (long ? (['today', 'week', 'month', 'year'] as const) : (['today', 'week', 'month'] as const)).map((k) => {
         const r = resolveRange({ key: k });
         return { key: k, value: summarize(ids, r).payments.NGN ?? 0, sub: rangeText(r) };
       }),
@@ -118,7 +135,7 @@ function Analysis({ ids }: { ids: string[] }) {
         <span aria-hidden="true" className="absolute -bottom-28 -left-16 h-64 w-64 rounded-full bg-black/10" />
         <Sticker name="moneyBag" size={60} className="absolute right-4 top-[68px] drop-shadow-[0_10px_18px_rgba(0,0,0,0.25)]" />
         <div className="relative flex gap-1 rounded-full bg-white/15 p-1 ring-1 ring-white/20 backdrop-blur-sm" role="group" aria-label="Analysis period" style={{ width: 'fit-content' }}>
-          {(['today', 'yesterday', 'week', 'month', 'year'] as const).map((k) => (
+          {(long ? (['today', 'yesterday', 'week', 'month', 'year'] as const) : (['today', 'yesterday', 'week', 'month'] as const)).map((k) => (
             <button key={k} type="button" aria-pressed={key === k} onClick={() => setKey(k)} className={`press min-h-8 rounded-full px-2.5 text-[12px] font-semibold ${key === k ? 'bg-white text-brand-700 shadow' : 'text-white/90'}`}>
               {k === 'today' ? 'Today' : k === 'yesterday' ? 'Yest.' : k === 'week' ? 'Week' : k === 'month' ? 'Month' : 'Year'}
             </button>
@@ -144,7 +161,7 @@ function Analysis({ ids }: { ids: string[] }) {
           {[
             { l: 'Billed', v: naira(s.revenue.NGN ?? 0, true) },
             { l: 'Costs', v: naira(fin.costs, true) },
-            { l: loss ? 'Net loss' : 'Net profit', v: naira(Math.abs(fin.net), true), hot: true },
+            profit ? { l: loss ? 'Net loss' : 'Net profit', v: naira(Math.abs(fin.net), true), hot: true } : { l: 'Money in', v: naira(fin.income, true), hot: false },
           ].map((x) => (
             <span key={x.l} className={`min-w-0 rounded-2xl px-2.5 py-2 ring-1 backdrop-blur-sm ${x.hot ? (loss ? 'bg-[#ff6b6b]/25 ring-[#ffb4b4]/40' : 'bg-[#34d07f]/25 ring-[#9cf0c4]/40') : 'bg-white/15 ring-white/20'}`}>
               <span className="block truncate text-[11px] text-white/85">{x.l}</span>
@@ -192,10 +209,10 @@ function Analysis({ ids }: { ids: string[] }) {
           format={(n) => naira(n, true)}
           parts={[
             { label: 'Costs', value: fin.costs, color: '#f27a1a', sub: 'expenses and PR commission' },
-            ...(fin.net > 0 ? [{ label: 'Net profit', value: fin.net, color: '#16a34a', sub: 'admin only' }] : []),
+            ...(fin.net > 0 && profit ? [{ label: 'Net profit', value: fin.net, color: '#16a34a', sub: 'admin only' }] : fin.net > 0 ? [{ label: 'Left after costs', value: fin.net, color: '#16a34a', sub: 'money in less costs' }] : []),
           ]}
         />
-        {loss && <p className="mt-2 rounded-2xl bg-[#fdecec] px-3 py-2 text-[12.5px] font-medium text-[#b42318]">Costs were {naira(-fin.net, true)} more than the money received.</p>}
+        {loss && profit && <p className="mt-2 rounded-2xl bg-[#fdecec] px-3 py-2 text-[12.5px] font-medium text-[#b42318]">Costs were {naira(-fin.net, true)} more than the money received.</p>}
       </Section>
       {methodTotal > 0 && (
         <Section icon={<CreditCard size={18} />} tint="bg-tint-orange text-orange" title="Payment methods" note="How patients paid in this period">
@@ -388,7 +405,7 @@ async function printPages(doc: ReturnType<ReportSpec['build']>, pages: Page[], p
   w.print();
 }
 
-function BuilderSheet({ spec, initialBranch, onClose }: { spec: ReportSpec; initialBranch: string; onClose: () => void }) {
+function BuilderSheet({ spec, initialBranch, onClose, lockBranch = false, long = true }: { spec: ReportSpec; initialBranch: string; onClose: () => void; /** Branch workspace: its own branch only. */ lockBranch?: boolean; /** Periods longer than a month. */ long?: boolean }) {
   const { agents: raw, user } = useCompany();
   const { showToast } = useNav();
   const banks = useAgentBanks();
@@ -538,7 +555,7 @@ function BuilderSheet({ spec, initialBranch, onClose }: { spec: ReportSpec; init
               ) : (
                 <>
                   <div className="flex flex-wrap gap-2">
-                    {PRESETS.map((p) => (
+                    {PRESETS.filter((p) => long || p.id !== 'year').map((p) => (
                       <Pill key={p.id} on={preset === p.id} label={p.label} onClick={() => setPreset(p.id)} />
                     ))}
                   </div>
@@ -567,6 +584,11 @@ function BuilderSheet({ spec, initialBranch, onClose }: { spec: ReportSpec; init
 
       {step === 1 && (
         <div className="space-y-4 px-1 pb-2">
+          {lockBranch ? (
+            <p className="rounded-2xl bg-page px-3.5 py-2.5 text-[13.5px] text-ink-2">
+              Branch: <b className="text-ink">{getBranch(branch)?.name ?? branch} branch</b>
+            </p>
+          ) : (
           <div>
             <p className="mb-2 text-[14px] font-semibold text-ink">Branch</p>
             <div className="flex flex-wrap gap-2">
@@ -576,6 +598,7 @@ function BuilderSheet({ spec, initialBranch, onClose }: { spec: ReportSpec; init
               ))}
             </div>
           </div>
+          )}
           {selectDefs.map((sd) => (
             <div key={sd.id}>
               <p className="text-[14px] font-semibold text-ink">{sd.label}</p>

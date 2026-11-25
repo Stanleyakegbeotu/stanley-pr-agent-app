@@ -38,6 +38,7 @@ import { hasPhone, hospitalKey } from '@company/data/legacy';
 import { BASELINE_AGENTS } from '@company/data/userRecords';
 import { onlyName } from '@/ui/fieldRules';
 import { copyText } from '@/ui/privacy';
+import { useChatLink, useRight } from './access';
 
 const ALL_TIME: DateRange = { from: DATA_START, to: TODAY, days: diffDays(DATA_START, TODAY) + 1 };
 /** PR agents belong to the branch their referrals go to (the legacy branch until agents carry a branch). */
@@ -48,6 +49,7 @@ const firstName = (n: string) => n.replace(/^(dr\.?|mr\.?|mrs\.?|ms\.?|miss|barr
 /* ─────────────── every PR agent of a branch ─────────────── */
 
 export function AgentsSheet({ branchId, period, onClose, hospital, initialShow = 'all', canAdd }: { branchId: string; period: PeriodSelection; onClose: () => void; /** A hospital code, null for agents with no hospital, or all agents. */ hospital?: string | null; initialShow?: 'all' | 'active' | 'quiet' | 'nophone' | 'edited'; canAdd?: boolean }) {
+  const seeMoney = useRight()('referral.commission');
   const { agents: everyone, agentEdits } = useCompany();
   const [adding, setAdding] = useState(false);
   const agents = hospital === undefined ? everyone : everyone.filter((a) => hospitalKey(a.hospital) === (hospital ?? ''));
@@ -120,7 +122,7 @@ export function AgentsSheet({ branchId, period, onClose, hospital, initialShow =
                 <span className="min-w-0 flex-1">
                   <span className="flex items-start justify-between gap-2">
                     <span className="truncate text-[14.5px] font-semibold text-ink">{a.name}</span>
-                    {s && <span className="shrink-0 text-[14px] font-bold text-violet">{formatMoney(s.commission[s.branch.currency] ?? 0, s.branch.currency, true)}</span>}
+                    {s && seeMoney && <span className="shrink-0 text-[14px] font-bold text-violet">{formatMoney(s.commission[s.branch.currency] ?? 0, s.branch.currency, true)}</span>}
                   </span>
                   <span className="block truncate text-[12.5px] text-muted">
                     {hospitalOf(a.hospital)}
@@ -189,7 +191,11 @@ export function AgentProfileSheet({ id, branchIds, period, onClose }: { id: numb
   const rows = visits.map((v) => visitRow(v, ctx, { amountNote: `${formatMoney(commissionOn(v.billed, id), c)} commission` })).filter((r) => !t || r.text.includes(t));
   const mineSent = sent.filter((a) => (a.audience.kind === 'agent' && a.audience.agentId === id) || (a.audience.kind === 'agents' && a.audience.agents.some((x) => x.id === id))).slice(0, 3);
   const copy = (text: string, what: string) => copyText(text, what, showToast);
-  const chat = () => navigate(`/messages/${agentConvId(id)}`);
+  const chatLink = useChatLink();
+  const chat = () => navigate(chatLink.agent(id));
+  const right = useRight();
+  const canManage = right('referral.manage');
+  const seeMoney = right('referral.commission');
   return (
     <Sheet
       back
@@ -260,8 +266,8 @@ export function AgentProfileSheet({ id, branchIds, period, onClose }: { id: numb
       <div className="mb-3 grid grid-cols-2 gap-2">
         <Figure label="Patients referred" value={formatCount(visits.length)} sub={`${formatCount(life?.referrals ?? 0)} since records began`} />
         <Figure label="Billed for their patients" value={formatMoney(billed, c, true)} sub={`${formatMoney(life?.revenue[c] ?? 0, c, true)} since records began`} />
-        <Figure label="Commission" value={formatMoney(commission, c)} sub={`${formatMoney(life?.commission[c] ?? 0, c, true)} since records began`} strong />
-        <Figure label="Commission rate" value={pct(rateFor(id))} sub={agentRate(id) !== undefined ? "This agent's own rate" : 'Company rate'} onClick={found ? () => setEditing(true) : undefined} />
+        {seeMoney && <Figure label="Commission" value={formatMoney(commission, c)} sub={`${formatMoney(life?.commission[c] ?? 0, c, true)} since records began`} strong />}
+        {seeMoney && <Figure label="Commission rate" value={pct(rateFor(id))} sub={agentRate(id) !== undefined ? "This agent's own rate" : 'Company rate'} onClick={found && canManage ? () => setEditing(true) : undefined} />}
       </div>
 
       {/* Contact and account */}
@@ -271,7 +277,8 @@ export function AgentProfileSheet({ id, branchIds, period, onClose }: { id: numb
         <InfoRow icon={<Building2 size={16} />} label="Branch" value={branch ? `${branch.name} · ${branch.code}` : 'Not assigned'} />
       </div>
 
-      {/* Account details (for monthly payouts) */}
+      {/* Account details (for monthly payouts): Commission and payouts right only. */}
+      {seeMoney && (
       <div className="mb-3 overflow-hidden rounded-[20px] bg-white ring-1 ring-line/70">
         <div className="flex items-center justify-between gap-2 bg-linear-to-r from-[#e6f8ee] to-[#d4f1e2] px-3.5 py-2.5">
           <span className="flex items-center gap-2 text-[13.5px] font-bold text-good-ink">
@@ -298,8 +305,10 @@ export function AgentProfileSheet({ id, branchIds, period, onClose }: { id: numb
         )}
       </div>
 
+      )}
+
       {/* Manage (desktop: Edit profile, Restore recorded details, Move to trash) */}
-      {found && (
+      {found && canManage && (
         <div className="mb-3 flex flex-wrap gap-2">
           <button type="button" onClick={() => setEditing(true)} className="press flex min-h-10 items-center gap-1.5 rounded-full bg-white px-3.5 text-[13.5px] font-semibold text-brand-700 ring-1 ring-line">
             <Pencil size={15} /> Edit profile

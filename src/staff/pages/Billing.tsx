@@ -78,6 +78,7 @@ import { useStaffChrome } from '../chrome';
 import { ReceiptPanel, methodLabel } from '../receipt';
 import { IncomingEntry, findIncoming, useIncoming, type Incoming } from '../incoming';
 import { QUOTE_KEY, type QuoteHandOver } from '../calculator';
+import { useBranchItems } from '@/admin/branchCatalogue';
 
 type Step = 1 | 2 | 3;
 const STEPS = ['Patient', 'Services', 'Payment', 'Preview'] as const;
@@ -903,7 +904,8 @@ function HospitalPick({ value, agentHospital, onPick, onClose }: { value: string
 function ServicesStep({ s, set, errs, branchId }: StepProps) {
   const { inventory, user } = useCompany();
   const billing = useBilling();
-  const items = useMemo(() => buildItems(inventory), [inventory]);
+  // The branch's own price list (imported from the company, with its prices and tests).
+  const items = useBranchItems(branchId);
   const groups = useMemo(() => groupCategories(items, inventory.categoryNames), [items, inventory.categoryNames]);
   const [q, setQ] = useState('');
   const [cat, setCat] = useState<string | null>(null);
@@ -918,7 +920,7 @@ function ServicesStep({ s, set, errs, branchId }: StepProps) {
     const byId = new Map(items.map((i) => [i.id, i]));
     return frequentServices(branchId, recent, 24)
       .map((f) => byId.get(f.id))
-      .filter((i): i is Item => !!i && i.price !== null)
+      .filter((i): i is NonNullable<typeof i> => !!i && i.price !== null)
       .slice(0, 10);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [branchId, items, billing.orders]);

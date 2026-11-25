@@ -11,7 +11,7 @@ import { AgentAvatar } from './agentPhotos';
 
 const CARD = 'press flex w-full items-start gap-3.5 rounded-[20px] bg-white p-3 text-left shadow-[0_6px_20px_rgba(30,74,160,0.07)] ring-1 ring-line/70';
 
-export function TopAgents({ title = 'Top PR Agents', agents, onPick, onAll, action = 'See all' }: { title?: string; agents: AgentRank[]; onPick: (f: Focus) => void; onAll: () => void; action?: string }) {
+export function TopAgents({ title = 'Top PR Agents', agents, onPick, onAll, action = 'See all' , money = true }: { title?: string; agents: AgentRank[]; onPick: (f: Focus) => void; onAll: () => void; action?: string ; /** Commission figures (Commission and payouts right). */ money?: boolean }) {
   return (
     <>
       <SectionTitle title={title} action={action} onAction={onAll} />
@@ -29,9 +29,9 @@ export function TopAgents({ title = 'Top PR Agents', agents, onPick, onAll, acti
                 <span className="min-w-0 flex-1">
                   <span className="flex items-start justify-between gap-2">
                     <span className="truncate text-[15px] font-bold text-ink">{a.name}</span>
-                    <span className="shrink-0 text-[14.5px] font-bold text-violet">{formatMoney(a.commission[a.branch.currency] ?? 0, a.branch.currency)}</span>
+                    {money && <span className="shrink-0 text-[14.5px] font-bold text-violet">{formatMoney(a.commission[a.branch.currency] ?? 0, a.branch.currency)}</span>}
                   </span>
-                  <span className="block truncate text-[12.5px] text-muted">{a.hospitalKey || 'No hospital assigned'} · commission</span>
+                  <span className="block truncate text-[12.5px] text-muted">{a.hospitalKey || 'No hospital assigned'}{money ? ' · commission' : ''}</span>
                   <span className="mt-1.5 flex flex-wrap gap-1.5">
                     <Tag tone="bg-brand-50 text-brand-700">{`${formatCount(a.referrals)} patient${a.referrals === 1 ? '' : 's'}`}</Tag>
                     <Tag tone="bg-page text-ink-2">{formatMoney(a.revenue[a.branch.currency] ?? 0, a.branch.currency, true)} billed</Tag>

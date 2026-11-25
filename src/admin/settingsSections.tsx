@@ -413,7 +413,7 @@ const STATUS_MOVES: Record<BranchStatus, { to: BranchStatus; label: string; dang
   Inactive: [{ to: 'Active', label: 'Reactivate' }],
 };
 
-function BranchSettingsSheet({ branchId, onClose }: { branchId: string; onClose: () => void }) {
+export function BranchSettingsSheet({ branchId, onClose, limited = false, canEdit = true }: { branchId: string; onClose: () => void; /** Branch workspace: no branch page link, payment methods or status. */ limited?: boolean; /** May change contact and hours (Edit branch details). */ canEdit?: boolean }) {
   useBranches();
   const { user, navigate } = useCompany();
   const { showToast } = useNav();
@@ -440,7 +440,7 @@ function BranchSettingsSheet({ branchId, onClose }: { branchId: string; onClose:
   };
   return (
     <Sheet back title={b.name} subtitle={`${b.code} · ${b.status}`} onClose={onClose} tall>
-      <LinkRow label="Open the branch page" sub="Figures, team, PR agents and the front desk rota" onClick={() => navigate(`/branches/${branchId}`)} />
+      {!limited && <LinkRow label="Open the branch page" sub="Figures, team, PR agents and the front desk rota" onClick={() => navigate(`/branches/${branchId}`)} />}
       <Panel title="Branch identity" note={branchId === LEGACY_BRANCH_ID ? "The Abuja branch's name and codes come from the legacy records and can't be changed." : 'The Patient ID code locks once IDs have been issued with it.'}>
         <Facts
           rows={[
@@ -452,6 +452,11 @@ function BranchSettingsSheet({ branchId, onClose }: { branchId: string; onClose:
           ]}
         />
       </Panel>
+      {!canEdit ? (
+        <Panel title="Contact and hours" note="Printed on this branch's receipts. Ask the Branch Manager or the Company Admin to change them.">
+          <Facts rows={[{ label: 'Address', value: address || 'Not on record' }, { label: 'Phone', value: phone || 'Not on record' }, { label: 'Email', value: email || 'Not on record' }]} />
+        </Panel>
+      ) : (
       <Panel title="Contact and hours" note="Printed on this branch's receipts and quotes.">
         <div className="space-y-3">
           <LongText label="Address" value={address} onChange={setAddress} max={240} placeholder={"Street, building and area\nLandmark, city"} hint="Printed on this branch's receipts. Press Enter for a new line." />
@@ -478,6 +483,9 @@ function BranchSettingsSheet({ branchId, onClose }: { branchId: string; onClose:
           </button>
         </div>
       </Panel>
+      )}
+      {!limited && (
+      <>
       <Panel title="Payment methods at this branch" note={mode === 'inherit' ? 'Follows the company default. Change one below to give this branch its own set.' : 'This branch has its own set.'}>
         <div className="space-y-2">
           {PAYMENT_METHODS.map((m) => (
@@ -515,6 +523,8 @@ function BranchSettingsSheet({ branchId, onClose }: { branchId: string; onClose:
           </ol>
         )}
       </Panel>
+      </>
+      )}
       {move && (
         <Sheet
           back

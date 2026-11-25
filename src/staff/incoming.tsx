@@ -21,7 +21,7 @@
  * sees it on their request. The referral ID can be copied.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, BadgeCheck, Check, ChevronRight, Clock3, Copy, FilePlus2, Hash, ListChecks, MessageCircle, Mic, Pause, Phone, Play, Search, Siren, Stethoscope } from 'lucide-react';
+import { ArrowRight, BadgeCheck, CalendarDays, Check, ChevronRight, Clock3, Copy, FilePlus2, Hash, ListChecks, MessageCircle, Mic, Pause, Phone, Play, Search, Siren, Stethoscope } from 'lucide-react';
 import { useApp as useCompany } from '@company/app/AppState';
 import { getBranch } from '@company/data/company';
 import { addDays, isoDate } from '@company/data/demo/generator';
@@ -42,6 +42,7 @@ import { copyText } from '@/ui/privacy';
 import { LongText } from '@/admin/fields';
 import { FieldErr, FieldLabel, inputCls } from '@/admin/prManage';
 import { branchUpdateText, setBranchUpdate, useBranchUpdates, type BranchUpdate, type BranchUpdateKind } from '@/domain/referralStatus';
+import { branchItems, catalogueOf, useBranchCatalogue } from '@/admin/branchCatalogue';
 
 export type Urgency = 'Routine' | 'Urgent' | 'Emergency';
 export type IncomingStatus = 'waiting' | 'billing' | 'attended' | BranchUpdateKind;
@@ -132,22 +133,25 @@ export function useIncomingMany(branchIds: string[]): Incoming[] {
   }, []);
   const minute = Math.floor(now.getTime() / 60_000);
   const key = branchIds.join(',');
-  const items = useMemo(() => buildItems(inventory), [inventory]);
+  const catalogues = useBranchCatalogue(branchIds[0] ?? '');
+  const company = useMemo(() => buildItems(inventory), [inventory]);
+  const items = company;
   const labels = useMemo(() => new Map(groupCategories(items, inventory.categoryNames).map((g) => [g.key, g.label])), [items, inventory.categoryNames]);
   const pools = useMemo(() => {
-    const byId = new Map(items.map((i) => [i.id, i]));
     const range = resolveRange({ key: 'custom', from: isoDate(addDays(new Date(), -59)), to: isoDate(new Date()) });
     return new Map(
       branchIds.map((id) => {
+        const list = branchItems(company, catalogueOf(id));
+        const byId = new Map(list.map((i) => [i.id, i]));
         const ranked = serviceRanking([id], range)
           .map((r) => byId.get(r.id))
-          .filter((i): i is Item => !!i && i.price !== null)
+          .filter((i): i is NonNullable<typeof i> => !!i && i.price !== null)
           .slice(0, 60);
-        return [id, ranked.length ? ranked : items.filter((i) => i.price !== null).slice(0, 60)] as const;
+        return [id, ranked.length ? ranked : list.filter((i) => i.price !== null).slice(0, 60)] as const;
       }),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, items]);
+  }, [key, company, catalogues]);
 
   const base = useMemo(() => {
     const out: Omit<Incoming, 'status' | 'attended' | 'draftId'>[] = [];
@@ -716,8 +720,25 @@ export function ReferralHistory({ branchIds, onClose, onStart, onResume, admin }
   const [filter, setFilter] = useState<'all' | 'open' | 'attended' | 'not'>('all');
   const [open, setOpen] = useState<string | null>(null);
   const [shownWeeks, setShownWeeks] = useState(4);
+  // Date filter (owner, 2026-11-25): any dates, a quick period, or from and to.
+  const [when, setWhen] = useState<'any' | 'week' | 'last' | 'month' | '4w' | 'custom'>('any');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const bounds = useMemo((): [number, number] => {
+    const now = new Date();
+    const day0 = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const wk = weekStart().getTime();
+    if (when === 'week') return [wk, Infinity];
+    if (when === 'last') return [wk - 7 * DAY, wk];
+    if (when === 'month') return [new Date(now.getFullYear(), now.getMonth(), 1).getTime(), Infinity];
+    if (when === '4w') return [day0 - 27 * DAY, Infinity];
+    if (when === 'custom') return [from ? new Date(`${from}T00:00:00`).getTime() : -Infinity, to ? new Date(`${to}T00:00:00`).getTime() + DAY : Infinity];
+    return [-Infinity, Infinity];
+  }, [when, from, to]);
   const t = q.trim().toLowerCase();
   const pass = (r: Incoming) =>
+    r.sentAt.getTime() >= bounds[0] &&
+    r.sentAt.getTime() < bounds[1] &&
     (filter === 'all' || (filter === 'open' && isOpen(r)) || (filter === 'attended' && r.status === 'attended') || (filter === 'not' && (r.status === 'no_show' || r.status === 'cancelled'))) &&
     (!t || [r.patient.name, r.patient.phone, r.id, r.agentName, r.hospital, getBranch(r.branchId)?.name ?? ''].join(' ').toLowerCase().includes(t));
   const weeks = useMemo(() => {
@@ -748,7 +769,36 @@ export function ReferralHistory({ branchIds, onClose, onStart, onResume, admin }
             </button>
           ))}
         </div>
-        {weeks.slice(0, t ? weeks.length : shownWeeks).map(([w, rows]) => {
+        <div className="-mx-1 mb-3 flex gap-2 overflow-x-auto px-1 pb-0.5" role="group" aria-label="Dates">
+          {(
+            [
+              ['any', 'Any date'],
+              ['week', 'This week'],
+              ['last', 'Last week'],
+              ['month', 'This month'],
+              ['4w', 'Last 4 weeks'],
+              ['custom', 'Choose dates'],
+            ] as const
+          ).map(([k, l]) => (
+            <button key={k} type="button" aria-pressed={when === k} onClick={() => setWhen(k)} className={`press flex min-h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-semibold ${when === k ? 'bg-ink text-white' : 'bg-white text-ink-2 ring-1 ring-line'}`}>
+              {k === 'custom' && <CalendarDays size={14} />}
+              {l}
+            </button>
+          ))}
+        </div>
+        {when === 'custom' && (
+          <div className="drop-down mb-3 grid grid-cols-2 gap-2">
+            <label className="min-w-0">
+              <span className="mb-1 block text-[12.5px] text-muted">From</span>
+              <input type="date" value={from} max={to || isoDate(new Date())} onChange={(e) => setFrom(e.target.value)} className={inputCls()} />
+            </label>
+            <label className="min-w-0">
+              <span className="mb-1 block text-[12.5px] text-muted">To</span>
+              <input type="date" value={to} min={from || undefined} max={isoDate(new Date())} onChange={(e) => setTo(e.target.value)} className={inputCls()} />
+            </label>
+          </div>
+        )}
+        {weeks.slice(0, t || when !== 'any' ? weeks.length : shownWeeks).map(([w, rows]) => {
           const shown = rows.filter(pass);
           if (!shown.length) return null;
           const att = rows.filter((r) => r.status === 'attended').length;
@@ -777,7 +827,7 @@ export function ReferralHistory({ branchIds, onClose, onStart, onResume, admin }
             </section>
           );
         })}
-        {!t && shownWeeks < weeks.length && (
+        {!t && when === 'any' && shownWeeks < weeks.length && (
           <button type="button" onClick={() => setShownWeeks((n) => n + 4)} className="press min-h-12 w-full rounded-2xl bg-white text-[14px] font-semibold text-brand-600 ring-1 ring-line">
             Show earlier weeks
           </button>

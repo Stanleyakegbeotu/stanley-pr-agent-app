@@ -14,10 +14,14 @@ import type { Branch, PeriodSelection } from '@company/data/types';
 import type { StickerKey } from '@/assets';
 import { Sticker } from '@/ui/kit';
 import { PeriodChoices, Sheet, periodText } from './ui';
+import { useStaffChrome } from '@/staff/chrome';
 
 /** The branch this page is about: the scope's branch, else the one in the address. */
 export function useBranchFirst(sub?: string): { branch: Branch | null; fromScope: boolean } {
+  // Branch workspace: always its own branch, never a choice.
+  const locked = useStaffChrome().branchId;
   const { context } = useCompany();
+  if (locked) return { branch: getBranch(locked) ?? null, fromScope: true };
   if (context !== 'all') return { branch: getBranch(context) ?? null, fromScope: true };
   const b = sub ? getBranch(sub) : undefined;
   return { branch: b ?? null, fromScope: false };

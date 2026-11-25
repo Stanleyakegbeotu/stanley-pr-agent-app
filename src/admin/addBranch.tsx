@@ -29,6 +29,8 @@ import { Sticker } from '@/ui/kit';
 import { Sheet } from './ui';
 import { LongText } from './fields';
 import { emailProblem, onlyEmail, onlyName, onlyPhone } from '@/ui/fieldRules';
+import { AFTER_IMPORT, setupBranchCatalogue } from './branchCatalogue';
+import { buildItems } from './pages/Inventory';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const PHONE_RE = /^\+?[\d\s()-]{7,20}$/;
@@ -125,6 +127,10 @@ export function AddBranchSheet({ onClose }: { onClose: () => void }) {
   const [payMode, setPayMode] = useState<'inherit' | 'custom'>('inherit');
   const [methods, setMethods] = useState<Record<PaymentMethod, boolean>>({ ...cfg.payments.enabled });
   const [pick, setPick] = useState<'country' | 'region' | 'city' | null>(null);
+  // Inventory (owner, 2026-11-25): import the company catalogue and tailor it, or start empty.
+  const [inv, setInv] = useState<'import' | 'empty'>('import');
+  const { inventory } = useCompany();
+  const companyCount = useMemo(() => buildItems(inventory).length, [inventory]);
   const [tried, setTried] = useState(false);
 
   const c = GEO_COUNTRIES.find((x) => x.code === country) ?? GEO_COUNTRIES[0]!;
@@ -153,6 +159,7 @@ export function AddBranchSheet({ onClose }: { onClose: () => void }) {
     { label: 'Location', done: !errs.region && !errs.city && !errs.address },
     { label: 'Contact', done: !errs.phone && !errs.email },
     { label: 'Setup', done: !errs.pay },
+    { label: 'Inventory', done: true },
   ];
   const show = (k: keyof typeof errs) => (tried && errs[k] ? <span className="mt-1 block text-[12.5px] font-medium text-[#d93036]">{errs[k]}</span> : null);
 
@@ -164,7 +171,8 @@ export function AddBranchSheet({ onClose }: { onClose: () => void }) {
     updateBranchContact(b.id, { address: address.trim(), phone });
     updateBranchProfile(b.id, { email: email.trim(), hours: hours.trim() });
     if (payMode === 'custom') setBranchPayments(b.id, methods, user.name);
-    showToast(`${b.name} branch created. Pending setup until you activate it`);
+    setupBranchCatalogue(b.id, b.name, inv, user.name);
+    showToast(inv === 'import' ? `${b.name} branch created with the company inventory. Check its prices in Inventory` : `${b.name} branch created. Add its tests in Inventory`);
     onClose();
     navigate(`/branches/${b.id}`);
   };
@@ -183,7 +191,7 @@ export function AddBranchSheet({ onClose }: { onClose: () => void }) {
     >
       <div className="px-1 pb-3">
         {/* Progress */}
-        <div className="mb-3 grid grid-cols-4 gap-1.5">
+        <div className="mb-3 grid grid-cols-5 gap-1.5">
           {steps.map((s) => (
             <span key={s.label} className="min-w-0">
               <span className={`block h-1.5 rounded-full ${s.done ? 'bg-good' : 'bg-line'}`} />
@@ -322,6 +330,33 @@ export function AddBranchSheet({ onClose }: { onClose: () => void }) {
           </Label>
         </Section>
 
+        <Section title="Inventory" sticker="books">
+          <div className="grid grid-cols-2 gap-2">
+            {(
+              [
+                ['import', 'Import the company inventory', `${companyCount.toLocaleString('en-NG')} tests with their categories and prices. Then change what is different here.`],
+                ['empty', 'Start empty', 'Add this branch’s tests one by one. You can import later.'],
+              ] as const
+            ).map(([k, t, d]) => (
+              <button key={k} type="button" onClick={() => setInv(k)} aria-pressed={inv === k} className={`press rounded-2xl border p-3 text-left ${inv === k ? 'border-brand-500 bg-brand-50 ring-4 ring-brand-100' : 'border-line bg-white'}`}>
+                <span className={`block text-[14px] font-semibold ${inv === k ? 'text-brand-700' : 'text-ink'}`}>{t}</span>
+                <span className="mt-0.5 block text-[11.5px] leading-snug text-muted">{d}</span>
+              </button>
+            ))}
+          </div>
+          {inv === 'import' && (
+            <div className="mt-2 rounded-2xl bg-[#fff9ec] p-3 ring-1 ring-[#f6e1b3]">
+              <p className="text-[13px] font-semibold text-[#7a4a00]">After importing, check these in the branch’s Inventory:</p>
+              <ul className="mt-1.5 list-disc space-y-1 pl-4 text-[12.5px] leading-snug text-[#7a4a00]">
+                {AFTER_IMPORT.map((t) => (
+                  <li key={t}>{t}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <p className="mt-2 rounded-2xl bg-page px-3 py-2.5 text-[12.5px] text-ink-2">PR agents and hospitals are not imported. Every branch has its own, added in PR Management.</p>
+        </Section>
+
         {tried && firstErr && <p className="rounded-2xl bg-[#fdecec] px-4 py-3 text-[13px] font-medium text-[#b42318]">Check the highlighted fields: {firstErr}</p>}
         <p className="mt-3 px-1 text-[12px] leading-relaxed text-muted">Nothing is invented for a new branch. Its figures start at zero, and the service catalogue and prices are company-wide.</p>
       </div>
@@ -358,7 +393,7 @@ export function AddBranchSheet({ onClose }: { onClose: () => void }) {
   );
 }
 
-function Section({ title, sticker, children }: { title: string; sticker: 'hospital' | 'calendar' | 'speech' | 'sparkles'; icon?: ReactNode; children: ReactNode }) {
+function Section({ title, sticker, children }: { title: string; sticker: 'hospital' | 'calendar' | 'speech' | 'sparkles' | 'books'; icon?: ReactNode; children: ReactNode }) {
   return (
     <section className="mb-4 rounded-[22px] bg-white p-4 ring-1 ring-line/70">
       <h3 className="mb-3 flex items-center gap-2 text-[16px] font-bold text-ink">

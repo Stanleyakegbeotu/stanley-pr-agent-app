@@ -34,6 +34,7 @@ import { FieldErr, FieldLabel, TrashSheet, inputCls, nameCase } from '../prManag
 import { PICK_THEME, BranchCrumb, BranchPick, Chips, Facts, PageTitle, useBranchFirst } from '../branchFirst';
 import { StickyTools } from '@/admin/kit';
 import { copyText } from '@/ui/privacy';
+import { useChatLink, useInBranch, useRight } from '../access';
 
 const STATUS_TONE: Record<StaffStatus, string> = { Active: 'bg-tint-green text-good-ink', 'On leave': 'bg-[#fff1e0] text-[#b45309]', Suspended: 'bg-[#fdecec] text-[#b42318]', Left: 'bg-page text-muted' };
 const longDate = (iso: string) => (iso ? new Date(`${iso}T00:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Not on record');
@@ -97,7 +98,7 @@ function Choose() {
 }
 
 function Workspace({ branchId, crumb }: { branchId: string; crumb: boolean }) {
-  const { staff, navigate } = useCompany();
+  const { staff, navigate, user } = useCompany();
   const team = useTeam();
   const b = getBranch(branchId)!;
   const [q, setQ] = useState('');
@@ -105,6 +106,11 @@ function Workspace({ branchId, crumb }: { branchId: string; crumb: boolean }) {
   const [status, setStatus] = useState<'all' | StaffStatus>('all');
   const [open, setOpen] = useState<string | null>(null);
   const [adding, setAdding] = useState<{ role?: string } | null>(null);
+  // Roles and Permissions: front desk staff (staff.manage); the manager is appointed by the Company Admin (branch.managers).
+  const chatLink = useChatLink();
+  const right = useRight();
+  const canManage = right('staff.manage');
+  const canManagers = right('branch.managers');
   const people = staff.filter((s) => s.branchId === branchId);
   const manager = managerOf(staff, branchId);
   const others = people.filter((s) => s.id !== manager?.id);
@@ -119,7 +125,7 @@ function Workspace({ branchId, crumb }: { branchId: string; crumb: boolean }) {
         title="Staff Management"
         sub={`${b.name} branch · ${b.code}`}
         action={
-          <button type="button" onClick={() => setAdding({})} aria-label="Add staff" className="press flex min-h-11 items-center gap-1.5 rounded-full bg-brand-600 pl-3 pr-4 text-[14px] font-semibold text-white shadow-[0_8px_18px_rgba(31,111,232,0.3)]">
+          canManage && <button type="button" onClick={() => setAdding({})} aria-label="Add staff" className="press flex min-h-11 items-center gap-1.5 rounded-full bg-brand-600 pl-3 pr-4 text-[14px] font-semibold text-white shadow-[0_8px_18px_rgba(31,111,232,0.3)]">
             <Plus size={18} /> Add
           </button>
         }
@@ -147,9 +153,9 @@ function Workspace({ branchId, crumb }: { branchId: string; crumb: boolean }) {
             </div>
           </div>
           <div className="relative z-10 mt-4 flex flex-wrap gap-2">
-            <button type="button" onClick={(e) => (e.stopPropagation(), navigate(`/messages/${managerId(branchId)}`))} className="press inline-flex min-h-9 items-center gap-1.5 rounded-xl bg-white px-3 text-[13px] font-semibold text-brand-700 shadow-[0_6px_16px_rgba(0,0,0,0.12)]">
+            {manager.name !== user.name && <button type="button" onClick={(e) => (e.stopPropagation(), navigate(chatLink.manager(branchId)))} className="press inline-flex min-h-9 items-center gap-1.5 rounded-xl bg-white px-3 text-[13px] font-semibold text-brand-700 shadow-[0_6px_16px_rgba(0,0,0,0.12)]">
               <MessageCircle size={15} /> Chat
-            </button>
+            </button>}
             {manager.phone && (
               <a href={`tel:${manager.phone.replace(/\s+/g, '')}`} onClick={(e) => e.stopPropagation()} className="press inline-flex min-h-9 items-center gap-1.5 rounded-xl bg-white/15 px-3 text-[13px] font-semibold text-white ring-1 ring-white/40">
                 <Phone size={15} /> Call
@@ -159,6 +165,11 @@ function Workspace({ branchId, crumb }: { branchId: string; crumb: boolean }) {
               Profile <ChevronRight size={15} />
             </span>
           </div>
+        </div>
+      ) : !canManagers ? (
+        <div className="flex w-full items-center gap-3 rounded-[22px] bg-white p-4 ring-1 ring-line/70">
+          <Sticker name="manHealthWorker" size={44} />
+          <span className="text-[13px] text-muted">No branch manager yet. The Company Admin appoints one.</span>
         </div>
       ) : (
         <button type="button" onClick={() => setAdding({ role: MANAGER_ROLE })} className="press flex w-full items-center gap-3 rounded-[22px] border-[1.5px] border-dashed border-[#9cc3ff] bg-brand-50/60 p-4 text-left">
@@ -203,7 +214,7 @@ function Workspace({ branchId, crumb }: { branchId: string; crumb: boolean }) {
       <Chips label="Status" value={status} onChange={setStatus} options={[{ value: 'all' as const, label: 'Any status' }, ...STAFF_STATUSES.map((s) => ({ value: s, label: s, count: others.filter((x) => x.status === s).length }))]} />
 
       {shown.length === 0 ? (
-        others.length === 0 ? (
+        others.length === 0 && canManage ? (
           <button type="button" onClick={() => setAdding({ role: 'Front Desk' })} className="press flex w-full items-center gap-3 rounded-[22px] border-[1.5px] border-dashed border-[#9cc3ff] bg-brand-50/60 p-4 text-left">
             <Sticker name="womanHealthWorker" size={44} />
             <span>
@@ -287,7 +298,13 @@ export function StaffProfileSheet({ member, onClose }: { member: StaffRecord; on
     }
     return { month, next };
   }, [member, team]);
-  const chatId = mgr ? managerId(member.branchId) : onSeatToday ? frontDeskId(member.branchId) : null;
+  const chatLink = useChatLink();
+  const inBranch = useInBranch();
+  const right = useRight();
+  const canManage = right('staff.manage');
+  const rightNow = right;
+  const chatPath = mgr ? chatLink.manager(member.branchId) : onSeatToday ? chatLink.frontDesk(member.branchId) : null;
+  const chatId = chatPath;
   const copy = (text: string, what: string) => copyText(text, what, showToast);
   return (
     <Sheet
@@ -297,14 +314,16 @@ export function StaffProfileSheet({ member, onClose }: { member: StaffRecord; on
       onClose={onClose}
       tall
       footer={
-        <div className="flex gap-2">
-          <button type="button" onClick={() => setTrash(true)} aria-label="Move to trash" className="press grid min-h-12 w-12 place-items-center rounded-2xl bg-[#fdecec] text-[#b42318]">
-            <Trash2 size={19} />
-          </button>
-          <button type="button" onClick={() => setEditing(true)} className="press flex min-h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-brand-600 text-[15px] font-semibold text-white">
-            <Pencil size={17} /> Edit profile
-          </button>
-        </div>
+        canManage && (member.role !== MANAGER_ROLE || rightNow('branch.managers')) ? (
+          <div className="flex gap-2">
+            <button type="button" onClick={() => setTrash(true)} aria-label="Move to trash" className="press grid min-h-12 w-12 place-items-center rounded-2xl bg-[#fdecec] text-[#b42318]">
+              <Trash2 size={19} />
+            </button>
+            <button type="button" onClick={() => setEditing(true)} className="press flex min-h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-brand-600 text-[15px] font-semibold text-white">
+              <Pencil size={17} /> Edit profile
+            </button>
+          </div>
+        ) : undefined
       }
     >
       <div className="relative mb-3 overflow-hidden rounded-[22px] bg-linear-to-br from-[#e8f1ff] to-[#cfe2ff] p-4">
@@ -348,7 +367,7 @@ export function StaffProfileSheet({ member, onClose }: { member: StaffRecord; on
           </div>
         </div>
         <div className="mt-3 grid grid-cols-4 gap-2">
-          <Quick icon={<MessageCircle size={19} />} label="Chat" onClick={chatId ? () => navigate(`/messages/${chatId}`) : undefined} />
+          <Quick icon={<MessageCircle size={19} />} label="Chat" onClick={chatPath ? () => navigate(chatPath) : undefined} />
           <Quick icon={<Phone size={19} />} label="Call" href={member.phone ? `tel:${member.phone.replace(/\s+/g, '')}` : undefined} />
           <Quick icon={<Mail size={19} />} label="Email" href={member.email ? `mailto:${member.email}` : undefined} />
           <Quick icon={<Copy size={18} />} label="Copy phone" onClick={member.phone ? () => copy(member.phone, 'Phone number') : undefined} />

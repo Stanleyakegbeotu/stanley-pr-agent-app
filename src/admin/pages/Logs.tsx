@@ -24,6 +24,8 @@ import { ScopeBar, Sheet } from '../ui';
 import { AdminTopBar, EmptyCard, PageGlow } from '../kit';
 import { Chips, Facts, PageTitle } from '../branchFirst';
 import { StickyTools } from '@/admin/kit';
+import { useRight } from '../access';
+import { useStaffChrome } from '@/staff/chrome';
 
 const DAY = 86_400_000;
 const branchName = (id: string | null) => (id ? (getBranch(id)?.name ?? id) : 'Company wide');
@@ -51,7 +53,9 @@ const AREA: Record<string, { sticker: StickerKey; tint: string }> = {
 const area = (c: string) => AREA[c] ?? { sticker: 'clipboard' as StickerKey, tint: 'bg-page' };
 
 function useScopeIds() {
-  const { context } = useCompany();
+  const { context: ctx } = useCompany();
+  // Branch workspace: its own branch only.
+  const context = useStaffChrome().branchId || ctx;
   return { scope: context === 'all' ? null : [context], scopeText: context === 'all' ? 'All branches' : `${getBranch(context)?.name ?? ''} branch` };
 }
 
@@ -306,6 +310,8 @@ export function TrashPage() {
   const [q, setQ] = useState('');
   const [kind, setKind] = useState<'all' | TrashItem['kind']>('all');
   const [purge, setPurge] = useState<TrashItem | null>(null);
+  // Roles and Permissions: viewing Trash is not restoring it (trash.restore).
+  const canRestore = useRight()('trash.restore');
   const [open, setOpen] = useState<TrashItem | null>(null);
   const inScope = useMemo(() => trash.filter((t) => !scope || scope.includes(t.branchId)), [trash, scope]);
   const t = q.trim().toLowerCase();
@@ -375,21 +381,21 @@ export function TrashPage() {
                     </span>
                     <ChevronRight size={16} className="mt-3 shrink-0 text-faint" />
                   </button>
-                  <div className="flex gap-2 px-3 pb-3">
+                  {canRestore && <div className="flex gap-2 px-3 pb-3">
                     <button type="button" onClick={() => restore(x)} className="press flex min-h-10 flex-1 items-center justify-center gap-1.5 rounded-xl bg-brand-600 text-[13.5px] font-semibold text-white">
                       <RotateCcw size={15} /> Restore
                     </button>
                     <button type="button" onClick={() => setPurge(x)} aria-label={`Delete ${x.name} permanently`} className="press grid min-h-10 w-12 place-items-center rounded-xl bg-[#fdecec] text-[#b42318]">
                       <Trash2 size={17} />
                     </button>
-                  </div>
+                  </div>}
                 </li>
               );
             })}
           </ul>
         )}
         <p className="mt-6 flex items-start gap-2 text-[12px] leading-relaxed text-muted">
-          <Info size={14} className="mt-0.5 shrink-0" /> Restoring puts the record back exactly as it was. Deleting permanently cannot be undone.
+          <Info size={14} className="mt-0.5 shrink-0" /> {canRestore ? 'Restoring puts the record back exactly as it was. Deleting permanently cannot be undone.' : 'You can see what was deleted. Restoring or deleting for good needs the Restore and delete permanently right.'}
         </p>
       </div>
 
@@ -399,7 +405,7 @@ export function TrashPage() {
           subtitle={`${open.type} · ${daysLeft(open)} days left in Trash`}
           onClose={() => setOpen(null)}
           footer={
-            <div className="flex gap-2">
+            !canRestore ? undefined : <div className="flex gap-2">
               <button type="button" onClick={() => (setPurge(open), setOpen(null))} className="press min-h-12 rounded-2xl bg-[#fdecec] px-4 text-[14.5px] font-semibold text-[#b42318]">
                 Delete for good
               </button>
