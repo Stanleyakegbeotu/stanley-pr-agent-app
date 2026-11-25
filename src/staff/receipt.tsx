@@ -194,6 +194,7 @@ export function ReceiptPanel({ order, branch }: { order: Order; branch: NonNulla
     fit();
     const ro = new ResizeObserver(fit);
     if (box.current) ro.observe(box.current);
+    if (doc.current) ro.observe(doc.current);
     return () => ro.disconnect();
   }, [paper, order]);
   return (
@@ -207,7 +208,7 @@ export function ReceiptPanel({ order, branch }: { order: Order; branch: NonNulla
       </div>
       <div ref={box} className="relative overflow-hidden rounded-[22px] bg-[#eef2f8] p-2 ring-1 ring-line/70" style={{ height: h }}>
         <style>{RECEIPT_CSS}</style>
-        <div ref={doc} className="mx-auto w-fit origin-top shadow-[0_8px_24px_rgba(11,23,48,0.15)]" style={{ transform: `scale(${scale})` }}>
+        <div ref={doc} className="absolute left-1/2 top-2 w-max shadow-[0_8px_24px_rgba(11,23,48,0.15)]" style={{ transform: `translateX(-50%) scale(${scale})`, transformOrigin: "top center" }}>
           <OrderReceiptDoc order={order} branch={branch} profile={profile} paper={paper} printedAt={printedAt} />
         </div>
       </div>
