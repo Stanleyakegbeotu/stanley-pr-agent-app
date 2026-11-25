@@ -19,6 +19,7 @@ import { useNav } from '@/app/store';
 import { EmptyState, ScreenHeader } from '@/ui/kit';
 import { ConvAvatar, PersonAvatar } from '@/ui/avatars';
 import { useVoiceRecorder } from './useVoiceRecorder';
+import { useViewOnly } from '@/ui/privacy';
 
 /* ─────────────── helpers ─────────────── */
 export function useBlobUrl(blob?: Blob) {
@@ -242,7 +243,7 @@ function Bubble({ m, convName, showSender, onReply, onMenu, onOpenImage }: { m: 
         type="button"
         onClick={onMenu}
         aria-label="Message actions"
-        title="Reply, copy, download or delete"
+        title="Reply or delete"
         className={`press mt-1 grid h-8 w-8 shrink-0 place-items-center rounded-full text-ink-2/70 transition hover:bg-white hover:text-ink hover:shadow-sm active:bg-white ${mine ? 'order-first' : 'order-last'}`}
         style={{ opacity: dx ? 0 : 1 }}
       >
@@ -614,6 +615,7 @@ function Sheet({ children, onClose }: { children: React.ReactNode; onClose: () =
 }
 
 function ActionSheet({ m, onClose, onReply, onCopy, onDelete }: { m: ChatMsg; onClose: () => void; onReply: () => void; onCopy: () => void; onDelete: () => void }) {
+  const viewOnly = useViewOnly();
   const [confirm, setConfirm] = useState(false);
   const row = (icon: React.ReactNode, label: string, onClick: () => void, danger = false) => (
     <button type="button" onClick={onClick} className={`press flex w-full items-center gap-3.5 rounded-xl px-3 py-3 text-left text-[15.5px] font-medium hover:bg-page ${danger ? 'text-[#d93036]' : 'text-ink'}`}>
@@ -633,7 +635,7 @@ function ActionSheet({ m, onClose, onReply, onCopy, onDelete }: { m: ChatMsg; on
       ) : (
         <>
           {!m.deleted && row(<Reply size={20} />, 'Reply', onReply)}
-          {!m.deleted && (m.text || m.kind === 'text') && row(<Copy size={20} />, 'Copy text', onCopy)}
+          {!m.deleted && !viewOnly && (m.text || m.kind === 'text') && row(<Copy size={20} />, 'Copy text', onCopy)}
           {row(<Trash2 size={20} />, 'Delete', () => setConfirm(true), true)}
         </>
       )}

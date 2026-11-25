@@ -2,7 +2,7 @@
  * Results (compliance rebuild, 2026-11-24).
  *  • Only the requesting clinician sees a result, and only after the
  *    pathologist / radiologist has signed it off (flag from the branch).
- *  • Viewed in the app with a watermark; no download.
+ *  • Viewed in the app only (screen capture blocked); no download.
  *  • Access ends RESULT_ACCESS_DAYS after the result was released.
  *  • Every view is written to the audit log (domain/audit).
  *  • Results never go through chat.

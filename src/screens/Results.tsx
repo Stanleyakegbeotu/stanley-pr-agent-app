@@ -1,6 +1,6 @@
 /**
  * Results (compliance rebuild, 2026-11-24): only the requesting clinician's
- * own patients, only after specialist sign-off, watermarked, no download,
+ * own patients, only after specialist sign-off, view only (no screenshots or download),
  * every view logged (domain/audit), access ends after RESULT_ACCESS_DAYS.
  * Results never go through chat.
  */
@@ -80,22 +80,10 @@ export function ResultView({ id }: { id: string }) {
       </>
     );
 
-  const mark = `${account?.clinician.title ?? ''} ${account?.clinician.firstName ?? ''} ${account?.clinician.lastName ?? ''} · ${new Date().toLocaleDateString('en-GB')} · CONFIDENTIAL`;
   return (
     <>
       <ScreenHeader title="Result" />
       <div className="relative select-none overflow-hidden rounded-[22px]" onContextMenu={(e) => e.preventDefault()}>
-        {/* Watermark: the viewer's name and today's date across the whole result. */}
-        <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-10 overflow-hidden">
-          <div className="absolute -inset-1/2 flex rotate-[-28deg] flex-col justify-center gap-14 opacity-[0.09]">
-            {Array.from({ length: 14 }, (_, i) => (
-              <p key={i} className="whitespace-nowrap text-[18px] font-bold tracking-wide text-ink">
-                {`${mark}   ${mark}   ${mark}`}
-              </p>
-            ))}
-          </div>
-        </div>
-
         <Card className="relative p-5">
           {report.sample && <p className="mb-3 rounded-xl bg-[#fff6e5] px-3 py-2 text-[12.5px] font-semibold text-[#8a5a12]">SAMPLE RESULT for the demo. Real results come from the branch once connected.</p>}
           <div className="flex items-start gap-3">

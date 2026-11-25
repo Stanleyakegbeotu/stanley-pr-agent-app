@@ -10,14 +10,23 @@ import { AdminApp } from '@/admin/AdminApp';
 import { StaffApp } from '@/staff/StaffApp';
 import { App } from './App';
 import { AppStoreProvider } from './store';
+import { PrivacyGuard } from '@/ui/privacy';
 
 export function Root() {
   const role = useRole();
-  if (role === 'admin') return <AdminApp key="admin" />;
-  if (role === 'manager' || role === 'frontdesk') return <StaffApp key="staff" />;
+  // View only on the phone for the PR agent portal and the branch staff workspace (privacy rules in ui/privacy).
   return (
-    <AppStoreProvider key="clinician">
-      <App />
-    </AppStoreProvider>
+    <>
+      <PrivacyGuard on={role !== 'admin'} />
+      {role === 'admin' ? (
+        <AdminApp key="admin" />
+      ) : role === 'manager' || role === 'frontdesk' ? (
+        <StaffApp key="staff" />
+      ) : (
+        <AppStoreProvider key="clinician">
+          <App />
+        </AppStoreProvider>
+      )}
+    </>
   );
 }

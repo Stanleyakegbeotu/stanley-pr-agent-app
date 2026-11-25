@@ -33,6 +33,7 @@ import { photoOf, useTeam } from '../people';
 import { FieldErr, FieldLabel, TrashSheet, inputCls, nameCase } from '../prManage';
 import { PICK_THEME, BranchCrumb, BranchPick, Chips, Facts, PageTitle, useBranchFirst } from '../branchFirst';
 import { StickyTools } from '@/admin/kit';
+import { copyText } from '@/ui/privacy';
 
 const STATUS_TONE: Record<StaffStatus, string> = { Active: 'bg-tint-green text-good-ink', 'On leave': 'bg-[#fff1e0] text-[#b45309]', Suspended: 'bg-[#fdecec] text-[#b42318]', Left: 'bg-page text-muted' };
 const longDate = (iso: string) => (iso ? new Date(`${iso}T00:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Not on record');
@@ -287,14 +288,7 @@ export function StaffProfileSheet({ member, onClose }: { member: StaffRecord; on
     return { month, next };
   }, [member, team]);
   const chatId = mgr ? managerId(member.branchId) : onSeatToday ? frontDeskId(member.branchId) : null;
-  const copy = async (text: string, what: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      showToast(`${what} copied`);
-    } catch {
-      showToast(`${what}: ${text}`);
-    }
-  };
+  const copy = (text: string, what: string) => copyText(text, what, showToast);
   return (
     <Sheet
       back

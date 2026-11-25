@@ -10,7 +10,7 @@
  * or a refresh loses nothing. Errors are shown on the field itself.
  */
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, CalendarDays, Check, ChevronDown, Copy, Hash, Pencil, Phone, Send, Siren, Stethoscope, UserRound, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CalendarDays, Check, ChevronDown, Hash, Pencil, Phone, Send, Siren, Stethoscope, UserRound, X } from 'lucide-react';
 import { BRANCH, COMPANY } from '@/config/org';
 import { isActive, useAccount } from '@/domain/account';
 import { PatientMessageButton } from './PatientMessage';
@@ -481,17 +481,9 @@ function CardHead({ icon, title, onEdit }: { icon: React.ReactNode; title: strin
 /* ─────────────── Sent ─────────────── */
 
 export function ReferralSent({ id }: { id: string }) {
-  const { referrals, navigate, showToast } = useApp();
+  const { referrals, navigate } = useApp();
   const r = referrals.find((x) => x.id === id);
   if (!r) return <EmptyState sticker="clipboard" title="Request not found" text="It may have been sent from another device." />;
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(r.id);
-      showToast('Request ID copied');
-    } catch {
-      showToast(r.id);
-    }
-  };
   return (
     <div className="flex min-h-[80dvh] flex-col items-center pt-[max(40px,var(--safe-top))] text-center">
       <div className="relative">
@@ -501,13 +493,13 @@ export function ReferralSent({ id }: { id: string }) {
       <h1 className="mt-5 text-[26px] font-bold tracking-[-0.02em] text-ink">Request sent</h1>
       <p className="mt-2 max-w-80 text-[15px] leading-relaxed text-muted">The front desk uses the request ID to find {r.patient.name.split(' ')[0]}’s tests. You’ll be told when they arrive and when results are ready.</p>
 
-      <button type="button" onClick={copy} className="card press mt-6 flex w-full max-w-sm items-center justify-between gap-3 px-5 py-4">
+      <div className="card mt-6 flex w-full max-w-sm items-center justify-between gap-3 px-5 py-4">
         <span className="text-left">
           <span className="block text-[12.5px] font-semibold uppercase tracking-wide text-muted">Request ID</span>
           <span className="block text-[26px] font-bold tracking-wide text-brand-700">{r.id}</span>
         </span>
-        <Copy size={22} className="text-brand-600" />
-      </button>
+        <Hash size={22} className="text-brand-600" />
+      </div>
       {r.queued && <p className="mt-3 max-w-sm text-[12.5px] leading-relaxed text-muted">Saved on this phone (encrypted). It’s sent to the branch when the server is connected.</p>}
 
       <div className="mt-6 grid w-full max-w-sm gap-3">

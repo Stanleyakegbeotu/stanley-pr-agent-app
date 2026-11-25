@@ -36,6 +36,7 @@ import { useTeam, type Who } from './people';
 import { AgentProfileSheet } from './agents';
 import { AgentAvatar } from './agentPhotos';
 import { StaffSheetByName, useIsStaff } from './pages/Staff';
+import { copyText, useViewOnly } from '@/ui/privacy';
 
 export type DetailKind = 'revenue' | 'payments' | 'patients' | 'expenses' | 'outstanding' | 'commission' | 'referrals' | 'hospitals' | 'services';
 /** A single record opened on top of a list. */
@@ -406,14 +407,8 @@ export function VisitSheet({ visit, onClose }: { visit: PatientVisit; onClose: (
   const { ref, seen } = useSeen<HTMLDivElement>(0.2);
   const R = 30;
   const C = 2 * Math.PI * R;
-  const copy = async (text: string, what: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      showToast(`${what} copied`);
-    } catch {
-      showToast(`${what}: ${text}`);
-    }
-  };
+  const viewOnly = useViewOnly();
+  const copy = (text: string, what: string) => copyText(text, what, showToast);
   const steps: { icon: ReactNode; title: string; sub: string; tone: string }[] = [
     { icon: <MapPin size={15} />, title: `Arrived at ${branch?.name ?? 'the branch'}`, sub: `${timeOf(v.at)} · ${dateOf(v.at)}`, tone: 'bg-brand-600' },
     { icon: <UserCheck size={15} />, title: `Registered and billed by ${by ? by.name : 'the front desk'}`, sub: by ? by.role : 'Name not on record', tone: 'bg-violet' },
@@ -513,9 +508,16 @@ export function VisitSheet({ visit, onClose }: { visit: PatientVisit; onClose: (
             <Phone size={18} /> No phone
           </span>
         )}
-        <button type="button" onClick={() => copy(v.patientRef, 'Patient ID')} className="press flex min-h-[60px] flex-col items-center justify-center gap-1 rounded-2xl bg-white text-[12px] font-semibold text-brand-700 ring-1 ring-line/70">
-          <Copy size={17} /> Copy ID
-        </button>
+        {viewOnly ? (
+          <span className="flex min-h-[60px] flex-col items-center justify-center gap-0.5 rounded-2xl bg-white px-1 text-center ring-1 ring-line/70">
+            <span className="text-[11px] font-semibold text-muted">Patient ID</span>
+            <span className="max-w-full truncate text-[12.5px] font-bold text-brand-700">{v.patientRef}</span>
+          </span>
+        ) : (
+          <button type="button" onClick={() => copy(v.patientRef, 'Patient ID')} className="press flex min-h-[60px] flex-col items-center justify-center gap-1 rounded-2xl bg-white text-[12px] font-semibold text-brand-700 ring-1 ring-line/70">
+            <Copy size={17} /> Copy ID
+          </button>
+        )}
         <button type="button" disabled={v.agentId == null} onClick={() => v.agentId != null && setFocus({ kind: 'agent', id: v.agentId })} className="press flex min-h-[60px] flex-col items-center justify-center gap-1 rounded-2xl bg-white text-[12px] font-semibold text-violet ring-1 ring-line/70 disabled:text-faint">
           <Handshake size={18} /> {v.agentId != null ? 'Referrer' : 'Walk in'}
         </button>

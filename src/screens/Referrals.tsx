@@ -6,7 +6,7 @@
  * were not done (no reasons), clinical details, note, results link.
  */
 import { useMemo, useState } from 'react';
-import { CalendarDays, Check, Copy, FileText, Hash, Phone, Plus, Siren, Stethoscope } from 'lucide-react';
+import { CalendarDays, Check, FileText, Hash, Phone, Plus, Siren, Stethoscope } from 'lucide-react';
 import { BRANCH } from '@/config/org';
 import { displayPhone, naira, shortDate } from '@/domain/format';
 import { NOT_ATTENDED_DAYS, RETENTION_DAYS, STAGES, STATUS_LABEL, STATUS_NOTE, countsFor, inMonth, isToday, partialNote, quoteOf, serviceSummary, servicesOf, statusOf, type Referral, type ReferralStatus } from '@/domain/referrals';
@@ -140,7 +140,7 @@ export function PatientCard({ r, onOpen }: { r: Referral; onOpen: () => void }) 
 const STAGE_TIME: Record<string, (r: Referral) => string | undefined> = { Requested: (r) => r.createdAt, Arrived: (r) => r.arrivedAt, TestsDone: (r) => r.testsDoneAt, ResultsReady: (r) => r.resultsAt };
 
 export function ReferralDetails({ id }: { id: string }) {
-  const { referrals, navigate, showToast } = useApp();
+  const { referrals, navigate } = useApp();
   const r = referrals.find((x) => x.id === id);
   if (!r)
     return (
@@ -162,20 +162,9 @@ export function ReferralDetails({ id }: { id: string }) {
           <InitialsAvatar name={r.patient.name} size={56} />
           <div className="min-w-0 flex-1">
             <p className="truncate text-[19px] font-bold text-ink">{r.patient.name}</p>
-            <button
-              type="button"
-              onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(r.id);
-                  showToast('Request ID copied');
-                } catch {
-                  showToast(r.id);
-                }
-              }}
-              className="mt-0.5 flex items-center gap-1.5 text-[14px] font-semibold text-brand-600"
-            >
-              <Hash size={14} /> {r.id} <Copy size={14} />
-            </button>
+            <p className="mt-0.5 flex items-center gap-1.5 text-[14px] font-semibold text-brand-600">
+              <Hash size={14} /> {r.id}
+            </p>
           </div>
           <StatusBadge status={s} />
         </div>

@@ -191,3 +191,31 @@
 .page-pop > div > div.relative > :nth-child(6) { animation-delay: 360ms; }
 .page-pop > div > div.relative > :nth-child(n + 7) { animation-delay: 420ms; }
 @media (prefers-reduced-motion: reduce) { .page-pop, .page-pop * { animation: none !important; } }
+
+/* View only on the phone (ui/privacy): no selecting, copying, long press menus or saving images; typing still works. */
+html.view-only body {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+html.view-only :is(input, textarea, [contenteditable='true']) {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+html.view-only img {
+  -webkit-user-drag: none;
+  -webkit-touch-callout: none;
+}
+@media print {
+  html.view-only body > * {
+    display: none !important;
+  }
+  html.view-only body::before {
+    content: 'Printing is not available in the mobile app. Patient records stay on the phone screen to protect patient privacy.';
+    display: block;
+    padding: 48px;
+    font: 600 16px/1.5 system-ui, sans-serif;
+    color: #0b1730;
+  }
+}

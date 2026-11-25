@@ -37,6 +37,7 @@ import { AddAgentSheet, AgentEditSheet, TrashSheet } from './prManage';
 import { hasPhone, hospitalKey } from '@company/data/legacy';
 import { BASELINE_AGENTS } from '@company/data/userRecords';
 import { onlyName } from '@/ui/fieldRules';
+import { copyText } from '@/ui/privacy';
 
 const ALL_TIME: DateRange = { from: DATA_START, to: TODAY, days: diffDays(DATA_START, TODAY) + 1 };
 /** PR agents belong to the branch their referrals go to (the legacy branch until agents carry a branch). */
@@ -187,14 +188,7 @@ export function AgentProfileSheet({ id, branchIds, period, onClose }: { id: numb
   const t = norm(q);
   const rows = visits.map((v) => visitRow(v, ctx, { amountNote: `${formatMoney(commissionOn(v.billed, id), c)} commission` })).filter((r) => !t || r.text.includes(t));
   const mineSent = sent.filter((a) => (a.audience.kind === 'agent' && a.audience.agentId === id) || (a.audience.kind === 'agents' && a.audience.agents.some((x) => x.id === id))).slice(0, 3);
-  const copy = async (text: string, what: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      showToast(`${what} copied`);
-    } catch {
-      showToast(`Couldn’t copy. ${what}: ${text}`);
-    }
-  };
+  const copy = (text: string, what: string) => copyText(text, what, showToast);
   const chat = () => navigate(`/messages/${agentConvId(id)}`);
   return (
     <Sheet

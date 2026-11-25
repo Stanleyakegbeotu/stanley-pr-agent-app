@@ -7,7 +7,7 @@
  * Every output is written to the Audit Log, as on the desktop.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Download, ImageDown, Loader2, Printer } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 import type { getBranch } from '@company/data/company';
 import { formatMoney } from '@company/shared/format';
 import { BrandLogo, useCompanyName } from '@company/shell/BrandLogo';
@@ -15,8 +15,6 @@ import { logAudit } from '@company/services/audit';
 import { useReceiptProfile, type ReceiptProfile } from '@company/services/receiptProfile';
 import type { Order, PayChoice } from '@company/services/billing';
 import { RECEIPT_CSS, RECEIPT_PAPERS, type ReceiptPaper } from '@company/features/receipts/Receipt';
-import { downloadPdf, exportPng, printDocument } from '@company/features/receipts/receiptOutput';
-import { useNav } from '@/app/store';
 
 const PAPER_STYLE: Record<ReceiptPaper, { pad: string; fs: string; logo: string }> = {
   '58': { pad: '3mm 3mm 4mm', fs: '7.6pt', logo: '11mm' },
@@ -165,49 +163,39 @@ export function OrderReceiptDoc({ order, branch, profile, paper, printedAt }: { 
   );
 }
 
-/** Paper choice, a preview that fits the phone, and the three outputs. */
+/**
+ * The receipt on the phone: VIEW ONLY (owner, 2026-11-25, patient privacy).
+ * Same layout as the desktop receipt; no print, PDF, image, copy or screen
+ * capture on the mobile app. Patients get their printed receipt from the
+ * branch computer (Electron), where printing is allowed.
+ */
 export function ReceiptPanel({ order, branch }: { order: Order; branch: NonNullable<ReturnType<typeof getBranch>> }) {
-  const { showToast } = useNav();
   const profile = useReceiptProfile();
   const [paper, setPaper] = useState<ReceiptPaper>('80');
-  const [busy, setBusy] = useState<null | 'print' | 'pdf' | 'png'>(null);
   const printedAt = useMemo(() => new Date(), []);
   const box = useRef<HTMLDivElement>(null);
   const doc = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
   const [h, setH] = useState(400);
   const paperDef = RECEIPT_PAPERS.find((p) => p.id === paper)!;
-  const fileBase = `receipt-${order.invoiceNo}-${paper === 'a5' ? 'a5' : `${paper}mm`}`;
+  useEffect(() => {
+    logAudit({ category: 'Receipts', action: 'Receipt viewed on the mobile app', record: `${order.invoiceNo} · ${order.patient.patientId}`, details: 'View only', branchId: order.branchId });
+  }, [order.invoiceNo, order.patient.patientId, order.branchId]);
   // Fit the receipt to the phone's width (A5 is wider than a phone).
   useEffect(() => {
     const fit = () => {
       const el = doc.current?.querySelector<HTMLElement>('.rc');
       const w = box.current?.clientWidth ?? 320;
       if (!el) return;
-      const s = Math.min(1, (w - 16) / el.offsetWidth);
-      setScale(s);
-      setH(el.offsetHeight * s + 16);
+      const sc = Math.min(1, (w - 16) / el.offsetWidth);
+      setScale(sc);
+      setH(el.offsetHeight * sc + 16);
     };
     fit();
     const ro = new ResizeObserver(fit);
     if (box.current) ro.observe(box.current);
     return () => ro.disconnect();
   }, [paper, order]);
-  const run = async (kind: 'print' | 'pdf' | 'png') => {
-    const el = doc.current?.querySelector<HTMLElement>('.rc');
-    if (!el) return;
-    setBusy(kind);
-    try {
-      logAudit({ category: 'Receipts', action: kind === 'print' ? 'Receipt printed' : kind === 'pdf' ? 'Receipt downloaded (PDF)' : 'Receipt exported (image)', record: `${order.invoiceNo} · ${order.patient.patientId}`, details: paperDef.label, branchId: order.branchId });
-      if (kind === 'print') await printDocument(el, paper, fileBase);
-      else if (kind === 'pdf') {
-        await downloadPdf(el, paper, fileBase);
-        showToast(`Saved ${fileBase}.pdf`);
-      } else if (await exportPng(el, fileBase)) showToast(`Saved ${fileBase}.png`);
-    } finally {
-      setBusy(null);
-    }
-  };
   return (
     <div>
       <div className="mb-3 grid grid-cols-3 gap-1 rounded-full bg-white p-1 ring-1 ring-line" role="radiogroup" aria-label="Receipt size">
@@ -217,26 +205,21 @@ export function ReceiptPanel({ order, branch }: { order: Order; branch: NonNulla
           </button>
         ))}
       </div>
-      <div ref={box} className="overflow-hidden rounded-[22px] bg-[#eef2f8] p-2 ring-1 ring-line/70" style={{ height: h }}>
+      <div ref={box} className="relative overflow-hidden rounded-[22px] bg-[#eef2f8] p-2 ring-1 ring-line/70" style={{ height: h }}>
         <style>{RECEIPT_CSS}</style>
         <div ref={doc} className="mx-auto w-fit origin-top shadow-[0_8px_24px_rgba(11,23,48,0.15)]" style={{ transform: `scale(${scale})` }}>
           <OrderReceiptDoc order={order} branch={branch} profile={profile} paper={paper} printedAt={printedAt} />
         </div>
       </div>
-      <p className="mt-1.5 text-center text-[11.5px] text-muted">{paperDef.label} · prints exactly like this</p>
-      <div className="mt-3 grid grid-cols-3 gap-2">
-        {(
-          [
-            ['print', 'Print', <Printer key="p" size={18} />],
-            ['pdf', 'PDF', <Download key="d" size={18} />],
-            ['png', 'Image', <ImageDown key="i" size={18} />],
-          ] as const
-        ).map(([k, label, icon]) => (
-          <button key={k} type="button" disabled={busy !== null} onClick={() => run(k)} className={`press flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-2xl text-[12.5px] font-semibold disabled:opacity-50 ${k === 'print' ? 'bg-brand-600 text-white' : 'bg-white text-ink-2 ring-1 ring-line'}`}>
-            {busy === k ? <Loader2 size={18} className="animate-spin" /> : icon}
-            {label}
-          </button>
-        ))}
+      <p className="mt-1.5 text-center text-[11.5px] text-muted">{paperDef.label} · how it prints at the branch</p>
+      <div className="mt-3 flex items-start gap-3 rounded-2xl bg-[#eef4ff] p-3.5 ring-1 ring-[#d6e4ff]">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white text-brand-600 shadow-sm">
+          <ShieldCheck size={20} />
+        </span>
+        <span className="min-w-0">
+          <b className="block text-[14px] text-ink">View only on the phone</b>
+          <span className="block text-[12.5px] leading-snug text-ink-2">To protect patient privacy, receipts cannot be printed, downloaded, copied or captured on the mobile app. Print the patient's receipt from a branch computer.</span>
+        </span>
       </div>
     </div>
   );
