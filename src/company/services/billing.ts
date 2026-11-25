@@ -88,7 +88,8 @@ export interface BillingSession {
   reservedId: string | null;
   reservedType: PatientType | null;
   services: SelectedService[];
-  discount: { amount: number; reason: string };
+  /** approvedBy: "Name|Role" of the Branch Manager who approved the discount (owner, 2026-11-25: every discount is approved). */
+  discount: { amount: number; reason: string; approvedBy?: string };
   payment: PaymentDraft;
   /** User confirmed a possible duplicate is a different person. */
   differentPatientConfirmed: boolean;
@@ -110,6 +111,8 @@ export interface Order {
   subtotal: number;
   discount: number;
   discountReason: string;
+  /** Who approved the discount (Branch Manager). Older bills may not have it. */
+  discountApprovedBy?: { name: string; role: string } | null;
   total: number;
   amountPaid: number;
   balance: number;
@@ -388,6 +391,7 @@ export function validateStep(s: BillingSession, step: 1 | 2 | 3, agents: AgentRe
     const t = computeBill(s);
     if (s.discount.amount < 0 || s.discount.amount > t.subtotal) add("discount", "The discount cannot be more than the bill.");
     if (s.discount.amount > 0 && !s.discount.reason.trim()) add("discountReason", "Give a reason for the discount.");
+    if (s.discount.amount > 0 && !s.discount.approvedBy) add("discountApprovedBy", "Choose the branch manager who approved the discount.");
     // Settings → Billing & Payments: discounts on/off and the maximum percentage.
     if (s.discount.amount > 0 && !config().discounts.enabled) add("discount", "Discounts are turned off for the company.");
     else if (s.discount.amount > maxDiscount(t.subtotal)) add("discount", `Discounts are limited to ${config().discounts.maxPercent}% of the bill (${maxDiscount(t.subtotal).toLocaleString("en-NG")}).`);
@@ -433,7 +437,7 @@ export function newSession(branchId: string, entry: "new" | "referral", startedB
     reservedId: null,
     reservedType: null,
     services: [],
-    discount: { amount: 0, reason: "" },
+    discount: { amount: 0, reason: "", approvedBy: "" },
     payment: { method: "Cash", status: "full", partAmount: 0, split: { Cash: 0, POS: 0, Transfer: 0 }, balanceReason: "", approvedBy: "", promiseDate: "" },
     differentPatientConfirmed: false,
     startedAt: new Date().toISOString(),
@@ -537,7 +541,10 @@ export function submitBilling(s: BillingSession, agents: AgentRecord[], user: { 
     if (!user.name) return { ok: false, error: "The person processing this bill is not known — sign in again." };
     // Rights come from Settings → Roles & Permissions (checked again here, not only in the form).
     if (s.services.some((x) => x.overridePrice !== null) && !canOverridePrices(user.role)) return { ok: false, error: "You are not allowed to change prices on a bill. Ask the branch manager." };
-    if (s.discount.amount > 0 && !canGiveDiscount(user.role)) return { ok: false, error: "You are not allowed to give discounts. Ask the branch manager." };
+    // Every discount is approved by the branch manager (named on the bill); staff without the discount right need that approval.
+    if (s.discount.amount > 0 && !config().discounts.enabled) return { ok: false, error: "Discounts are turned off for the company." };
+    if (s.discount.amount > 0 && !s.discount.approvedBy) return { ok: false, error: "A discount needs the branch manager's approval. Choose who approved it." };
+    if (s.discount.amount > 0 && !canGiveDiscount(user.role) && !["Branch Manager", "Company Admin"].includes((s.discount.approvedBy ?? "").split("|")[1] ?? "")) return { ok: false, error: "Only the branch manager can approve a discount." };
     const branch = getBranch(s.branchId);
     if (!branch) return { ok: false, error: "This branch is not available." };
     const t = computeBill(s);
@@ -571,6 +578,7 @@ export function submitBilling(s: BillingSession, agents: AgentRecord[], user: { 
       subtotal: t.subtotal,
       discount: t.discount,
       discountReason: t.discount > 0 ? s.discount.reason.trim() : "",
+      discountApprovedBy: t.discount > 0 && s.discount.approvedBy ? { name: s.discount.approvedBy.split("|")[0]!, role: s.discount.approvedBy.split("|")[1] ?? "" } : null,
       total: t.total,
       amountPaid: t.amountPaid,
       balance: t.balance,
@@ -595,7 +603,7 @@ export function submitBilling(s: BillingSession, agents: AgentRecord[], user: { 
       category: "Billing",
       action: isNew ? "Patient registered and billed" : "Patient billed",
       record: `${order.invoiceNo} · ${order.patient.patientId}`,
-      details: `${order.services.length} test${order.services.length === 1 ? "" : "s"} · total ${order.total.toLocaleString("en-NG")} · paid ${order.amountPaid.toLocaleString("en-NG")}${order.balance ? ` · balance ${order.balance.toLocaleString("en-NG")} (${order.balanceInfo.reason}; approved by ${order.balanceInfo.approvedBy?.name ?? "—"}${order.balanceInfo.promiseDate ? `; promised ${order.balanceInfo.promiseDate}` : ""})` : ""}${order.discount ? ` · discount ${order.discount.toLocaleString("en-NG")} (${order.discountReason})` : ""}${order.services.some((x) => x.overridePrice !== null) ? " · price changed for this bill" : ""}${order.referral.agentName ? ` · referred by ${order.referral.agentName}` : " · walk-in"}`,
+      details: `${order.services.length} test${order.services.length === 1 ? "" : "s"} · total ${order.total.toLocaleString("en-NG")} · paid ${order.amountPaid.toLocaleString("en-NG")}${order.balance ? ` · balance ${order.balance.toLocaleString("en-NG")} (${order.balanceInfo.reason}; approved by ${order.balanceInfo.approvedBy?.name ?? "—"}${order.balanceInfo.promiseDate ? `; promised ${order.balanceInfo.promiseDate}` : ""})` : ""}${order.discount ? ` · discount ${order.discount.toLocaleString("en-NG")} (${order.discountReason}; approved by ${order.discountApprovedBy?.name ?? "not recorded"})` : ""}${order.services.some((x) => x.overridePrice !== null) ? " · price changed for this bill" : ""}${order.referral.agentName ? ` · referred by ${order.referral.agentName}` : " · walk-in"}`,
       branchId: s.branchId,
     });
     return { ok: true, order };
@@ -653,6 +661,20 @@ export function balanceApprovers(staff: readonly { name: string; role: string; b
       if (!out.has(v)) out.set(v, { value: v, label: s.name, description: s.role });
     }
   return [...out.values()];
+}
+
+/**
+ * Who can approve a discount (owner, 2026-11-25): the branch's active
+ * manager(s) from Staff Management. A manager billing can approve their own;
+ * with no manager on record the Company Admin approves. Value "Name|Role".
+ */
+export function discountApprovers(staff: readonly { name: string; role: string; branchId: string; status: string }[], branchId: string, user: { name: string; role: string }) {
+  const out: { value: string; label: string; description: string }[] = [];
+  for (const m of staff)
+    if (m.branchId === branchId && m.role === "Branch Manager" && m.status !== "Left" && m.status !== "Suspended") out.push({ value: `${m.name}|${m.role}`, label: m.name, description: m.name === user.name ? "Branch Manager · you" : "Branch Manager" });
+  if (user.role === "Branch Manager" && !out.some((a) => a.label === user.name)) out.unshift({ value: `${user.name}|${user.role}`, label: user.name, description: "Branch Manager · you" });
+  if (!out.length) out.push({ value: "Company Administrator|Company Admin", label: "Company Administrator", description: "Company Admin · no branch manager on record" });
+  return out;
 }
 
 /**

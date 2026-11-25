@@ -120,6 +120,12 @@ export function OrderReceiptDoc({ order, branch, profile, paper, printedAt }: { 
           <span>Discount</span>
           <b>{order.discount > 0 ? `− ${money(order.discount)}` : 'No discount'}</b>
         </div>
+        {order.discount > 0 && order.discountApprovedBy && (
+          <div className="rc-kv">
+            <span>Discount approved by</span>
+            <b>{order.discountApprovedBy.name}</b>
+          </div>
+        )}
         <div className="rc-kv rc-total">
           <span>Total</span>
           <b className="rc-num">{money(order.total)}</b>

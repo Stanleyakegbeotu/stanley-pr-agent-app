@@ -36,7 +36,7 @@ import { enabledMethods } from '@company/services/org';
 import {
   balanceApprovers,
   branchPrefix,
-  canGiveDiscount,
+  discountApprovers,
   canOverridePrices,
   computeBill,
   deleteDraft,
@@ -1071,7 +1071,9 @@ function PaymentStep({ s, set, errs, branchId }: StepProps) {
   const p = s.payment;
   const offered = enabledMethods(branchId);
   const canSplit = cfg.payments.split && offered.length >= 2;
-  const canDisc = canGiveDiscount(user.role);
+  // Discounts (owner, 2026-11-25): anyone billing may add one when discounts are on; the branch manager approves every discount.
+  const canDisc = cfg.discounts.enabled;
+  const discountBy = useMemo(() => discountApprovers(staff, branchId, user), [staff, branchId, user]);
   const approvers = useMemo(() => balanceApprovers(staff, branchId, user), [staff, branchId, user]);
   const setPay = (patch: Partial<typeof p>) => set((x) => ({ ...x, payment: { ...x.payment, ...patch } }));
   const balanceLeft = t.total > 0 && t.amountPaid < t.total && (p.method === 'Split' ? t.amountPaid > 0 : p.status !== 'full');
@@ -1201,7 +1203,7 @@ function PaymentStep({ s, set, errs, branchId }: StepProps) {
 
       {canDisc &&
         (discOpen || s.discount.amount > 0 ? (
-          <Card icon={<Sticker name="gift" size={24} />} n={2} title="Discount" hint={`Optional. Up to ${money(maxDiscount(t.subtotal))}${cfg.discounts.maxPercent < 100 ? ` (${cfg.discounts.maxPercent}% of the bill)` : ''}. Every discount needs a reason.`}>
+          <Card icon={<Sticker name="gift" size={24} />} n={2} title="Discount" hint={`Optional. Up to ${money(maxDiscount(t.subtotal))}${cfg.discounts.maxPercent < 100 ? ` (${cfg.discounts.maxPercent}% of the bill)` : ''}. Every discount needs a reason and the branch manager's approval.`}>
             <div className="relative">
               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[15px] font-semibold text-muted">₦</span>
               <input inputMode="numeric" value={showNum(s.discount.amount)} onChange={(e) => set((x) => ({ ...x, discount: { ...x.discount, amount: digitsNum(e.target.value) } }))} placeholder="0" aria-label="Discount amount" className={`${inputCls(errs.discount)} pl-9 font-bold`} />
@@ -1209,7 +1211,29 @@ function PaymentStep({ s, set, errs, branchId }: StepProps) {
             <FieldErr msg={errs.discount} />
             {s.discount.amount > 0 && (
               <div className="mt-3">
-                <LongText label="Reason for the discount" required value={s.discount.reason} onChange={(v) => set((x) => ({ ...x, discount: { ...x.discount, reason: v } }))} max={200} minRows={2} placeholder="For example: staff family, approved by the manager" error={errs.discountReason} />
+                <LongText label="Reason for the discount" required value={s.discount.reason} onChange={(v) => set((x) => ({ ...x, discount: { ...x.discount, reason: v } }))} max={200} minRows={2} placeholder="For example: the PR agent asked for 3,000 off, the patient is short of money" error={errs.discountReason} />
+              </div>
+            )}
+            {s.discount.amount > 0 && (
+              <div className="mt-3">
+                <FieldLabel label="Approved by" required />
+                <div className="space-y-1.5" role="radiogroup" aria-label="Discount approved by">
+                  {discountBy.map((a) => {
+                    const on = s.discount.approvedBy === a.value;
+                    return (
+                      <button key={a.value} type="button" role="radio" aria-checked={on} onClick={() => set((x) => ({ ...x, discount: { ...x.discount, approvedBy: a.value } }))} className={`press flex w-full items-center gap-3 rounded-2xl p-2.5 text-left ${on ? 'bg-[#faf7ff] ring-2 ring-violet' : 'bg-[#f8fafd] ring-1 ring-[#e3eaf4]'}`}>
+                        <InitialsAvatar name={a.label} size={36} />
+                        <span className="min-w-0 flex-1">
+                          <b className="block truncate text-[14px] text-ink">{a.label}</b>
+                          <span className="block truncate text-[12px] text-muted">{a.description}</span>
+                        </span>
+                        <span className={`grid h-5 w-5 place-items-center rounded-full ${on ? 'bg-violet text-white' : 'ring-2 ring-[#d3dce9]'}`}>{on && <Check size={12} strokeWidth={3} />}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <FieldErr msg={errs.discountApprovedBy} />
+                {!errs.discountApprovedBy && <span className="mt-1 block text-[12px] text-muted">Every discount is approved by the branch manager. Their name is on the bill and the receipt.</span>}
               </div>
             )}
             {s.discount.amount === 0 && (
@@ -1285,6 +1309,7 @@ function PreviewStep({ s, branchId, onEdit }: { s: BillingSession; branchId: str
       <Part title="Payment" step={3}>
         <Row l="Subtotal" v={money(t.subtotal)} />
         {t.discount > 0 && <Row l={`Discount (${s.discount.reason})`} v={`minus ${money(t.discount)}`} />}
+        {t.discount > 0 && <Row l="Discount approved by" v={s.discount.approvedBy ? s.discount.approvedBy.replace('|', ', ') : 'Not chosen'} tone={s.discount.approvedBy ? undefined : 'text-[#b42318]'} />}
         <Row l="Total" v={money(t.total)} />
         <Row l="Method" v={methodLabel(s.payment.method)} />
         {t.split.map((x) => (
