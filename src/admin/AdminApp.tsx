@@ -32,6 +32,7 @@ import { StaffPage } from './pages/Staff';
 import { InventoryPage } from './pages/Inventory';
 import { AuditPage, TrashPage } from './pages/Logs';
 import { ReportsPage } from './pages/Reports';
+import { SettingsPage } from './pages/Settings';
 
 interface AdminPage {
   id: string;
@@ -50,7 +51,7 @@ export const ADMIN_PAGES: AdminPage[] = [
   { id: 'patients', label: 'Patients', icon: UserRound, screen: PatientsPage },
   { id: 'finance', label: 'Finance & Expenses', icon: Wallet, screen: FinancePage },
   { id: 'reports', label: 'Reports', icon: ChartLine, screen: ReportsPage },
-  { id: 'settings', label: 'Settings', icon: Settings, screen: () => <ComingNext title="Settings" /> },
+  { id: 'settings', label: 'Settings', icon: Settings, screen: SettingsPage },
   { id: 'audit', label: 'Audit Log', icon: ScrollText, screen: AuditPage },
   { id: 'trash', label: 'Trash', icon: Trash2, screen: TrashPage },
 ];

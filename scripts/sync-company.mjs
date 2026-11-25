@@ -45,6 +45,8 @@ const ENTRIES = [
   'features/reports/access.ts',
   'features/reports/ReportPages.tsx',
   'features/reports/reportCss.ts',
+  // Settings: the organisation facts behind Overview, Branch management and Monitoring.
+  'features/settings/admin/orgData.ts',
 ];
 const KEEP_MOBILE = new Set(['app/router.ts']);
 
