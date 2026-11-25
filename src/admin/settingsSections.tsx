@@ -35,7 +35,9 @@ import { AddBranchSheet } from './addBranch';
 import { AddStaffSheet } from './pages/Staff';
 import { Approvals } from './pages/Finance';
 import { photoOf } from './people';
-import { LongText } from './fields';
+import { LongText, RuleInput, ruleProblem, type RuleKind } from './fields';
+import { emailProblem, nameProblem, phoneProblem } from '@/ui/fieldRules';
+import { emailTaken, passwordRules, setPassword, setSignInEmail, strength, useSignIn } from './signin';
 
 export type Go = (section: string) => void;
 
@@ -174,7 +176,7 @@ export function ProfileSection() {
   const [tried, setTried] = useState(false);
   const file = useRef<HTMLInputElement>(null);
   const photo = p.photo === undefined ? user.photo : p.photo || undefined;
-  const errs = { name: !name.trim() ? 'Enter your name.' : null, email: email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) ? 'Check the email address.' : null };
+  const errs = { name: nameProblem(name), email: emailProblem(email), phone: phoneProblem(phone) };
   return (
     <>
       <div className="mb-4 flex items-center gap-4 rounded-[22px] bg-linear-to-br from-[#e8f1ff] to-[#cfe2ff] p-4">
@@ -212,26 +214,15 @@ export function ProfileSection() {
         </span>
       </div>
       <div className="space-y-3.5 px-1">
-        <label className="block">
-          <FieldLabel label="Full name" required />
-          <input value={name} onChange={(e) => setName(e.target.value)} className={inputCls(tried ? errs.name : null)} />
-          <FieldErr msg={tried ? errs.name : null} />
-        </label>
-        <label className="block">
-          <FieldLabel label="Email address" />
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inputCls(tried ? errs.email : null)} />
-          <FieldErr msg={tried ? errs.email : null} />
-        </label>
-        <label className="block">
-          <FieldLabel label="Phone number" />
-          <input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" className={inputCls()} />
-        </label>
+        <RuleInput kind="name" label="Full name" required value={name} onChange={setName} showError={tried} />
+        <RuleInput kind="email" label="Email address" value={email} onChange={setEmail} showError={tried} />
+        <RuleInput kind="phone" label="Phone number" value={phone} onChange={setPhone} showError={tried} />
         <LongText label="Address" optional value={address} onChange={setAddress} max={240} minRows={2} placeholder={"House number and street\nArea, city"} hint="Press Enter for a new line." />
         <button
           type="button"
           onClick={() => {
             setTried(true);
-            if (errs.name || errs.email) return;
+            if (errs.name || errs.email || errs.phone) return;
             updateProfile(user.key, { name: name.trim(), email: email.trim(), phone: phone.trim(), address: address.trim() });
             showToast('Profile saved');
           }}
@@ -246,15 +237,15 @@ export function ProfileSection() {
 
 /* ─────────────── Company settings ─────────────── */
 
-const COMPANY_FIELDS: { k: keyof CompanyProfile; label: string; optional?: boolean; type?: string }[] = [
+const COMPANY_FIELDS: { k: keyof CompanyProfile; label: string; optional?: boolean; type?: string; rule?: RuleKind }[] = [
   { k: 'name', label: 'Company name' },
   { k: 'shortName', label: 'Short name' },
   { k: 'registeredName', label: 'Registered name', optional: true },
   { k: 'rcNumber', label: 'CAC (RC) number', optional: true },
-  { k: 'owner', label: 'Owner', optional: true },
-  { k: 'contactPerson', label: 'Contact person', optional: true },
-  { k: 'phone', label: 'Company phone', type: 'tel' },
-  { k: 'website', label: 'Website', optional: true },
+  { k: 'owner', label: 'Owner', optional: true, rule: 'name' },
+  { k: 'contactPerson', label: 'Contact person', optional: true, rule: 'name' },
+  { k: 'phone', label: 'Company phone', rule: 'phone' },
+  { k: 'website', label: 'Website', optional: true, rule: 'website' },
   { k: 'address', label: 'Registered address' },
   { k: 'city', label: 'City', optional: true },
   { k: 'state', label: 'State', optional: true },
@@ -273,9 +264,12 @@ export function CompanySection() {
   const logo = useRef<HTMLInputElement>(null);
   const changed = (Object.keys(form) as (keyof CompanyProfile)[]).filter((k) => form[k] !== saved[k]);
   const recChanged = (Object.keys(rec) as (keyof typeof rec)[]).filter((k) => rec[k] !== receipt[k]);
-  const emailErr = rec.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rec.email.trim()) ? 'Check the email address.' : null;
+  const [tried, setTried] = useState(false);
+  const emailErr = emailProblem(rec.email);
+  const ruleErrs = COMPANY_FIELDS.filter((x) => x.rule).map((x) => ruleProblem(x.rule!, form[x.k], false)).filter(Boolean);
   const save = () => {
-    if (emailErr || !form.name.trim()) return;
+    setTried(true);
+    if (emailErr || !form.name.trim() || ruleErrs.length) return;
     if (changed.length) updateCompany(form);
     if (recChanged.length) updateReceiptProfile(rec);
     logAudit({ category: 'Settings', action: 'Company settings changed', record: form.name, details: `Changed: ${[...changed, ...recChanged].join(', ')}`, branchId: null });
@@ -333,7 +327,11 @@ export function CompanySection() {
                   hint={f.k === 'address' ? 'The registered office address, printed on documents. Press Enter for a new line.' : 'Shown on the company profile.'}
                 />
               ) : (
-                <input value={form[f.k]} type={f.type ?? 'text'} onChange={(e) => setForm((x) => ({ ...x, [f.k]: e.target.value }))} className={inputCls(f.k === 'name' && !form.name.trim() ? 'x' : null)} />
+                f.rule ? (
+                  <RuleInput kind={f.rule} value={form[f.k]} onChange={(v) => setForm((x) => ({ ...x, [f.k]: v }))} showError={tried} />
+                ) : (
+                  <input value={form[f.k]} type={f.type ?? 'text'} onChange={(e) => setForm((x) => ({ ...x, [f.k]: e.target.value }))} className={inputCls(f.k === 'name' && !form.name.trim() ? 'x' : null)} />
+                )
               )}
             </label>
           ))}
@@ -341,11 +339,7 @@ export function CompanySection() {
       </Panel>
       <Panel title="Receipts and documents" note="What every patient receipt prints. Each branch's address and phone come from Branch management.">
         <div className="space-y-3">
-          <label className="block">
-            <FieldLabel label="Company email (printed)" />
-            <input type="email" value={rec.email} onChange={(e) => setRec((x) => ({ ...x, email: e.target.value }))} className={inputCls(emailErr)} />
-            <FieldErr msg={emailErr} />
-          </label>
+          <RuleInput kind="email" label="Company email (printed)" value={rec.email} onChange={(v) => setRec((x) => ({ ...x, email: v }))} showError={tried} />
           <label className="block">
             <FieldLabel label="Motto" optional />
             <input value={rec.motto} onChange={(e) => setRec((x) => ({ ...x, motto: e.target.value }))} className={inputCls()} />
@@ -436,6 +430,7 @@ function BranchSettingsSheet({ branchId, onClose }: { branchId: string; onClose:
   const mode = branchPaymentMode(branchId);
   const methods = enabledMethods(branchId);
   const changed = address !== contact.address || phone !== contact.phone || email !== prof.email || hours !== prof.hours;
+  const [triedContact, setTriedContact] = useState(false);
   const history = statusHistory(branchId);
   const toggleMethod = (m: PaymentMethod) => {
     const cur = Object.fromEntries(PAYMENT_METHODS.map((x) => [x, methods.includes(x)])) as Record<PaymentMethod, boolean>;
@@ -460,14 +455,8 @@ function BranchSettingsSheet({ branchId, onClose }: { branchId: string; onClose:
       <Panel title="Contact and hours" note="Printed on this branch's receipts and quotes.">
         <div className="space-y-3">
           <LongText label="Address" value={address} onChange={setAddress} max={240} placeholder={"Street, building and area\nLandmark, city"} hint="Printed on this branch's receipts. Press Enter for a new line." />
-          <label className="block">
-            <FieldLabel label="Phone" />
-            <input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" className={inputCls()} />
-          </label>
-          <label className="block">
-            <FieldLabel label="Branch email" optional />
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inputCls()} />
-          </label>
+          <RuleInput kind="phone" label="Phone" value={phone} onChange={setPhone} showError={triedContact} />
+          <RuleInput kind="email" label="Branch email" optional value={email} onChange={setEmail} showError={triedContact} />
           <label className="block">
             <FieldLabel label="Opening hours" optional />
             <input value={hours} onChange={(e) => setHours(e.target.value)} placeholder="For example Mon to Sat, 7am to 8pm" className={inputCls()} />
@@ -476,6 +465,8 @@ function BranchSettingsSheet({ branchId, onClose }: { branchId: string; onClose:
             type="button"
             disabled={!changed}
             onClick={() => {
+              setTriedContact(true);
+              if (phoneProblem(phone) || emailProblem(email)) return;
               updateBranchContact(branchId, { address: address.trim(), phone: phone.trim() });
               updateBranchProfile(branchId, { email: email.trim(), hours: hours.trim() });
               logAudit({ category: 'Settings', action: 'Branch contact changed', record: b.name, details: 'Address, phone, email or hours updated', branchId });
@@ -1272,5 +1263,129 @@ export function SystemSection() {
         <Bullets items={['The service catalogue, prices and PR agents come from the legacy records, which are never modified.', 'Daily activity is demonstration data built from that catalogue and network; it reconciles line by line.', 'The mobile admin uses the desktop app’s own logic, rules and figures.']} />
       </Panel>
     </>
+  );
+}
+
+/* ─────────────── Sign-in and password (set by the person themselves) ─────────────── */
+
+function Secret({ label, value, onChange, show, onShow, autoComplete }: { label: string; value: string; onChange: (v: string) => void; show: boolean; onShow: () => void; autoComplete: string }) {
+  return (
+    <label className="block">
+      <FieldLabel label={label} />
+      <span className="relative block">
+        <input type={show ? 'text' : 'password'} value={value} onChange={(e) => onChange(e.target.value)} autoComplete={autoComplete} className={`${inputCls()} pr-20`} />
+        <button type="button" onClick={onShow} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full px-3 py-1.5 text-[12.5px] font-semibold text-brand-600">
+          {show ? 'Hide' : 'Show'}
+        </button>
+      </span>
+    </label>
+  );
+}
+
+export function SignInSection() {
+  const { user } = useCompany();
+  const { showToast } = useNav();
+  const me = useSignIn(user.key);
+  const who = { name: user.name, role: user.role };
+  const startEmail = me?.email || (user.email && !emailProblem(user.email) ? user.email : '');
+  const [email, setEmail] = useState(startEmail);
+  const [triedEmail, setTriedEmail] = useState(false);
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [again, setAgain] = useState('');
+  const [show, setShow] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [pwErr, setPwErr] = useState<string | null>(null);
+  const emailErr = emailProblem(email, true) ?? (emailTaken(email, user.key) ? 'Someone else already signs in with this email.' : null);
+  const rules = passwordRules(next);
+  const st = strength(next);
+  const ready = rules.every((r) => r.ok) && next === again && (!me?.hash || current.length > 0);
+  const when = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '');
+  return (
+    <>
+      <div className="mb-3 flex items-center gap-3 rounded-[22px] bg-linear-to-br from-[#e8f1ff] to-[#cfe2ff] p-4">
+        <Sticker name="check" size={44} />
+        <div className="min-w-0">
+          <p className="text-[15px] font-bold text-ink">{me?.hash && me.email ? 'Your sign-in is set up' : 'Set up how you sign in'}</p>
+          <p className="text-[12.5px] leading-snug text-ink-2">Only you can set or change your password. Nobody else, not even the Company Admin or a manager, can see it.</p>
+        </div>
+      </div>
+
+      <Panel title="Sign-in email" note={me?.emailSetAt ? `Set on ${when(me.emailSetAt)}` : 'The email you will type to sign in.'}>
+        <RuleInput kind="email" label="Email" required value={email} onChange={setEmail} autoComplete="username" showError={triedEmail} error={triedEmail && emailTaken(email, user.key) ? 'Someone else already signs in with this email.' : null} />
+        <button
+          type="button"
+          disabled={email.trim() === (me?.email ?? '') && !!me?.email}
+          onClick={() => {
+            setTriedEmail(true);
+            if (emailErr) return;
+            setSignInEmail(user.key, who, email);
+            showToast('Sign-in email saved');
+          }}
+          className="press mt-3 min-h-11 w-full rounded-2xl bg-brand-600 text-[14.5px] font-semibold text-white disabled:opacity-40"
+        >
+          {me?.email ? 'Change sign-in email' : 'Save sign-in email'}
+        </button>
+      </Panel>
+
+      <Panel title={me?.hash ? 'Change password' : 'Create a password'} note={me?.passwordSetAt ? `Last changed on ${when(me.passwordSetAt)}` : 'You will sign in with your email and this password.'}>
+        <div className="space-y-3">
+          {me?.hash && <Secret label="Current password" value={current} onChange={(v) => (setCurrent(v), setPwErr(null))} show={show} onShow={() => setShow((s) => !s)} autoComplete="current-password" />}
+          <Secret label="New password" value={next} onChange={(v) => (setNext(v), setPwErr(null))} show={show} onShow={() => setShow((s) => !s)} autoComplete="new-password" />
+          {next && (
+            <div className="drop-down">
+              <span className="flex gap-1">
+                {[1, 2, 3, 4].map((i) => (
+                  <span key={i} className={`h-1.5 flex-1 rounded-full ${i <= st.score ? (st.score <= 1 ? 'bg-[#ef4444]' : st.score === 2 ? 'bg-[#f59e0b]' : 'bg-good') : 'bg-[#e3ebf7]'}`} />
+                ))}
+              </span>
+              <p className="mt-1 text-[12px] font-semibold text-ink-2">{st.label}</p>
+            </div>
+          )}
+          <ul className="grid grid-cols-2 gap-1.5">
+            {rules.map((r) => (
+              <li key={r.label} className={`flex items-center gap-1.5 text-[12.5px] ${r.ok ? 'text-good-ink' : 'text-muted'}`}>
+                <Check size={14} className={r.ok ? '' : 'opacity-30'} /> {r.label}
+              </li>
+            ))}
+          </ul>
+          <Secret label="Type it again" value={again} onChange={(v) => (setAgain(v), setPwErr(null))} show={show} onShow={() => setShow((s) => !s)} autoComplete="new-password" />
+          {again && again !== next && <FieldErr msg="The two passwords are not the same." />}
+          <FieldErr msg={pwErr} />
+          <button
+            type="button"
+            disabled={!ready || busy}
+            onClick={async () => {
+              setBusy(true);
+              const err = await setPassword(user.key, who, next, current);
+              setBusy(false);
+              if (err) return setPwErr(err);
+              setCurrent('');
+              setNext('');
+              setAgain('');
+              showToast(me?.hash ? 'Password changed' : 'Password created');
+            }}
+            className="press min-h-12 w-full rounded-2xl bg-brand-600 text-[15px] font-semibold text-white disabled:opacity-40"
+          >
+            {busy ? 'Saving' : me?.hash ? 'Change password' : 'Create password'}
+          </button>
+        </div>
+      </Panel>
+
+      <Panel title="Forgot your password?">
+        <p className="text-[13px] leading-snug text-ink-2">When sign-in is connected, a reset link goes to your sign-in email{me?.email ? ` (${me.email})` : ''}, and you choose a new password yourself.</p>
+        <NotConnected>Sign-in isn't connected yet, so STANLEY still opens without a password on this device. Your email and password are saved here (the password only as a scrambled code) and will be used when sign-in arrives.</NotConnected>
+      </Panel>
+    </>
+  );
+}
+
+/** For the admin on someone's profile: whether they have set up their own sign-in (never the password). */
+export function SignInStatus({ userKey }: { userKey: string }) {
+  const s = useSignIn(userKey);
+  return (
+    <span className={`rounded-full px-2 py-0.5 text-[11.5px] font-semibold ${s?.hash && s.email ? 'bg-tint-green text-good-ink' : 'bg-page text-muted'}`}>
+      {s?.hash && s.email ? `Signs in with ${s.email}` : 'Sign-in not set up yet'}
+    </span>
   );
 }

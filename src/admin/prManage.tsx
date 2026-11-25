@@ -22,6 +22,8 @@ import { useNav } from '@/app/store';
 import { Sticker } from '@/ui/kit';
 import { Sheet } from './ui';
 import { LongText } from './fields';
+import { RuleInput } from './fields';
+import { nameProblem, phoneProblem } from '@/ui/fieldRules';
 
 const NO_HOSPITAL = 'No hospital assigned';
 export const inputCls = (err?: string | null) => `min-h-12 w-full rounded-2xl border-[1.5px] bg-white px-4 text-[15px] text-ink outline-none ring-4 ${err ? 'border-[#e5484d] ring-[#fde3e3]' : 'border-brand-500 ring-brand-100'}`;
@@ -154,7 +156,8 @@ export function AgentEditSheet({ id, onClose }: { id: number; onClose: () => voi
   const [tried, setTried] = useState(false);
   const pctNum = Number(ownPct);
   const errs = {
-    name: !name.trim() ? "Enter the agent's full name." : null,
+    name: nameProblem(name),
+    phone: phoneProblem(phone),
     rate: useOwn && (!ownPct.trim() || !Number.isFinite(pctNum) || pctNum < 0 || pctNum > 50) ? 'Enter a rate between 0% and 50%.' : null,
   };
   const detailsChanged = name.trim() !== agent.name || (phone.trim() || 'N/A') !== agent.phone || hospital !== key;
@@ -162,7 +165,7 @@ export function AgentEditSheet({ id, onClose }: { id: number; onClose: () => voi
   const changed = detailsChanged || rateChanged;
   const save = () => {
     setTried(true);
-    if (errs.name || errs.rate) return;
+    if (errs.name || errs.rate || errs.phone) return;
     if (detailsChanged) editAgent(id, { name, phone, hospital });
     if (rateChanged) setAgentRate(id, useOwn ? pctNum / 100 : null, name.trim());
     showToast(hospital !== key ? `${name.trim()} transferred to ${hospital || 'no hospital'}` : `${name.trim()} updated`);
@@ -182,16 +185,8 @@ export function AgentEditSheet({ id, onClose }: { id: number; onClose: () => voi
       }
     >
       <div className="space-y-4 px-1 pb-2">
-        <label className="block">
-          <FieldLabel label="Full name" required />
-          <input value={name} onChange={(e) => setName(nameCase(e.target.value))} autoCapitalize="words" className={inputCls(tried ? errs.name : null)} />
-          <FieldErr msg={tried ? errs.name : null} />
-        </label>
-        <label className="block">
-          <FieldLabel label="Phone number" optional />
-          <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Leave blank if unknown" inputMode="tel" className={inputCls()} />
-          <span className="mt-1 block text-[12px] text-muted">A blank phone is saved as “N/A”, as in the legacy records.</span>
-        </label>
+        <RuleInput kind="name" label="Full name" required value={name} onChange={setName} showError={tried} />
+        <RuleInput kind="phone" label="Phone number" optional value={phone} onChange={setPhone} showError={tried} placeholder="Leave blank if unknown" hint="Numbers only. A blank phone is saved as “N/A”, as in the legacy records." />
         <div>
           <FieldLabel label={`Assigned hospital · ${hospital || NO_HOSPITAL}`} optional />
           <HospitalPick value={hospital} onChange={setHospital} />
@@ -252,7 +247,7 @@ export function AddAgentSheet({ hospital: initial = '', onClose, onAdded }: { ho
   const [hospital, setHospital] = useState(initial);
   const [tried, setTried] = useState(false);
   const branch = getBranch(LEGACY_BRANCH_ID);
-  const err = !name.trim() ? "Enter the PR agent's full name." : null;
+  const err = nameProblem(name) ?? phoneProblem(phone);
   const save = () => {
     setTried(true);
     if (err) return;
@@ -284,16 +279,8 @@ export function AddAgentSheet({ hospital: initial = '', onClose, onAdded }: { ho
             <p>Phone: {phone.trim() || 'N/A'}</p>
           </div>
         </div>
-        <label className="block">
-          <FieldLabel label="Full name" required />
-          <input value={name} onChange={(e) => setName(nameCase(e.target.value))} placeholder="For example Dr Amaka Obi" autoCapitalize="words" className={inputCls(tried ? err : null)} />
-          <FieldErr msg={tried ? err : null} />
-        </label>
-        <label className="block">
-          <FieldLabel label="Phone number" optional />
-          <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+234" inputMode="tel" className={inputCls()} />
-          <span className="mt-1 block text-[12px] text-muted">Leave blank if unknown; it is saved as “N/A”.</span>
-        </label>
+        <RuleInput kind="name" label="Full name" required value={name} onChange={setName} placeholder="For example Dr Amaka Obi" showError={tried} />
+        <RuleInput kind="phone" label="Phone number" optional value={phone} onChange={setPhone} showError={tried} hint="Numbers only. Leave blank if unknown; it is saved as “N/A”." />
         <div>
           <FieldLabel label={`Assigned hospital · ${hospital || NO_HOSPITAL}`} optional />
           <HospitalPick value={hospital} onChange={setHospital} />

@@ -17,6 +17,7 @@ import { REGULATORS, SIGN_IN_ENABLED, biometricsAvailable, disableBiometrics, en
 import { TITLES, saveProfile, squarePhoto, tidyName, tidyPhone, useProfile, validEmail } from '@/domain/profile';
 import { signOutDevice } from '@/app/Gate';
 import { Button, Card, Field, ScreenHeader, inputClass } from '@/ui/kit';
+import { onlyEmail, onlyPhone } from '@/ui/fieldRules';
 
 export function Profile() {
   const { referrals, navigate, showToast } = useApp();
@@ -261,10 +262,10 @@ function EditProfile({ onClose, onSaved, onPhoto }: { onClose: () => void; onSav
           <input id="p-last" autoComplete="family-name" value={last} onChange={(e) => setLast(e.target.value)} className={inputClass(lastErr)} />
         </Field>
         <Field label="Phone number" id="p-phone" error={phoneErr}>
-          <input id="p-phone" type="tel" inputMode="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className={inputClass(phoneErr)} />
+          <input id="p-phone" type="tel" inputMode="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(onlyPhone(e.target.value))} className={inputClass(phoneErr)} />
         </Field>
         <Field label="Email" id="p-email" error={emailErr}>
-          <input id="p-email" type="email" inputMode="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inputClass(emailErr)} />
+          <input id="p-email" type="email" inputMode="email" autoComplete="email" value={email} onChange={(e) => setEmail(onlyEmail(e.target.value))} className={inputClass(emailErr)} />
         </Field>
         <div className="mt-2 grid grid-cols-2 gap-3">
           <Button variant="secondary" onClick={onClose}>

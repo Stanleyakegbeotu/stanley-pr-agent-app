@@ -18,6 +18,7 @@ import { Sheet } from '../ui';
 import { AdminTopBar, PageGlow } from '../kit';
 import { PageTitle } from '../branchFirst';
 import * as S from '../settingsSections';
+import { useSignIn } from '../signin';
 
 interface Section {
   id: string;
@@ -35,6 +36,7 @@ const GROUPS: { label: string; sections: Section[] }[] = [
     sections: [
       { id: 'overview', label: 'Overview', icon: LayoutDashboard, tint: 'bg-brand-50 text-brand-600', hint: 'The organisation at a glance and what needs attention.', keywords: 'dashboard alerts status quick' },
       { id: 'profile', label: 'My profile', icon: UserRound, tint: 'bg-brand-50 text-brand-600', hint: 'Your own account: photo and contact details.', keywords: 'photo avatar name email phone account' },
+      { id: 'signin', label: 'Sign-in and password', icon: KeyRound, tint: 'bg-brand-50 text-brand-600', hint: 'Your sign-in email and password, set by you.', keywords: 'password login sign in email reset change security account' },
       { id: 'about', label: 'About my account', icon: BookOpenText, tint: 'bg-brand-50 text-brand-600', hint: 'Your role in plain words: what you can do and who to ask.', keywords: 'about role duties rules' },
     ],
   },
@@ -103,6 +105,7 @@ const BODY: Record<string, ComponentType<{ go: S.Go }>> = {
   overview: ({ go }) => <S.OverviewSection go={go} />,
   profile: () => <S.ProfileSection />,
   about: () => <AboutSection />,
+  signin: () => <S.SignInSection />,
   company: () => <S.CompanySection />,
   branches: () => <S.BranchesSection />,
   monitoring: () => <S.MonitoringSection />,
@@ -128,7 +131,9 @@ export function SettingsPage() {
   const p = useProfile(user.key);
   const [q, setQ] = useState('');
   const [open, setOpen] = useState<string | null>(null);
+  const mySignIn = useSignIn(user.key);
   const badges: Record<string, number> = {
+    signin: mySignIn?.hash && mySignIn.email ? 0 : 1,
     approvals: facts.pendingApprovals,
     managers: facts.perBranch.filter((b) => !b.manager && b.branch.status !== 'Inactive').length,
     data: facts.backupOverdue ? 1 : 0,

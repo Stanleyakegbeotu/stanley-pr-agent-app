@@ -22,6 +22,8 @@ import { formatCount } from '@company/shared/format';
 import { useNav } from '@/app/store';
 import { InitialsAvatar, Sticker } from '@/ui/kit';
 import { LongText } from '../fields';
+import { RuleInput } from '../fields';
+import { emailProblem, nameProblem, phoneProblem } from '@/ui/fieldRules';
 import { Sheet } from '../ui';
 import { AdminTopBar, EmptyCard, PageGlow, SectionTitle } from '../kit';
 import { DutyRota } from '../duty';
@@ -532,10 +534,11 @@ function StaffEditSheet({ member, onClose }: { member: StaffRecord; onClose: () 
   const [notes, setNotes] = useState(member.notes ?? '');
   const [tried, setTried] = useState(false);
   const otherManager = useMemo(() => staff.find((s) => s.branchId === member.branchId && s.id !== member.id && isManager(s) && s.status !== 'Left'), [staff, member]);
-  const emailOk = !email.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   const errs = {
-    name: !name.trim() ? 'Enter the full name.' : null,
-    contact: !phone.trim() && !email.trim() ? 'Give at least a phone number or an email address.' : !emailOk ? 'Check the email address, for example name@company.com.' : null,
+    name: nameProblem(name),
+    phone: phoneProblem(phone),
+    email: emailProblem(email),
+    contact: !phone.trim() && !email.trim() ? 'Give at least a phone number or an email address.' : null,
     startDate: !startDate ? 'Choose the start date.' : null,
     role: role === MANAGER_ROLE && otherManager ? `${otherManager.name} is already the branch manager. Change their role first.` : null,
   };
@@ -567,20 +570,10 @@ function StaffEditSheet({ member, onClose }: { member: StaffRecord; onClose: () 
       }
     >
       <div className="space-y-4 px-1 pb-2">
-        <label className="block">
-          <FieldLabel label="Full name" required />
-          <input value={name} onChange={(x) => setName(nameCase(x.target.value))} autoCapitalize="words" className={inputCls(e('name'))} />
-          <FieldErr msg={e('name')} />
-        </label>
-        <label className="block">
-          <FieldLabel label="Phone number" />
-          <input value={phone} onChange={(x) => setPhone(x.target.value)} inputMode="tel" placeholder="+234" className={inputCls()} />
-        </label>
-        <label className="block">
-          <FieldLabel label="Email address" />
-          <input type="email" value={email} onChange={(x) => setEmail(x.target.value)} placeholder="name@example.com" className={inputCls(e('contact'))} />
-          <FieldErr msg={e('contact')} />
-        </label>
+        <RuleInput kind="name" label="Full name" required value={name} onChange={setName} showError={tried} />
+        <RuleInput kind="phone" label="Phone number" value={phone} onChange={setPhone} showError={tried} />
+        <RuleInput kind="email" label="Email address" value={email} onChange={setEmail} showError={tried} />
+        <FieldErr msg={e('contact')} />
         <LongText label="Home address" optional value={address} onChange={setAddress} max={240} minRows={2} placeholder={"House number and street\nArea, city"} hint="Press Enter for a new line." />
         <div>
           <FieldLabel label="Role" />
@@ -622,10 +615,11 @@ export function AddStaffSheet({ branchId, presetRole, onClose, onCreated }: { br
   const [tried, setTried] = useState(false);
   const b = getBranch(branch);
   const currentManager = managerOf(staff, branch);
-  const emailOk = !email.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   const errs = {
-    name: !name.trim() ? "Enter the staff member's full name." : null,
-    contact: !emailOk ? 'Check the email address, for example name@company.com.' : !email.trim() && !phone.trim() ? 'Enter an email address or a phone number.' : null,
+    name: nameProblem(name),
+    phone: phoneProblem(phone),
+    email: emailProblem(email),
+    contact: !email.trim() && !phone.trim() ? 'Enter an email address or a phone number.' : null,
     role: !role ? 'Choose a role.' : role === MANAGER_ROLE && currentManager ? 'This branch already has a manager. Choose another role.' : null,
     start: !start ? 'Choose the start date.' : null,
   };
@@ -665,20 +659,10 @@ export function AddStaffSheet({ branchId, presetRole, onClose, onCreated }: { br
           </div>
         </div>
         <p className="text-[13px] font-semibold text-ink-2">Personal details · at least an email or a phone number</p>
-        <label className="block">
-          <FieldLabel label="Full name" required />
-          <input value={name} onChange={(x) => setName(nameCase(x.target.value))} placeholder="For example Chiamaka Eze" autoCapitalize="words" className={inputCls(e('name'))} />
-          <FieldErr msg={e('name')} />
-        </label>
-        <label className="block">
-          <FieldLabel label="Email address" />
-          <input type="email" value={email} onChange={(x) => setEmail(x.target.value)} placeholder="name@example.com" className={inputCls(e('contact'))} />
-          <FieldErr msg={e('contact')} />
-        </label>
-        <label className="block">
-          <FieldLabel label="Phone number" />
-          <input value={phone} onChange={(x) => setPhone(x.target.value)} placeholder="+234" inputMode="tel" className={inputCls()} />
-        </label>
+        <RuleInput kind="name" label="Full name" required value={name} onChange={setName} placeholder="For example Chiamaka Eze" showError={tried} />
+        <RuleInput kind="email" label="Email address" value={email} onChange={setEmail} showError={tried} />
+        <RuleInput kind="phone" label="Phone number" value={phone} onChange={setPhone} showError={tried} />
+        <FieldErr msg={e('contact')} />
         <div>
           <FieldLabel label="Branch" required />
           <div className="flex flex-wrap gap-2">

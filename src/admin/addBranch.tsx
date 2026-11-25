@@ -28,6 +28,7 @@ import { updateBranchProfile } from '@company/services/settingsStore';
 import { Sticker } from '@/ui/kit';
 import { Sheet } from './ui';
 import { LongText } from './fields';
+import { emailProblem, onlyEmail, onlyName, onlyPhone } from '@/ui/fieldRules';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const PHONE_RE = /^\+?[\d\s()-]{7,20}$/;
@@ -134,7 +135,7 @@ export function AddBranchSheet({ onClose }: { onClose: () => void }) {
   const filled = (s: string) => s.trim().length > 0;
   const validPhones = phones.map((p) => p.trim()).filter(Boolean);
   const badPhone = validPhones.some((p) => !PHONE_RE.test(p));
-  const emailBad = filled(email) && !EMAIL_RE.test(email.trim());
+  const emailBad = emailProblem(email);
   const cities = country === 'NG' ? (NG_CITIES[region] ?? []) : [];
   const errs = {
     name: filled(name) ? '' : 'Enter the branch name, e.g. Lagos.',
@@ -143,7 +144,7 @@ export function AddBranchSheet({ onClose }: { onClose: () => void }) {
     city: filled(city) ? '' : 'Choose or type the city.',
     address: filled(address) ? '' : 'Enter the branch address. It prints on receipts.',
     phone: badPhone ? 'Enter valid phone numbers, e.g. 0803 123 4567.' : !validPhones.length && !filled(email) ? 'Enter a phone number or an email.' : '',
-    email: emailBad ? 'Enter a valid email address.' : '',
+    email: emailBad ?? '',
     pay: payMode === 'custom' && !Object.values(methods).some(Boolean) ? 'Turn on at least one payment method.' : '',
   };
   const firstErr = Object.values(errs).find(Boolean);
@@ -251,7 +252,7 @@ export function AddBranchSheet({ onClose }: { onClose: () => void }) {
               {phones.map((ph, i) => (
                 <div key={i} className="flex items-center gap-2">
                   <span className="grid min-h-12 shrink-0 place-items-center rounded-2xl bg-page px-3 text-[14px] font-semibold text-ink-2">{c.dial || '+'}</span>
-                  <input value={ph} onChange={(e) => setPhones((l) => l.map((x, j) => (j === i ? e.target.value : x)))} inputMode="tel" placeholder={i === 0 ? 'Main line' : ['Front desk line', 'Lab line', 'After-hours line', 'Another line'][i - 1]} aria-label={`Phone number ${i + 1}`} className={inputCls} />
+                  <input value={ph} onChange={(e) => setPhones((l) => l.map((x, j) => (j === i ? onlyPhone(e.target.value) : x)))} type="tel" inputMode="tel" placeholder={i === 0 ? 'Main line' : ['Front desk line', 'Lab line', 'After-hours line', 'Another line'][i - 1]} aria-label={`Phone number ${i + 1}`} className={inputCls} />
                   {phones.length > 1 && (
                     <button type="button" onClick={() => setPhones((l) => l.filter((_, j) => j !== i))} aria-label={`Remove phone number ${i + 1}`} className="press grid h-10 w-10 shrink-0 place-items-center rounded-full bg-page text-muted">
                       <X size={17} />
@@ -268,11 +269,11 @@ export function AddBranchSheet({ onClose }: { onClose: () => void }) {
             {tried && errs.phone ? show('phone') : <span className="mt-1 block text-[12px] text-muted">Add more for the front desk, lab or after-hours line.</span>}
           </Label>
           <Label text="Email address">
-            <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" inputMode="email" placeholder="lagos@example.com" className={inputCls} />
+            <input value={email} onChange={(e) => setEmail(onlyEmail(e.target.value))} type="email" inputMode="email" autoCapitalize="off" spellCheck={false} placeholder="lagos@gmail.com" className={inputCls} />
             {show('email')}
           </Label>
           <Label text="Branch contact person">
-            <input value={contact} onChange={(e) => setContact(e.target.value)} placeholder="Until a manager is appointed" autoCapitalize="words" className={inputCls} />
+            <input value={contact} onChange={(e) => setContact(onlyName(e.target.value))} placeholder="Until a manager is appointed" autoCapitalize="words" className={inputCls} />
           </Label>
         </Section>
 

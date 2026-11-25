@@ -13,6 +13,7 @@ import { formatPersonName, isValidNgPhone } from '@/domain/format';
 import { TITLES, tidyName, validEmail } from '@/domain/profile';
 import { Button, Field, inputClass } from '@/ui/kit';
 import { LegalDoc } from '@/screens/Legal';
+import { emailProblem, onlyEmail, onlyPhone } from '@/ui/fieldRules';
 
 /* ─────────────── frame ─────────────── */
 
@@ -113,7 +114,7 @@ function RegisterForm({ onOtp }: { onOtp: () => void }) {
     if (f.licence.trim().length < 4) return setErr('Enter your licence or folio number. Silhouette checks it with your regulator.');
     if (f.facility.trim().length < 3) return setErr('Enter the facility where you work.');
     if (!isValidNgPhone(f.phone)) return setErr('Enter a valid Nigerian mobile number.');
-    if (!validEmail(f.email)) return setErr('Enter a valid email address.');
+    if (emailProblem(f.email, true)) return setErr(emailProblem(f.email, true)!);
     try {
       await startRegister({ title: f.title, firstName: first, lastName: last, profession: f.profession, regulator: f.regulator, licence: f.licence.trim().toUpperCase(), facility: f.facility.trim(), phone: f.phone.trim(), email: f.email.trim().toLowerCase() }, f.password);
       onOtp();
@@ -165,10 +166,10 @@ function RegisterForm({ onOtp }: { onOtp: () => void }) {
       </Field>
       <div className="grid gap-x-3 sm:grid-cols-2">
         <Field label="Phone" id="rg-phone">
-          <input id="rg-phone" type="tel" inputMode="tel" autoComplete="tel" value={f.phone} onChange={(e) => set('phone', e.target.value)} className={inputClass()} />
+          <input id="rg-phone" type="tel" inputMode="tel" autoComplete="tel" value={f.phone} onChange={(e) => set('phone', onlyPhone(e.target.value))} className={inputClass()} />
         </Field>
         <Field label="Email" id="rg-email">
-          <input id="rg-email" type="email" autoComplete="email" value={f.email} onChange={(e) => set('email', e.target.value)} className={inputClass()} />
+          <input id="rg-email" type="email" autoComplete="email" value={f.email} onChange={(e) => set('email', onlyEmail(e.target.value))} className={inputClass()} />
         </Field>
       </div>
       <Field label="Password (at least 8 characters)" id="rg-pw">

@@ -6,7 +6,8 @@
  * show what to write and how much room is left. Short facts (phone, hours,
  * amounts) stay single-line inputs.
  */
-import { useEffect, useId, useRef, type TextareaHTMLAttributes } from 'react';
+import { useEffect, useId, useRef, useState, type InputHTMLAttributes, type TextareaHTMLAttributes } from 'react';
+import { emailProblem, nameProblem, onlyEmail, onlyName, onlyPhone, phoneProblem, websiteProblem } from '@/ui/fieldRules';
 import { FieldErr, FieldLabel } from './prManage';
 
 const LINE = 24; // px per line at the field's font size and line height
@@ -81,3 +82,47 @@ export function LongText({
     </div>
   );
 }
+
+/* ─────────────── fields that only accept what they are for ─────────────── */
+
+export type RuleKind = 'phone' | 'email' | 'name' | 'website';
+const RULES: Record<RuleKind, { clean: (v: string) => string; problem: (v: string, req: boolean) => string | null; type: string; inputMode: 'tel' | 'email' | 'text' | 'url'; autoComplete: string; placeholder: string; hint?: string }> = {
+  phone: { clean: onlyPhone, problem: phoneProblem, type: 'tel', inputMode: 'tel', autoComplete: 'tel', placeholder: '08031234567', hint: 'Numbers only. Start with 0, or + and the country code.' },
+  email: { clean: onlyEmail, problem: emailProblem, type: 'email', inputMode: 'email', autoComplete: 'email', placeholder: 'name@gmail.com' },
+  name: { clean: onlyName, problem: (v, req) => nameProblem(v, req), type: 'text', inputMode: 'text', autoComplete: 'name', placeholder: 'Full name' },
+  website: { clean: (v) => v.replace(/\s/g, ''), problem: (v) => websiteProblem(v), type: 'url', inputMode: 'url', autoComplete: 'url', placeholder: 'example.com' },
+};
+/** The same check a form runs before saving. */
+export const ruleProblem = (kind: RuleKind, v: string, required = false) => RULES[kind].problem(v, required);
+
+/**
+ * A single-line field with its own rules: it filters what can be typed
+ * (letters never appear in a phone number), checks the value when you leave
+ * the field or press save, and says what is wrong in one sentence.
+ */
+export function RuleInput({ kind, label, value, onChange, required, optional, hint, placeholder, showError, error, autoComplete, ...rest }: { kind: RuleKind; label?: string; value: string; onChange: (v: string) => void; required?: boolean; optional?: boolean; hint?: string; placeholder?: string; /** The form tried to save: show the problem even if the field wasn't visited. */ showError?: boolean; /** An extra problem from the form (e.g. already in use). */ error?: string | null; autoComplete?: string } & Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'type'>) {
+  const r = RULES[kind];
+  const [touched, setTouched] = useState(false);
+  const problem = error ?? ((touched || showError) && (value.trim() || showError) ? r.problem(value, !!required) : null);
+  return (
+    <div>
+      {label && <FieldLabel label={label} required={required} optional={optional} />}
+      <input
+        type={r.type}
+        inputMode={r.inputMode}
+        autoComplete={autoComplete ?? r.autoComplete}
+        autoCapitalize={kind === 'name' ? 'words' : 'off'}
+        spellCheck={false}
+        value={value}
+        onChange={(e) => onChange(kind === 'name' ? capitalise(r.clean(e.target.value)) : r.clean(e.target.value))}
+        onBlur={() => setTouched(true)}
+        placeholder={placeholder ?? r.placeholder}
+        aria-invalid={!!problem}
+        className={`min-h-12 w-full rounded-2xl border-[1.5px] bg-white px-4 text-[15px] text-ink outline-none ring-4 placeholder:text-faint ${problem ? 'border-[#e5484d] ring-[#fde3e3]' : 'border-brand-500 ring-brand-100'}`}
+        {...rest}
+      />
+      {problem ? <FieldErr msg={problem} /> : (hint ?? r.hint) && <span className="mt-1 block text-[12px] text-muted">{hint ?? r.hint}</span>}
+    </div>
+  );
+}
+const capitalise = (v: string) => v.replace(/(^|[\s'’-])(\p{Ll})/gu, (_m, a: string, b: string) => a + b.toUpperCase());

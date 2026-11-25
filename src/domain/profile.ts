@@ -7,6 +7,7 @@
 import { useSyncExternalStore } from 'react';
 import { PHOTOS } from '@/assets';
 import { getAccount, updateClinician, useAccount } from './account';
+import { emailProblem } from '@/ui/fieldRules';
 
 const PHOTO_KEY = 'stanley.pr.photo.v1';
 const listeners = new Set<() => void>();
@@ -72,7 +73,7 @@ export function tidyName(v: string): string | null {
   return t.replace(/(^|[\s'-])(\p{L})/gu, (_, a: string, b: string) => a + b.toUpperCase());
 }
 export const TITLES = ['Dr.', 'Prof.', 'Pharm.', 'Nurse', 'Mr.', 'Mrs.', 'Ms.', 'Miss', ''];
-export const validEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v.trim());
+export const validEmail = (v: string) => !emailProblem(v, true);
 
 /** Square, small JPEG of a chosen photo (keeps the phone's storage light). */
 export async function squarePhoto(file: File, size = 360): Promise<string> {

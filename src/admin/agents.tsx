@@ -36,6 +36,7 @@ import { LongText } from './fields';
 import { AddAgentSheet, AgentEditSheet, TrashSheet } from './prManage';
 import { hasPhone, hospitalKey } from '@company/data/legacy';
 import { BASELINE_AGENTS } from '@company/data/userRecords';
+import { onlyName } from '@/ui/fieldRules';
 
 const ALL_TIME: DateRange = { from: DATA_START, to: TODAY, days: diffDays(DATA_START, TODAY) + 1 };
 /** PR agents belong to the branch their referrals go to (the legacy branch until agents carry a branch). */
@@ -489,7 +490,7 @@ function BankSheet({ id, name, onClose }: { id: number; name: string; onClose: (
         </label>
         <label className="mt-3 block">
           <span className="mb-1.5 block text-[14px] font-semibold text-ink">Account name</span>
-          <input value={acct} onChange={(e) => setAcct(e.target.value)} placeholder="Name on the bank account" className={inputCls} />
+          <input value={acct} onChange={(e) => setAcct(onlyName(e.target.value))} autoCapitalize="words" placeholder="Name on the bank account" className={inputCls} />
           {tried && errs.acct && <span className="mt-1 block text-[12.5px] font-medium text-[#d93036]">{errs.acct}</span>}
         </label>
       </div>
