@@ -14,14 +14,17 @@
  *     part / not paid; a balance needs a reason, who approved it and an
  *     optional promised date.
  *   4 Preview: everything, with Edit on each part.
- *   5 Receipt: the desktop receipt; print, PDF or image.
+ *   5 Receipt: the desktop receipt, view only on the phone (privacy rule).
+ * Look (owner, 2026-11-25, "premium"): a frosted header with a numbered
+ * stepper, a question per step, calm fields, choice tiles instead of
+ * toggles, a receipt style preview and Back / Continue in the bottom bar.
  * The Patient ID is reserved when leaving step 1 and only becomes a record
  * when the bill is saved. Work is saved as a draft automatically; leaving
  * asks Save draft or Discard. The tab bar hides while a bill is open.
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, Check, ChevronRight, CircleCheck, CreditCard, FilePlus2, FlaskConical, Hash, Info, Minus, Plus, Search, UserCheck, UserRound, X } from 'lucide-react';
+import { ArrowLeft, ArrowLeftRight, Banknote, Check, ChevronRight, CircleCheck, Clock3, CreditCard, FilePlus2, FlaskConical, Hash, Info, Minus, Pencil, PieChart, Plus, Search, Split, UserCheck, UserRound, X, type LucideIcon } from 'lucide-react';
 import { useApp as useCompany } from '@company/app/AppState';
 import { getBranch } from '@company/data/company';
 import { PAYMENT_METHODS, type PaymentMethod } from '@company/data/types';
@@ -78,12 +81,20 @@ import { QUOTE_KEY, type QuoteHandOver } from '../calculator';
 
 type Step = 1 | 2 | 3;
 const STEPS = ['Patient', 'Services', 'Payment', 'Preview'] as const;
-const NEXT = ['Continue to services', 'Continue to payment', 'Continue to preview', 'Complete billing'];
+const NEXT = ['Continue to tests', 'Continue to payment', 'Check the bill', 'Complete billing'];
+const INTRO: [string, string][] = [
+  ['Who is the patient?', 'Find them if they have been here before, or enter their details.'],
+  ['Which tests today?', 'Tap the most done tests, search, or open a category.'],
+  ['How are they paying?', 'Method, how much was paid, and any discount.'],
+  ['Check and complete', 'Everything at a glance. Tap Edit to change a part.'],
+];
 const ago = (iso: string | null) => {
   if (!iso) return 'not saved yet';
   const s = Math.round((Date.now() - new Date(iso).getTime()) / 1000);
   return s < 10 ? 'just now' : s < 60 ? `${s} seconds ago` : s < 3600 ? `${Math.round(s / 60)} min ago` : new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 };
+const METHOD_ICON: Partial<Record<string, LucideIcon>> = { Cash: Banknote, POS: CreditCard, Transfer: ArrowLeftRight, Split };
+const METHOD_SUB: Partial<Record<string, string>> = { Cash: 'At the desk', POS: 'Card', Transfer: 'To the bank', Split: 'Two methods' };
 const digitsNum = (v: string) => Number(v.replace(/\D/g, '').slice(0, 12)) || 0;
 const showNum = (n: number) => (n ? n.toLocaleString('en-NG') : '');
 
@@ -417,39 +428,59 @@ export function BillingPage() {
   const step = session.step;
   const sameDrafts = step === 1 ? draftsForPatient(branchId, session.patient, session.id) : [];
   return (
-    <div className="relative pb-28">
-      {/* Header */}
-      <header className="sticky top-0 z-30 -mx-5 bg-[#f4f8fe]/95 px-5 pb-2 pt-[var(--safe-top)] backdrop-blur-xl md:-mx-8 md:px-8">
-        <div className="flex min-h-14 items-center gap-2">
-          <button type="button" onClick={() => (step === 5 ? close() : hasContent(session) ? setLeaving(true) : (session.reservedId && releasePatientId(session.reservedId), close()))} aria-label="Close bill" className="press -ml-2 grid h-11 w-11 place-items-center rounded-full text-ink">
-            {step === 5 ? <X size={22} /> : <ArrowLeft size={22} />}
+    <div className="no-stagger relative pb-28">
+      {/* Header: who is being billed, autosave, and the numbered stepper. */}
+      <header className="sticky top-0 z-30 -mx-5 bg-[#f4f8fe]/90 px-5 pb-3 pt-[var(--safe-top)] shadow-[0_10px_24px_-18px_rgba(30,74,160,0.35)] backdrop-blur-xl md:-mx-8 md:px-8">
+        <div className="flex min-h-14 items-center gap-2.5">
+          <button type="button" onClick={() => (step === 5 ? close() : hasContent(session) ? setLeaving(true) : (session.reservedId && releasePatientId(session.reservedId), close()))} aria-label="Close bill" className="press grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white text-ink shadow-[0_4px_12px_rgba(30,74,160,0.12)] ring-1 ring-line/60">
+            {step === 5 ? <X size={20} /> : <ArrowLeft size={20} />}
           </button>
+          {session.patient.name.trim() ? <InitialsAvatar name={session.patient.name} size={38} /> : null}
           <div className="min-w-0 flex-1">
-            <p className="truncate text-[17px] font-bold text-ink">{step === 5 ? 'Billing complete' : session.patient.name.trim() || 'New patient bill'}</p>
-            <p className="truncate text-[12px] text-muted">{step === 5 ? order?.invoiceNo : `${session.patient.existingId ?? session.reservedId ?? 'Patient ID reserved on Continue'} · ${lastSaved ? `draft saved ${ago(lastSaved)}` : 'saves as you go'}`}</p>
+            <p className="truncate text-[16.5px] font-bold leading-tight text-ink">{step === 5 ? 'Billing complete' : session.patient.name.trim() || 'New patient bill'}</p>
+            <p className="flex items-center gap-1.5 truncate text-[12px] text-muted">
+              {step < 5 && <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${lastSaved ? 'bg-good' : 'bg-[#c3cede]'}`} />}
+              <span className="truncate">{step === 5 ? order?.invoiceNo : `${session.patient.existingId ?? session.reservedId ?? 'ID reserved on Continue'} · ${lastSaved ? `saved ${ago(lastSaved)}` : 'saves as you go'}`}</span>
+            </p>
           </div>
+          {step >= 2 && step < 5 && (
+            <span className="shrink-0 rounded-full bg-white px-3 py-1.5 text-[13px] font-bold text-ink shadow-sm ring-1 ring-line/70">{money(t.total)}</span>
+          )}
         </div>
         {step < 5 && (
-          <div className="grid grid-cols-4 gap-1.5 pb-1">
+          <ol className="mt-1 flex items-start" aria-label="Billing steps">
             {STEPS.map((label, i) => {
               const n = (i + 1) as 1 | 2 | 3 | 4;
               const done = n < step;
+              const on = n === step;
               return (
-                <button key={label} type="button" disabled={n > step} onClick={() => goStep(n)} className="text-left">
-                  <span className={`block h-1.5 rounded-full transition-colors ${n <= step ? 'bg-brand-600' : 'bg-[#dbe5f3]'}`} />
-                  <span className={`mt-1 flex items-center gap-1 text-[11.5px] font-semibold ${n === step ? 'text-brand-700' : done ? 'text-ink-2' : 'text-faint'}`}>
-                    {done && <Check size={12} className="text-good" />}
-                    {label}
-                  </span>
-                </button>
+                <li key={label} className="relative flex flex-1 flex-col items-center">
+                  {i > 0 && <span aria-hidden="true" className={`absolute right-1/2 top-[15px] h-[3px] w-full -translate-x-[15px] rounded-full ${n <= step ? 'bg-linear-to-r from-good to-brand-500' : 'bg-[#dbe5f3]'}`} style={{ width: 'calc(100% - 30px)' }} />}
+                  <button type="button" disabled={n > step} onClick={() => goStep(n)} aria-current={on ? 'step' : undefined} className={`press relative z-10 grid h-[30px] w-[30px] place-items-center rounded-full text-[13px] font-bold transition-all ${on ? 'bg-linear-to-b from-brand-500 to-brand-700 text-white shadow-[0_6px_14px_rgba(31,111,232,0.4)] ring-4 ring-brand-100' : done ? 'bg-good text-white' : 'bg-white text-faint ring-1 ring-[#dbe5f3]'}`}>
+                    {done ? <Check size={15} strokeWidth={3} /> : n}
+                  </button>
+                  <span className={`mt-1 text-[11.5px] font-semibold ${on ? 'text-brand-700' : done ? 'text-ink-2' : 'text-faint'}`}>{label}</span>
+                </li>
               );
             })}
-          </div>
+          </ol>
         )}
       </header>
 
-      {notice && <p className="mb-3 flex items-center gap-2 rounded-2xl bg-brand-50 px-3.5 py-2.5 text-[13px] text-brand-800"><Info size={15} className="shrink-0" /> {notice}</p>}
-      {error && <p className="mb-3 rounded-2xl bg-[#fdecec] px-3.5 py-2.5 text-[13px] font-medium text-[#b42318]">{error}</p>}
+      {step < 5 && (
+        <div className="mb-3 mt-4 px-0.5">
+          <p className="text-[12px] font-bold uppercase tracking-[0.12em] text-brand-600">Step {step} of 4</p>
+          <h2 className="mt-0.5 text-[23px] font-extrabold leading-tight tracking-[-0.02em] text-ink">{INTRO[step - 1]![0]}</h2>
+          <p className="mt-0.5 text-[13.5px] text-muted">{INTRO[step - 1]![1]}</p>
+        </div>
+      )}
+
+      {notice && (
+        <p className="mb-3 flex items-start gap-2.5 rounded-2xl bg-linear-to-r from-[#eaf2ff] to-[#f3f7ff] px-3.5 py-3 text-[13px] leading-snug text-brand-800 ring-1 ring-[#d9e6fb]">
+          <Info size={16} className="mt-px shrink-0" /> {notice}
+        </p>
+      )}
+      {error && <p className="mb-3 rounded-2xl bg-[#fdecec] px-3.5 py-3 text-[13px] font-medium text-[#b42318] ring-1 ring-[#f9d4d4]">{error}</p>}
       {sameDrafts.length > 0 && (
         <div className="mb-3 rounded-[20px] bg-[#fff7ec] p-3.5 ring-1 ring-[#ffe0b8]">
           <p className="text-[13.5px] font-semibold text-[#9a4a07]">This patient has an unfinished bill</p>
@@ -499,12 +530,17 @@ export function BillingPage() {
           ) : (
             <>
               {step >= 2 && (
+                <button type="button" onClick={() => goStep((step - 1) as 1 | 2 | 3)} aria-label="Back to the previous step" className="press grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-page text-ink ring-1 ring-line">
+                  <ArrowLeft size={20} />
+                </button>
+              )}
+              {step >= 2 && (
                 <span className="min-w-0">
                   <span className="block text-[11.5px] text-muted">{step >= 3 ? (t.balance > 0 ? `Paid ${money(t.amountPaid)}` : 'Total') : `${session.services.length} test${session.services.length === 1 ? '' : 's'}`}</span>
-                  <b className="block truncate text-[18px] text-ink">{money(t.total)}</b>
+                  <b className="block truncate text-[18px] tracking-[-0.01em] text-ink">{money(t.total)}</b>
                 </span>
               )}
-              <button type="button" onClick={next} className={`press flex min-h-12 flex-1 items-center justify-center gap-1.5 rounded-2xl text-[15px] font-semibold text-white ${step === 4 ? 'bg-good' : 'bg-brand-600'}`}>
+              <button type="button" onClick={next} className={`press flex min-h-12 flex-1 items-center justify-center gap-1.5 rounded-2xl text-[15px] font-bold text-white ${step === 4 ? 'bg-linear-to-b from-[#22b866] to-[#139a52] shadow-[0_10px_22px_rgba(22,163,90,0.35)]' : 'bg-linear-to-b from-brand-500 to-brand-600 shadow-[0_10px_22px_rgba(31,111,232,0.32)]'}`}>
                 {NEXT[step - 1]} {step < 4 ? <ChevronRight size={18} /> : <Check size={18} />}
               </button>
             </>
@@ -596,18 +632,34 @@ function DraftRow({ d, money, onResume }: { d: BillingSession; money: (n: number
   );
 }
 
-function Card({ icon, title, hint, children }: { icon: ReactNode; title: string; hint?: string; children: ReactNode }) {
+function Card({ icon, title, hint, children, n }: { icon: ReactNode; title: string; hint?: string; children: ReactNode; n?: number }) {
   return (
-    <section className="mb-3 rounded-[22px] bg-white p-4 shadow-[0_6px_20px_rgba(30,74,160,0.06)] ring-1 ring-line/70">
-      <div className="mb-3 flex items-start gap-3">
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600">{icon}</span>
-        <span className="min-w-0">
-          <span className="block text-[16px] font-bold text-ink">{title}</span>
-          {hint && <span className="block text-[12.5px] leading-snug text-muted">{hint}</span>}
+    <section className="mb-3.5 rounded-[24px] bg-white p-4 shadow-[0_10px_30px_-12px_rgba(30,74,160,0.18)] ring-1 ring-[#e6edf7]">
+      <div className="mb-3.5 flex items-start gap-3">
+        <span className="relative grid h-10 w-10 shrink-0 place-items-center rounded-[14px] bg-linear-to-br from-[#eaf2ff] to-[#d6e5ff] text-brand-600">
+          {icon}
+          {n != null && <span className="absolute -right-1 -top-1 grid h-[18px] w-[18px] place-items-center rounded-full bg-brand-600 text-[10.5px] font-bold text-white ring-2 ring-white">{n}</span>}
+        </span>
+        <span className="min-w-0 pt-0.5">
+          <span className="block text-[16.5px] font-bold leading-tight text-ink">{title}</span>
+          {hint && <span className="mt-0.5 block text-[12.5px] leading-snug text-muted">{hint}</span>}
         </span>
       </div>
       {children}
     </section>
+  );
+}
+
+/** A big choice tile (instead of a switch): icon or sticker, title, one line. */
+function Choice({ on, onClick, title, sub, art, tone = 'brand' }: { on: boolean; onClick: () => void; title: string; sub: string; art: ReactNode; tone?: 'brand' | 'green' | 'violet' }) {
+  const ring = tone === 'green' ? 'ring-good bg-[#effbf4]' : tone === 'violet' ? 'ring-violet bg-[#f5f1ff]' : 'ring-brand-500 bg-brand-50';
+  return (
+    <button type="button" role="radio" aria-checked={on} onClick={onClick} className={`press relative flex flex-col items-start rounded-[20px] p-3.5 text-left transition-all ${on ? `ring-2 ${ring} shadow-[0_8px_20px_-10px_rgba(31,111,232,0.45)]` : 'bg-[#f8fafd] ring-1 ring-[#e3eaf4]'}`}>
+      <span className="grid h-11 w-11 place-items-center">{art}</span>
+      <b className="mt-1.5 block text-[14.5px] leading-tight text-ink">{title}</b>
+      <span className="mt-0.5 block text-[12px] leading-snug text-muted">{sub}</span>
+      <span className={`absolute right-3 top-3 grid h-5 w-5 place-items-center rounded-full ${on ? 'bg-brand-600 text-white' : 'ring-2 ring-[#d3dce9]'}`}>{on && <Check size={12} strokeWidth={3.2} />}</span>
+    </button>
   );
 }
 
@@ -633,90 +685,129 @@ function PatientStep({ s, set, errs, branchId }: StepProps) {
     set((x) => ({ ...x, patient: { uuid: p.uuid, existingId: p.patientId, existingType: p.type, name: p.name, phone: p.phone }, differentPatientConfirmed: false }));
     setFind('');
   };
+  const [mode, setMode] = useState<'new' | 'find'>('new');
   return (
     <>
-      <Card icon={<UserRound size={18} />} title="Patient" hint="Existing patients keep their Patient ID; a new patient gets one reserved for this bill.">
-        {!existing ? (
-          <div className="mb-4">
-            <FieldLabel label="Existing patient? Find them first" />
-            <div className="relative">
-              <Search size={17} className="pointer-events-none absolute left-4 top-1/2 z-10 -translate-y-1/2 text-muted" />
-              <input value={find} onChange={(e) => setFind(e.target.value)} placeholder="Patient ID, name or phone" aria-label="Find an existing patient" className={`${inputCls()} pl-11`} />
+      <Card icon={<UserRound size={19} />} n={1} title="Patient details" hint="Returning patients keep their Patient ID. A new patient gets one reserved for this bill.">
+        {existing ? (
+          <div className="relative overflow-hidden rounded-[20px] bg-linear-to-br from-[#e9f9ef] to-[#d3f3e1] p-3.5 ring-1 ring-[#bfe9d0]">
+            <div className="flex items-center gap-3">
+              <InitialsAvatar name={s.patient.name} size={48} />
+              <span className="min-w-0 flex-1">
+                <b className="block truncate text-[16px] text-ink">{s.patient.name}</b>
+                <span className="block truncate text-[12.5px] text-good-ink">
+                  {s.patient.existingId} · {s.patient.existingType === 'REFERRED' ? 'Referred' : 'Walk-in'}
+                  {s.patient.phone ? ` · ${s.patient.phone}` : ''}
+                </span>
+              </span>
+              <UserCheck size={22} className="shrink-0 text-good" />
             </div>
-            {find.trim() && (
-              <ul className="drop-down mt-2 overflow-hidden rounded-2xl bg-page">
-                {results.length === 0 ? (
-                  <li className="px-3.5 py-3 text-[13px] text-muted">No registered patient matches “{find.trim()}”. Enter their details below as a new patient.</li>
-                ) : (
-                  results.map((p) => (
-                    <li key={p.uuid}>
-                      <button type="button" onClick={() => usePatient(p)} className="press flex w-full items-center gap-3 px-3 py-2.5 text-left">
-                        <InitialsAvatar name={p.name} size={36} />
-                        <span className="min-w-0 flex-1">
-                          <b className="block truncate text-[14px] text-ink">{p.name}</b>
-                          <span className="block truncate text-[12px] text-muted">
-                            {p.patientId} · {p.type === 'REFERRED' ? 'Referred' : 'Walk-in'}
-                            {p.phone ? ` · ${p.phone}` : ''}
-                          </span>
-                        </span>
-                        <span className="text-[12.5px] font-semibold text-brand-600">Use</span>
-                      </button>
-                    </li>
-                  ))
-                )}
-              </ul>
-            )}
+            <div className="mt-3 flex items-center justify-between gap-2 border-t border-[#bfe9d0] pt-2.5">
+              <span className="text-[12.5px] text-good-ink">Returning patient. Keeps this Patient ID.</span>
+              <button type="button" onClick={() => (set((x) => ({ ...x, patient: { uuid: null, existingId: null, existingType: null, name: '', phone: '' } })), setMode('find'))} className="press shrink-0 rounded-full bg-white px-3 py-1 text-[12.5px] font-semibold text-brand-600 shadow-sm">
+                Change
+              </button>
+            </div>
           </div>
         ) : (
-          <div className="mb-4 flex items-center gap-3 rounded-2xl bg-tint-green p-3">
-            <UserCheck size={20} className="shrink-0 text-good" />
-            <span className="min-w-0 flex-1 text-[13px] text-good-ink">
-              <b className="block">Existing patient · {s.patient.existingId}</b>
-              Keeps this Patient ID. No new record is made.
-            </span>
-            <button type="button" onClick={() => set((x) => ({ ...x, patient: { uuid: null, existingId: null, existingType: null, name: '', phone: '' } }))} className="shrink-0 text-[12.5px] font-semibold text-brand-600">
-              Not this patient
-            </button>
-          </div>
-        )}
-        <div className="space-y-3">
-          <RuleInput kind="name" label="Patient full name" required value={s.patient.name} readOnly={existing} onChange={(name) => set((x) => ({ ...x, patient: { ...x.patient, name }, differentPatientConfirmed: false }))} placeholder="As on their ID or hospital card" error={errs.name} />
-          <RuleInput kind="phone" label="Phone number" required={config().patient.phoneRequired} optional={!config().patient.phoneRequired} value={s.patient.phone} onChange={(phone) => set((x) => ({ ...x, patient: { ...x.patient, phone } }))} error={errs.phone} />
-        </div>
-        {similar.length > 0 && (
-          <div className="mt-3 rounded-2xl bg-[#fff7ec] p-3 ring-1 ring-[#ffe0b8]">
-            <p className="text-[13px] font-semibold text-[#9a4a07]">
-              {similar.length} registered patient{similar.length === 1 ? '' : 's'} with this name or phone
-            </p>
-            <p className="text-[12px] text-[#9a4a07]/90">Use the existing record to avoid a duplicate, or continue if this is someone else.</p>
-            {similar.slice(0, 3).map((p) => (
-              <button key={p.uuid} type="button" onClick={() => usePatient(p)} className="press mt-1.5 flex w-full justify-between rounded-xl bg-white px-3 py-2 text-left text-[13px]">
-                <span>
-                  {p.patientId} · {p.name}
-                </span>
-                <b className="text-brand-600">Use</b>
-              </button>
-            ))}
-          </div>
-        )}
-        {!existing && s.patient.name.trim() && similar.length === 0 && (
-          <p className="mt-3 rounded-2xl bg-brand-50 px-3 py-2 text-[12.5px] text-brand-800">
-            <b>New patient.</b> A {s.walkIn ? 'walk-in (W)' : 'referred (R)'} Patient ID like {branchPrefix(branchId)}-{s.walkIn ? 'W' : 'R'}000123 is reserved when you continue.
-          </p>
+          <>
+            <div className="mb-3.5 grid grid-cols-2 gap-1 rounded-2xl bg-[#eef3fa] p-1" role="tablist" aria-label="New or returning patient">
+              {(
+                [
+                  ['new', 'New patient'],
+                  ['find', 'Returning patient'],
+                ] as const
+              ).map(([k, l]) => (
+                <button key={k} type="button" role="tab" aria-selected={mode === k} onClick={() => setMode(k)} className={`press min-h-10 rounded-xl text-[13.5px] font-semibold transition-all ${mode === k ? 'bg-white text-brand-700 shadow-[0_4px_10px_rgba(30,74,160,0.12)]' : 'text-muted'}`}>
+                  {l}
+                </button>
+              ))}
+            </div>
+            {mode === 'find' ? (
+              <div>
+                <div className="relative">
+                  <Search size={17} className="pointer-events-none absolute left-4 top-1/2 z-10 -translate-y-1/2 text-muted" />
+                  <input autoFocus value={find} onChange={(e) => setFind(e.target.value)} placeholder="Patient ID, name or phone" aria-label="Find a returning patient" className={`${inputCls()} pl-11`} />
+                </div>
+                {find.trim() ? (
+                  <ul className="drop-down mt-2.5 space-y-1.5">
+                    {results.length === 0 ? (
+                      <li className="rounded-2xl bg-page px-3.5 py-3 text-[13px] text-muted">
+                        No registered patient matches “{find.trim()}”.{' '}
+                        <button type="button" onClick={() => (setMode('new'), set((x) => ({ ...x, patient: { ...x.patient, name: /\d/.test(find) ? x.patient.name : nameCase(onlyName(find.trim())) } })))} className="font-semibold text-brand-600">
+                          Enter them as a new patient
+                        </button>
+                      </li>
+                    ) : (
+                      results.map((p) => (
+                        <li key={p.uuid}>
+                          <button type="button" onClick={() => usePatient(p)} className="press flex w-full items-center gap-3 rounded-2xl bg-[#f8fafd] p-2.5 text-left ring-1 ring-[#e3eaf4]">
+                            <InitialsAvatar name={p.name} size={40} />
+                            <span className="min-w-0 flex-1">
+                              <b className="block truncate text-[14.5px] text-ink">{p.name}</b>
+                              <span className="block truncate text-[12px] text-muted">
+                                {p.patientId} · {p.type === 'REFERRED' ? 'Referred' : 'Walk-in'}
+                                {p.phone ? ` · ${p.phone}` : ''}
+                              </span>
+                            </span>
+                            <span className="rounded-full bg-brand-600 px-3 py-1 text-[12.5px] font-semibold text-white">Use</span>
+                          </button>
+                        </li>
+                      ))
+                    )}
+                  </ul>
+                ) : (
+                  <p className="mt-2 px-1 text-[12.5px] text-muted">Ask for their Patient ID (on the receipt), or search by name or phone.</p>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-3.5">
+                <RuleInput kind="name" label="Full name" required value={s.patient.name} onChange={(name) => set((x) => ({ ...x, patient: { ...x.patient, name }, differentPatientConfirmed: false }))} placeholder="As on their ID or hospital card" error={errs.name} />
+                <RuleInput kind="phone" label="Phone number" required={config().patient.phoneRequired} optional={!config().patient.phoneRequired} value={s.patient.phone} onChange={(phone) => set((x) => ({ ...x, patient: { ...x.patient, phone } }))} error={errs.phone} />
+                {similar.length > 0 && (
+                  <div className="rounded-2xl bg-[#fff7ec] p-3 ring-1 ring-[#ffe0b8]">
+                    <p className="text-[13px] font-semibold text-[#9a4a07]">
+                      {similar.length} registered patient{similar.length === 1 ? '' : 's'} with this name or phone
+                    </p>
+                    <p className="text-[12px] text-[#9a4a07]/90">Use the existing record to avoid a duplicate, or continue if this is someone else.</p>
+                    {similar.slice(0, 3).map((p) => (
+                      <button key={p.uuid} type="button" onClick={() => usePatient(p)} className="press mt-1.5 flex w-full items-center justify-between rounded-xl bg-white px-3 py-2 text-left text-[13px]">
+                        <span className="truncate">
+                          {p.patientId} · {p.name}
+                        </span>
+                        <b className="text-brand-600">Use</b>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {s.patient.name.trim() && similar.length === 0 && (
+                  <p className="flex items-center gap-2 rounded-2xl bg-[#f3f7ff] px-3 py-2.5 text-[12.5px] text-brand-800">
+                    <Hash size={14} className="shrink-0" />
+                    <span>
+                      A {s.walkIn ? 'walk-in' : 'referred'} Patient ID like <b>{branchPrefix(branchId)}-{s.walkIn ? 'W' : 'R'}000123</b> is reserved when you continue.
+                    </span>
+                  </p>
+                )}
+              </div>
+            )}
+          </>
         )}
       </Card>
 
-      <Card icon={<UserCheck size={18} />} title="Where the patient came from" hint="Walk-in, or the PR agent who referred them.">
-        <Toggle label="Walk-in patient" hint={s.walkIn ? 'Came in by themselves: no PR agent or commission.' : 'Turn on if no PR agent referred this patient.'} checked={s.walkIn} onChange={(on) => set((x) => ({ ...x, walkIn: on, ...(on ? { agentId: null, hospital: null, referralId: null } : {}) }))} />
+      <Card icon={<UserCheck size={19} />} n={2} title="How they came" hint="Walked in by themselves, or sent by a PR agent.">
+        <div className="grid grid-cols-2 gap-2.5" role="radiogroup" aria-label="How the patient came">
+          <Choice on={s.walkIn} onClick={() => set((x) => ({ ...x, walkIn: true, agentId: null, hospital: null, referralId: null }))} title="Walk-in" sub="Came by themselves" art={<Sticker name="heart" size={40} />} tone="green" />
+          <Choice on={!s.walkIn} onClick={() => set((x) => ({ ...x, walkIn: false }))} title="Referred" sub="Sent by a PR agent" art={<Sticker name="stethoscope" size={40} />} tone="violet" />
+        </div>
         {!s.walkIn && (
-          <div className="mt-3 space-y-3">
+          <div className="drop-down mt-3.5 space-y-3">
             <div>
               <FieldLabel label="PR agent who referred the patient" required />
-              <button type="button" onClick={() => setPickAgent(true)} className={`press flex min-h-14 w-full items-center gap-3 rounded-2xl border-[1.5px] bg-white px-3 text-left ${errs.agent ? 'border-[#e5484d]' : 'border-brand-500'}`}>
-                {agent ? <AgentAvatar id={agent.id} name={agent.name} phone={agent.phone} size={38} /> : <span className="grid h-[38px] w-[38px] place-items-center rounded-full bg-tint-purple"><Sticker name="stethoscope" size={24} /></span>}
+              <button type="button" onClick={() => setPickAgent(true)} className={`press flex min-h-[60px] w-full items-center gap-3 rounded-2xl border-[1.5px] px-3 text-left transition-colors ${errs.agent ? 'border-[#e5484d] bg-white ring-4 ring-[#fde3e3]' : agent ? 'border-[#d6c8ff] bg-[#faf7ff]' : 'border-[#dfe6f1] bg-[#f8fafd]'}`}>
+                {agent ? <AgentAvatar id={agent.id} name={agent.name} phone={agent.phone} size={40} /> : <span className="grid h-10 w-10 place-items-center rounded-full bg-tint-purple"><Sticker name="stethoscope" size={24} /></span>}
                 <span className="min-w-0 flex-1">
                   <b className={`block truncate text-[14.5px] ${agent ? 'text-ink' : 'text-faint'}`}>{agent ? agent.name : `Choose from ${formatCount(agents.length)} agents`}</b>
-                  {agent && <span className="block truncate text-[12px] text-muted">{hospitalKey(agent.hospital) || 'No hospital assigned'} · #{agent.id}</span>}
+                  <span className="block truncate text-[12px] text-muted">{agent ? `${hospitalKey(agent.hospital) || 'No hospital assigned'} · #${agent.id}` : 'Search by name, hospital or phone'}</span>
                 </span>
                 <ChevronRight size={17} className="text-faint" />
               </button>
@@ -724,23 +815,25 @@ function PatientStep({ s, set, errs, branchId }: StepProps) {
             </div>
             <div>
               <FieldLabel label="Referring hospital" optional={!s.hospital} />
-              <button type="button" onClick={() => setPickHospital(true)} className="press flex min-h-12 w-full items-center justify-between rounded-2xl border-[1.5px] border-brand-500 bg-white px-4 text-left text-[14.5px]">
+              <button type="button" onClick={() => setPickHospital(true)} className="press flex min-h-12 w-full items-center justify-between gap-2 rounded-2xl border-[1.5px] border-[#dfe6f1] bg-[#f8fafd] px-4 text-left text-[14.5px] text-ink">
                 <span className="truncate">{s.hospital ?? (agent ? `${resolveHospital(null, agent)} (the agent's hospital)` : 'Not specified')}</span>
-                <ChevronRight size={17} className="text-faint" />
+                <ChevronRight size={17} className="shrink-0 text-faint" />
               </button>
             </div>
+            {s.referralId && (
+              <p className="flex items-center gap-2 rounded-2xl bg-[#fff8ec] px-3 py-2.5 text-[12.5px] text-[#7a4a00] ring-1 ring-[#f6e5bf]">
+                <Hash size={14} className="shrink-0" /> Referral {s.referralId} is attached to this bill.
+              </p>
+            )}
             {existing && s.patient.existingType === 'WALK_IN' && <p className="rounded-2xl bg-page px-3 py-2 text-[12.5px] text-ink-2">This patient was registered as a walk-in, so their ID stays {s.patient.existingId}. The referral is recorded on this bill.</p>}
           </div>
         )}
-        <div className="mt-3 flex items-center gap-3 rounded-2xl bg-page p-3">
-          <InitialsAvatar name={user.name} size={36} />
-          <span className="min-w-0 flex-1">
-            <span className="block text-[11.5px] text-muted">Processed by</span>
-            <b className="block text-[14px] leading-snug text-ink">
-              {user.name}, {user.role}
-            </b>
+        <div className="mt-3.5 flex items-center gap-3 border-t border-dashed border-line pt-3">
+          <InitialsAvatar name={user.name} size={32} />
+          <span className="min-w-0 flex-1 text-[12.5px] text-muted">
+            Processed by <b className="text-ink">{user.name}</b>, {user.role}
           </span>
-          <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-muted">Automatic</span>
+          <span className="rounded-full bg-page px-2 py-0.5 text-[11px] font-semibold text-muted">Automatic</span>
         </div>
       </Card>
       {pickAgent && <AgentPick value={s.agentId} onClose={() => setPickAgent(false)} onPick={(id) => (set((x) => ({ ...x, agentId: id })), setPickAgent(false))} />}
@@ -923,7 +1016,7 @@ function ServicesStep({ s, set, errs, branchId }: StepProps) {
         </div>
       )}
 
-      <Card icon={<FlaskConical size={18} />} title={`Selected tests · ${s.services.length}`} hint={canAdjust ? 'Catalogue prices apply. You can change a price for this bill only.' : 'Catalogue prices apply.'}>
+      <Card icon={<FlaskConical size={19} />} title={`Selected tests · ${s.services.length}`} hint={canAdjust ? 'Catalogue prices apply. You can change a price for this bill only.' : 'Catalogue prices apply.'}>
         {s.services.length === 0 ? (
           <>
             <p className="rounded-2xl bg-page p-3 text-center text-[13.5px] text-muted">No tests selected yet. Tap a test above to add it.</p>
@@ -932,7 +1025,7 @@ function ServicesStep({ s, set, errs, branchId }: StepProps) {
         ) : (
           <ul className="space-y-2">
             {s.services.map((x) => (
-              <li key={x.id} className={`rounded-2xl p-3 ring-1 ${x.overridePrice !== null ? 'bg-[#fff7ec] ring-[#ffe0b8]' : 'bg-page ring-transparent'}`}>
+              <li key={x.id} className={`drop-down rounded-2xl p-3 ring-1 ${x.overridePrice !== null ? 'bg-[#fff7ec] ring-[#ffe0b8]' : 'bg-[#f8fafd] ring-[#e3eaf4]'}`}>
                 <div className="flex items-start gap-2">
                   <span className="min-w-0 flex-1">
                     <b className="block text-[14px] leading-snug text-ink">{x.name}</b>
@@ -947,7 +1040,7 @@ function ServicesStep({ s, set, errs, branchId }: StepProps) {
                 {canAdjust ? (
                   <div className="mt-2 flex items-center gap-2">
                     <span className="text-[12px] text-muted">Price for this bill</span>
-                    <input inputMode="numeric" value={priceDraft[x.id] ?? String(x.overridePrice ?? x.price)} onChange={(e) => setOverride(x.id, e.target.value)} onBlur={() => setPriceDraft((d) => ({ ...d, [x.id]: undefined as unknown as string }))} aria-label={`Price for ${x.name}`} className="min-h-10 w-32 rounded-xl border-[1.5px] border-brand-500 bg-white px-3 text-right text-[14.5px] font-bold" />
+                    <input inputMode="numeric" value={priceDraft[x.id] ?? String(x.overridePrice ?? x.price)} onChange={(e) => setOverride(x.id, e.target.value)} onBlur={() => setPriceDraft((d) => ({ ...d, [x.id]: undefined as unknown as string }))} aria-label={`Price for ${x.name}`} className="min-h-10 w-32 rounded-xl border-[1.5px] border-[#dfe6f1] bg-white px-3 text-right text-[14.5px] font-bold outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-100" />
                     {x.overridePrice !== null && <span className="text-[11.5px] text-[#9a4a07]">was {money(x.price)}</span>}
                   </div>
                 ) : (
@@ -958,9 +1051,9 @@ function ServicesStep({ s, set, errs, branchId }: StepProps) {
             ))}
           </ul>
         )}
-        <p className="mt-3 flex justify-between border-t border-dashed border-line pt-3 text-[15px]">
-          <span className="text-ink-2">Subtotal</span>
-          <b className="text-ink">{money(computeBill(s).subtotal)}</b>
+        <p className="mt-3 flex items-end justify-between border-t border-dashed border-line pt-3">
+          <span className="text-[13.5px] text-ink-2">Subtotal</span>
+          <b className="text-[20px] tracking-[-0.01em] text-ink">{money(computeBill(s).subtotal)}</b>
         </p>
       </Card>
     </>
@@ -984,9 +1077,10 @@ function PaymentStep({ s, set, errs, branchId }: StepProps) {
   const balanceLeft = t.total > 0 && t.amountPaid < t.total && (p.method === 'Split' ? t.amountPaid > 0 : p.status !== 'full');
   const methods: PayChoice[] = [...offered, ...(canSplit ? (['Split'] as PayChoice[]) : [])];
   const todayIso = isoDate(new Date());
+  const [discOpen, setDiscOpen] = useState(false);
   return (
     <>
-      <div className="relative mb-3 overflow-hidden rounded-[24px] bg-linear-to-br from-[#123e9c] via-[#1f6fe8] to-[#5ea6f7] p-5 text-white">
+      <div className="relative mb-3.5 overflow-hidden rounded-[24px] bg-linear-to-br from-[#0f2f7a] via-[#1f6fe8] to-[#5ea6f7] p-5 text-white shadow-[0_16px_34px_-12px_rgba(31,99,214,0.55)]">
         <span aria-hidden="true" className="absolute -right-12 -top-16 h-48 w-48 rounded-full bg-white/10" />
         <Sticker name="moneyBag" size={64} className="absolute right-3 top-3" />
         <p className="text-[12.5px] text-white/85">Total to pay</p>
@@ -1007,27 +1101,38 @@ function PaymentStep({ s, set, errs, branchId }: StepProps) {
         </div>
       </div>
 
-      <Card icon={<CreditCard size={18} />} title="How the patient paid">
-        <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Payment method">
-          {methods.map((m) => (
-            <button key={m} type="button" role="radio" aria-checked={p.method === m} onClick={() => setPay({ method: m })} className={`press min-h-12 rounded-2xl text-[14px] font-semibold ${p.method === m ? 'bg-brand-600 text-white shadow-[0_6px_16px_rgba(31,111,232,0.28)]' : 'bg-page text-ink-2 ring-1 ring-line'}`}>
-              {methodLabel(m)}
-            </button>
-          ))}
+      <Card icon={<CreditCard size={19} />} n={1} title="Payment method">
+        <div className="grid grid-cols-2 gap-2.5" role="radiogroup" aria-label="Payment method">
+          {methods.map((m) => {
+            const on = p.method === m;
+            const Icon = METHOD_ICON[m] ?? CreditCard;
+            return (
+              <button key={m} type="button" role="radio" aria-checked={on} onClick={() => setPay({ method: m })} className={`press relative flex items-center gap-2.5 rounded-[18px] p-3 text-left transition-all ${on ? 'bg-brand-50 ring-2 ring-brand-500 shadow-[0_8px_20px_-10px_rgba(31,111,232,0.5)]' : 'bg-[#f8fafd] ring-1 ring-[#e3eaf4]'}`}>
+                <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-[12px] ${on ? 'bg-brand-600 text-white' : 'bg-white text-brand-600 ring-1 ring-[#e3eaf4]'}`}>
+                  <Icon size={19} />
+                </span>
+                <span className="min-w-0">
+                  <b className="block text-[14px] text-ink">{methodLabel(m)}</b>
+                  <span className="block truncate text-[11.5px] text-muted">{METHOD_SUB[m] ?? ''}</span>
+                </span>
+              </button>
+            );
+          })}
         </div>
         <FieldErr msg={errs.method} />
         {p.method !== 'Split' ? (
           <>
             <p className="mb-2 mt-4 text-[14px] font-semibold text-ink">How much was paid?</p>
-            <div className="grid grid-cols-3 gap-1 rounded-full bg-page p-1" role="radiogroup" aria-label="Payment status">
+            <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Payment status">
               {(
                 [
-                  ['full', 'Fully paid'],
-                  ['part', 'Part payment'],
-                  ['unpaid', 'Not paid'],
+                  ['full', 'Fully paid', CircleCheck, 'text-good'],
+                  ['part', 'Part paid', PieChart, 'text-[#d97706]'],
+                  ['unpaid', 'Not paid', Clock3, 'text-[#d93036]'],
                 ] as const
-              ).map(([k, l]) => (
-                <button key={k} type="button" role="radio" aria-checked={p.status === k} onClick={() => setPay({ status: k })} className={`press min-h-10 rounded-full text-[13px] font-semibold ${p.status === k ? 'bg-white text-brand-700 shadow' : 'text-ink-2'}`}>
+              ).map(([k, l, Icon, tone]) => (
+                <button key={k} type="button" role="radio" aria-checked={p.status === k} onClick={() => setPay({ status: k })} className={`press flex min-h-[68px] flex-col items-center justify-center gap-1 rounded-[16px] text-[12.5px] font-semibold transition-all ${p.status === k ? 'bg-white text-ink ring-2 ring-brand-500 shadow-[0_8px_18px_-10px_rgba(31,111,232,0.5)]' : 'bg-[#f8fafd] text-ink-2 ring-1 ring-[#e3eaf4]'}`}>
+                  <Icon size={20} className={tone} />
                   {l}
                 </button>
               ))}
@@ -1094,20 +1199,35 @@ function PaymentStep({ s, set, errs, branchId }: StepProps) {
         </section>
       )}
 
-      {canDisc && (
-        <Card icon={<Sticker name="gift" size={22} />} title="Discount" hint={`Optional. Up to ${money(maxDiscount(t.subtotal))}${cfg.discounts.maxPercent < 100 ? ` (${cfg.discounts.maxPercent}% of the bill)` : ''}. Every discount needs a reason.`}>
-          <div className="relative">
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[15px] font-semibold text-muted">₦</span>
-            <input inputMode="numeric" value={showNum(s.discount.amount)} onChange={(e) => set((x) => ({ ...x, discount: { ...x.discount, amount: digitsNum(e.target.value) } }))} placeholder="0" aria-label="Discount amount" className={`${inputCls(errs.discount)} pl-9 font-bold`} />
-          </div>
-          <FieldErr msg={errs.discount} />
-          {s.discount.amount > 0 && (
-            <div className="mt-3">
-              <LongText label="Reason for the discount" required value={s.discount.reason} onChange={(v) => set((x) => ({ ...x, discount: { ...x.discount, reason: v } }))} max={200} minRows={2} placeholder="For example: staff family, approved by the manager" error={errs.discountReason} />
+      {canDisc &&
+        (discOpen || s.discount.amount > 0 ? (
+          <Card icon={<Sticker name="gift" size={24} />} n={2} title="Discount" hint={`Optional. Up to ${money(maxDiscount(t.subtotal))}${cfg.discounts.maxPercent < 100 ? ` (${cfg.discounts.maxPercent}% of the bill)` : ''}. Every discount needs a reason.`}>
+            <div className="relative">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[15px] font-semibold text-muted">₦</span>
+              <input inputMode="numeric" value={showNum(s.discount.amount)} onChange={(e) => set((x) => ({ ...x, discount: { ...x.discount, amount: digitsNum(e.target.value) } }))} placeholder="0" aria-label="Discount amount" className={`${inputCls(errs.discount)} pl-9 font-bold`} />
             </div>
-          )}
-        </Card>
-      )}
+            <FieldErr msg={errs.discount} />
+            {s.discount.amount > 0 && (
+              <div className="mt-3">
+                <LongText label="Reason for the discount" required value={s.discount.reason} onChange={(v) => set((x) => ({ ...x, discount: { ...x.discount, reason: v } }))} max={200} minRows={2} placeholder="For example: staff family, approved by the manager" error={errs.discountReason} />
+              </div>
+            )}
+            {s.discount.amount === 0 && (
+              <button type="button" onClick={() => setDiscOpen(false)} className="press mt-2 text-[13px] font-semibold text-muted">
+                No discount
+              </button>
+            )}
+          </Card>
+        ) : (
+          <button type="button" onClick={() => setDiscOpen(true)} className="press mb-3.5 flex w-full items-center gap-3 rounded-[22px] border border-dashed border-[#d6c3ff] bg-[#faf7ff] p-3.5 text-left">
+            <Sticker name="gift" size={36} />
+            <span className="min-w-0 flex-1">
+              <b className="block text-[14.5px] text-ink">Add a discount</b>
+              <span className="block text-[12.5px] text-muted">Optional, up to {money(maxDiscount(t.subtotal))}, with a reason</span>
+            </span>
+            <Plus size={19} className="text-violet" />
+          </button>
+        ))}
     </>
   );
 }
@@ -1122,11 +1242,11 @@ function PreviewStep({ s, branchId, onEdit }: { s: BillingSession; branchId: str
   const agent = s.agentId !== null ? agents.find((a) => a.id === s.agentId) : undefined;
   const approver = s.payment.approvedBy ? s.payment.approvedBy.split('|') : null;
   const Part = ({ title, step, children }: { title: string; step: 1 | 2 | 3; children: ReactNode }) => (
-    <section className="mb-3 rounded-[22px] bg-white p-4 ring-1 ring-line/70">
-      <div className="mb-2 flex items-center justify-between">
-        <b className="text-[15px] text-ink">{title}</b>
-        <button type="button" onClick={() => onEdit(step)} className="press rounded-full bg-brand-50 px-3 py-1 text-[12.5px] font-semibold text-brand-700">
-          Edit
+    <section className="border-t border-dashed border-[#d9e1ec] px-4 py-3.5 first:border-t-0">
+      <div className="mb-1.5 flex items-center justify-between">
+        <b className="text-[12px] font-bold uppercase tracking-[0.1em] text-muted">{title}</b>
+        <button type="button" onClick={() => onEdit(step)} className="press flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-[12px] font-semibold text-brand-700">
+          <Pencil size={12} /> Edit
         </button>
       </div>
       {children}
@@ -1140,7 +1260,14 @@ function PreviewStep({ s, branchId, onEdit }: { s: BillingSession; branchId: str
   );
   return (
     <>
-      <p className="mb-3 rounded-2xl bg-brand-50 px-3.5 py-2.5 text-[13px] text-brand-800">Check everything before completing. The bill and receipt are saved only when you tap Complete billing.</p>
+      <div className="relative mb-3 overflow-hidden rounded-[24px] bg-white shadow-[0_16px_40px_-16px_rgba(30,74,160,0.35)] ring-1 ring-[#e6edf7]">
+        <div className="bg-linear-to-br from-[#0f2f7a] via-[#1f6fe8] to-[#5ea6f7] px-4 pb-4 pt-3.5 text-white">
+          <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-white/75">{branch.name} branch · bill preview</p>
+          <p className="mt-1 text-[30px] font-extrabold leading-none tracking-[-0.02em]">{money(t.total)}</p>
+          <p className="mt-1.5 text-[12.5px] text-white/85">
+            {s.patient.name} · {s.services.length} test{s.services.length === 1 ? '' : 's'} · {t.balance > 0 ? `${money(t.balance)} to be paid later` : 'paid in full'}
+          </p>
+        </div>
       <Part title="Patient" step={1}>
         <Row l="Name" v={s.patient.name} />
         <Row l="Patient ID" v={s.patient.existingId ?? s.reservedId ?? 'Reserved on save'} />
@@ -1173,6 +1300,11 @@ function PreviewStep({ s, branchId, onEdit }: { s: BillingSession; branchId: str
           </>
         )}
       </Part>
+        <div aria-hidden="true" className="h-3 bg-[radial-gradient(circle_at_8px_12px,#f4f8fe_7px,transparent_7.5px)] bg-[length:16px_12px] bg-repeat-x" />
+      </div>
+      <p className="mb-2 flex items-start gap-2 px-1 text-[12.5px] text-muted">
+        <Info size={14} className="mt-0.5 shrink-0" /> The bill and receipt are saved only when you tap Complete billing.
+      </p>
     </>
   );
 }
