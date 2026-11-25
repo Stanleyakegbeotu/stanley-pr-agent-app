@@ -30,6 +30,7 @@ import { FinancePage } from './pages/Finance';
 import { PRPage } from './pages/PR';
 import { StaffPage } from './pages/Staff';
 import { InventoryPage } from './pages/Inventory';
+import { AuditPage, TrashPage } from './pages/Logs';
 
 interface AdminPage {
   id: string;
@@ -49,8 +50,8 @@ export const ADMIN_PAGES: AdminPage[] = [
   { id: 'finance', label: 'Finance & Expenses', icon: Wallet, screen: FinancePage },
   { id: 'reports', label: 'Reports', icon: ChartLine, screen: () => <ComingNext title="Reports" /> },
   { id: 'settings', label: 'Settings', icon: Settings, screen: () => <ComingNext title="Settings" /> },
-  { id: 'audit', label: 'Audit Log', icon: ScrollText, screen: () => <ComingNext title="Audit Log" /> },
-  { id: 'trash', label: 'Trash', icon: Trash2, screen: () => <ComingNext title="Trash" /> },
+  { id: 'audit', label: 'Audit Log', icon: ScrollText, screen: AuditPage },
+  { id: 'trash', label: 'Trash', icon: Trash2, screen: TrashPage },
 ];
 const EXTRA: AdminPage[] = [
   { id: 'notifications', label: 'Notifications', icon: LayoutGrid, screen: AdminNotifications },
