@@ -18,6 +18,7 @@ import { useApp as useCompany } from '@company/app/AppState';
 import type { StaffRecord } from '@company/data/userRecords';
 import { managerOf } from '@company/data/userRecords';
 import type { ExpenseLine, PatientVisit } from '@company/data/demo/dailyLines';
+import { profileOf, useSettings } from '@company/services/settingsStore';
 
 export interface Who {
   name: string;
@@ -28,7 +29,12 @@ export interface Who {
 const PHOTOS = import.meta.glob('../assets/team/*.jpg', { eager: true, import: 'default' }) as Record<string, string>;
 const slug = (name: string) => name.toLowerCase().trim().replace(/\s+/g, '-');
 /** The person's own upload (data URL) first, then the bundled sample photo for their name. */
-export const photoOf = (s: Pick<StaffRecord, 'name' | 'photo'>) => (s.photo?.startsWith('data:') ? s.photo : PHOTOS[`../assets/team/${slug(s.name)}.jpg`]);
+const basePhoto = (s: Pick<StaffRecord, 'name' | 'photo'>) => (s.photo?.startsWith('data:') ? s.photo : PHOTOS[`../assets/team/${slug(s.name)}.jpg`]);
+/** Desktop rule (settingsStore.resolvePhoto): the photo they or the admin uploaded, else their default photo; an empty upload means initials. */
+export const photoOf = (s: Pick<StaffRecord, 'name' | 'photo'> & { id?: string }) => {
+  const p = s.id ? profileOf(s.id).photo : undefined;
+  return p === undefined ? basePhoto(s) : p || undefined;
+};
 const who = (s: StaffRecord): Who => ({ name: s.name, role: s.role, photo: photoOf(s) });
 export const whoText = (w: Who | null | undefined, fallbackRole: string) => (w ? `${w.name}, ${w.role}` : `${fallbackRole} (name not on record)`);
 
@@ -42,6 +48,7 @@ const hash = (s: string) => {
 
 export function useTeam() {
   const { staff, user } = useCompany();
+  const { profiles } = useSettings();
   return useMemo(() => {
     const frontDesk = (branchId: string) => staff.filter((s) => s.branchId === branchId && s.role === 'Front Desk' && s.status === 'Active');
     /** Who is on front desk duty at the branch on that day (one person per day, Staff Management order). */
@@ -76,5 +83,6 @@ export function useTeam() {
       return { recordedBy, approvedBy, approvedAt };
     };
     return { staff, onDuty, manager, admin, processedBy, expensePeople, frontDesk };
-  }, [staff, user.name]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [staff, user.name, profiles]);
 }
