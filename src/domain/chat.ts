@@ -244,6 +244,14 @@ export function useChat(convId: string) {
   return { messages, send, remove, clear };
 }
 
+/** Send a text message from outside the chat screen (e.g. the admin's "Say thank you"). */
+export async function postText(convId: string, text: string) {
+  const msg: ChatMsg = { id: uid(), convId, from: 'me', at: new Date().toISOString(), kind: 'text', text, status: 'saved' };
+  await putMsg(msg).catch(() => undefined);
+  changed();
+  return msg;
+}
+
 /* ─────────────── read / unread and the inbox list ─────────────── */
 
 const READ_KEY = 'stanley.pr.chat.read';

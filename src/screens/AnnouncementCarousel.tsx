@@ -4,11 +4,20 @@
  * pauses while touched/hovered, when the app is in the background, and for
  * people who turned on "reduce motion".
  */
-import { useEffect, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
 import { ArrowRight, TrendingUp } from 'lucide-react';
-import { ANNOUNCEMENTS, type Announcement } from '@/data/content';
+import { ANNOUNCEMENTS as BASE, type Announcement } from '@/data/content';
 import { useApp } from '@/app/store';
 import { Sticker } from '@/ui/kit';
+import { BRANCH } from '@/config/org';
+import { useAccount } from '@/domain/account';
+import { announcementsFor, useAnnouncements, type AdminAnnouncement } from '@/domain/announcements';
+
+/** What the Admin sent (a message, a thank you or a notice) as an announcement slide. Never money. */
+function fromAdmin(a: AdminAnnouncement): Announcement {
+  const look = a.kind === 'thanks' ? { kicker: 'A thank you from the Admin', theme: 'violet' as const, sticker: 'trophy' as const } : a.kind === 'message' ? { kicker: 'Message from the Admin', theme: 'blue' as const, sticker: 'envelope' as const } : { kicker: 'Notice from the Admin', theme: 'teal' as const, sticker: 'megaphone' as const };
+  return { id: a.id, kicker: look.kicker, title: a.title, text: a.text, cta: a.replyInChat ? 'Read and reply' : 'Reply to Admin', to: '/messages/admin', theme: look.theme, sticker: look.sticker, badge: 'NEW', date: a.at };
+}
 
 const THEME: Record<Announcement['theme'], string> = {
   blue: 'from-[#1b5fd6] via-[#2b78e8] to-[#5ea6f7]',
@@ -21,6 +30,10 @@ const AUTOPLAY_MS = 5000;
 
 export function AnnouncementCarousel() {
   const { navigate } = useApp();
+  const { account } = useAccount();
+  const sent = useAnnouncements();
+  // The Admin's announcements for this agent (by phone) and their branch come first.
+  const ANNOUNCEMENTS = useMemo(() => [...announcementsFor(sent, { phone: account?.clinician.phone, branchId: BRANCH.id }).slice(0, 3).map(fromAdmin), ...BASE], [sent, account?.clinician.phone]);
   const [index, setIndex] = useState(0);
   const [drag, setDrag] = useState(0);
   const [paused, setPaused] = useState(false);
@@ -103,7 +116,7 @@ function Slide({ a, hidden, onOpen }: { a: Announcement; hidden: boolean; onOpen
           <Sticker name="megaphone" size={26} className="-rotate-12" />
           {a.kicker}
         </p>
-        <h3 className="whitespace-pre-line text-[22px] font-bold leading-[1.12] tracking-[-0.02em]">{a.title}</h3>
+        <h3 className="line-clamp-2 whitespace-pre-line text-[22px] font-bold leading-[1.12] tracking-[-0.02em]">{a.title}</h3>
         <p className="mt-1.5 line-clamp-2 text-[13px] leading-snug text-white/90">{a.text}</p>
         <button type="button" tabIndex={hidden ? -1 : 0} onClick={onOpen} className="press mt-3.5 inline-flex w-fit items-center gap-2 rounded-xl bg-white px-4 py-2 text-[14.5px] font-semibold text-brand-700 shadow-[0_6px_16px_rgba(0,0,0,0.12)]">
           {a.cta} <ArrowRight size={17} strokeWidth={2.4} />

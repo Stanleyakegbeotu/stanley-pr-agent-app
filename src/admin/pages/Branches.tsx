@@ -1,82 +1,111 @@
 /**
- * Branches (mobile). Same content and rules as the desktop BranchesPage and
- * BranchWorkspace (features/company/pages.tsx, features/branch): company
- * totals, one card per branch, Add branch (services/org addBranch: unique
- * 3-letter Patient ID code, starts "Pending setup"), and a branch view with
- * figures, attention items, payments, top services, PR agents and staff.
+ * Branches (mobile, owner 2026-11-25): the admin design standard (clinician-
+ * app cards, 3D stickers, slide-ups). Same content and rules as the desktop
+ * BranchesPage and BranchWorkspace (src/company): one card per branch, Add
+ * branch (unique 3-letter Patient ID code, starts "Pending setup"), and a
+ * branch's own page:
+ *   hero with the team on duty · the branch's announcement bar (top PR agent
+ *   to thank, what changed, notices) · activity tiles · what changed ·
+ *   payments · needs attention · PR agent management (every agent as a
+ *   slide-up profile: contact, account, chat, announcements) · team ·
+ *   hospitals · services · expenses · trend · details.
  */
 import { useMemo, useState } from 'react';
-import { AlertTriangle, Bell, Building2, ChevronRight, Info, MapPin, Plus, ShieldAlert, Users, Wallet } from 'lucide-react';
+import { AlertTriangle, ChevronRight, Info, MapPin, Megaphone, MessageCircle, Plus, ShieldAlert, Users } from 'lucide-react';
 import { useApp as useCompany } from '@company/app/AppState';
 import { ACTIVE_BRANCHES, BRANCHES, NOT_ON_RECORD, getBranch } from '@company/data/company';
+import type { PaymentMethod } from '@company/data/types';
 import { addBranch, idCodeProblem, normCode, statusHistory, useBranches, type BranchInput } from '@company/services/org';
-import { agentRanking, paymentMix, periodLabel, resolveBranchIds, resolveRange, serviceRanking, summarize } from '@company/services/analytics';
-import { attentionItems, type Severity } from '@company/services/insights';
-import { formatCount, formatMoney, moneyEntries } from '@company/shared/format';
-import { AdminHeader, BarList, Card, Empty, Kpi, PALETTE, ScopeBar, SectionHead, ShareBar, Sheet } from '../ui';
+import { agentRanking, expenseMix, hospitalRanking, paymentMix, periodLabel, priorRange, resolveBranchIds, resolveRange, serviceRanking, summarize, trend } from '@company/services/analytics';
+import { attentionItems, type AttentionItem, type Severity } from '@company/services/insights';
+import { formatCount, formatMoney } from '@company/shared/format';
+import { useAnnouncements } from '@/domain/announcements';
+import { InitialsAvatar, Sticker } from '@/ui/kit';
+import { ScopeBar, Sheet, TrendChart } from '../ui';
+import { DetailSheet, FocusSheet, type DetailKind, type Focus } from '../details';
+import { ActivityTiles, AdminTopBar, PageGlow, PaymentsCard, SectionTitle, SlideCarousel, THEMES, Tag, type Slide } from '../kit';
+import { ExpensesCard, Hospitals, TopAgents, TopServices } from '../sections';
+import { WhatChangedSheet, periodWord, useInsightSlides } from '../insights';
+import { AgentsSheet, ComposeSheet, agentBranchId } from '../agents';
+import { frontDeskId, managerId } from '../chat';
+import { photoOf, useTeam, type Who } from '../people';
+import { DutyRota } from '../duty';
 
 export function BranchesPage({ sub }: { sub?: string }) {
   useBranches(); // re-render when a branch is added or changes status
   return sub ? <BranchView branchId={sub} /> : <BranchList />;
 }
 
+/* ─────────────── every branch ─────────────── */
+
 function BranchList() {
-  const { period, staff } = useCompany();
+  const { period } = useCompany();
   const [adding, setAdding] = useState(false);
+  const [changed, setChanged] = useState(false);
+  const ids = useMemo(() => resolveBranchIds('all'), []);
   const range = resolveRange(period);
-  const all = summarize(resolveBranchIds('all'), range);
-  const pay = moneyEntries(all.payments);
-  const assigned = staff.filter((s) => s.status !== 'Left').length;
+  const all = useMemo(() => summarize(ids, range), [ids, range]);
+  const c = all.currencies[0] ?? 'NGN';
+  const when = periodWord(period);
   return (
-    <>
-      <AdminHeader title="Branches" scope={false} right={<AddButton onClick={() => setAdding(true)} />} />
-      <PeriodOnly />
-      <div className="grid grid-cols-2 gap-2.5">
-        <Kpi icon={<Building2 size={18} />} tone="bg-tint-blue text-brand-700" title="Active branches" value={formatCount(ACTIVE_BRANCHES.length)} note={`${BRANCHES.length - ACTIVE_BRANCHES.length} in setup`} />
-        <Kpi icon={<Users size={18} />} tone="bg-tint-purple text-violet" title="Assigned staff" value={formatCount(assigned)} note="Across all branches" />
-        <Kpi icon={<Users size={18} />} tone="bg-tint-green text-good-ink" title="Patient visits" value={formatCount(all.patients)} note={`${formatCount(all.newPatients)} new patients`} />
-        <Kpi icon={<Wallet size={18} />} tone="bg-tint-orange text-orange" title="Payments received" value={pay.length ? formatMoney(pay[0]![1], pay[0]![0]) : formatMoney(0, 'NGN')} note={pay.length > 1 ? pay.slice(1).map(([c, v]) => `+ ${formatMoney(v, c)}`).join(' · ') : 'Kept per currency'} />
-      </div>
-      <SectionHead title="Your branches" note={periodLabel(period)} />
-      <div className="space-y-3">
-        {BRANCHES.map((b) => (
-          <BranchCard key={b.id} branchId={b.id} />
-        ))}
-        <button type="button" onClick={() => setAdding(true)} className="press flex w-full items-center gap-3 rounded-[20px] border-[1.5px] border-dashed border-brand-300 bg-brand-50/50 p-4 text-left">
-          <span className="grid h-11 w-11 place-items-center rounded-full bg-white text-brand-600 shadow-sm">
-            <Plus size={22} />
-          </span>
-          <span>
-            <span className="block text-[15px] font-bold text-ink">Add another branch</span>
-            <span className="block text-[12.5px] text-muted">A new location with its own Patient ID prefix and currency.</span>
-          </span>
-        </button>
+    <div className="relative">
+      <PageGlow />
+      <AdminTopBar />
+      <div className="relative">
+        <section className="mb-4 flex items-end justify-between gap-3 pt-1">
+          <div className="min-w-0">
+            <h1 className="text-[26px] font-bold leading-tight tracking-[-0.025em] text-ink">Branches</h1>
+            <p className="mt-0.5 text-[14.5px] text-ink-2">
+              {formatCount(ACTIVE_BRANCHES.length)} active · {formatCount(BRANCHES.length - ACTIVE_BRANCHES.length)} in setup
+            </p>
+          </div>
+          <button type="button" onClick={() => setAdding(true)} aria-label="Add branch" className="press flex min-h-11 items-center gap-1.5 rounded-full bg-brand-600 pl-3 pr-4 text-[14px] font-semibold text-white shadow-[0_8px_18px_rgba(31,111,232,0.3)]">
+            <Plus size={18} /> Add
+          </button>
+        </section>
+        <ScopeBar periodOnly />
+
+        {/* Company hero */}
+        <div className="relative overflow-hidden rounded-[24px] bg-linear-to-br from-[#1b5fd6] via-[#2b78e8] to-[#5ea6f7] p-5 text-white shadow-[0_14px_34px_rgba(31,99,214,0.25)]">
+          <span aria-hidden="true" className="absolute -right-16 -top-24 h-72 w-72 rounded-full bg-white/10" />
+          <div className="relative max-w-[66%]">
+            <p className="text-[13px] font-medium text-white/90">All branches made {when}</p>
+            <p className="mt-1 text-[30px] font-bold leading-none tracking-[-0.02em]">{formatMoney(all.revenue[c] ?? 0, c, true)}</p>
+            <p className="mt-2 text-[12.5px] leading-snug text-white/90">
+              {formatMoney(all.payments[c] ?? 0, c, true)} received · {formatMoney(all.expenses[c] ?? 0, c, true)} spent · {formatCount(all.patients)} patients
+            </p>
+            <button type="button" onClick={() => setChanged(true)} className="press mt-3.5 inline-flex items-center gap-1.5 rounded-xl bg-white px-3.5 py-2 text-[13.5px] font-semibold text-brand-700 shadow-[0_6px_16px_rgba(0,0,0,0.12)]">
+              See what changed <ChevronRight size={16} />
+            </button>
+          </div>
+          <Sticker name="hospital" size={124} className="absolute -bottom-2 right-0" />
+        </div>
+
+        <SectionTitle title="Your branches" />
+        <div className="space-y-3">
+          {BRANCHES.map((b) => (
+            <BranchCard key={b.id} branchId={b.id} />
+          ))}
+          <button type="button" onClick={() => setAdding(true)} className="press flex w-full items-center gap-3 rounded-[22px] border-[1.5px] border-dashed border-brand-300 bg-brand-50/50 p-4 text-left">
+            <span className="grid h-12 w-12 place-items-center rounded-2xl bg-white shadow-sm">
+              <Sticker name="rocket" size={32} />
+            </span>
+            <span>
+              <span className="block text-[15px] font-bold text-ink">Add another branch</span>
+              <span className="block text-[12.5px] text-muted">A new location with its own Patient ID prefix and currency.</span>
+            </span>
+          </button>
+        </div>
       </div>
       {adding && <AddBranchSheet onClose={() => setAdding(false)} />}
-    </>
-  );
-}
-
-function PeriodOnly() {
-  // The branch list shows every branch; only the period applies (desktop: same).
-  return (
-    <div className="-mt-1">
-      <ScopePeriod />
+      {changed && <WhatChangedSheet branchIds={ids} period={period} title="All branches" onClose={() => setChanged(false)} />}
     </div>
-  );
-}
-const ScopePeriod = () => <ScopeBar periodOnly />;
-
-function AddButton({ onClick }: { onClick: () => void }) {
-  return (
-    <button type="button" onClick={onClick} aria-label="Add branch" className="press grid h-10 w-10 place-items-center rounded-full bg-brand-600 text-white shadow-[0_8px_18px_rgba(31,111,232,0.3)]">
-      <Plus size={20} />
-    </button>
   );
 }
 
 function BranchCard({ branchId }: { branchId: string }) {
-  const { period, navigate, staff } = useCompany();
+  const { period, navigate } = useCompany();
+  const team = useTeam();
   const b = getBranch(branchId)!;
   const active = b.status === 'Active';
   const range = resolveRange(period);
@@ -86,223 +115,392 @@ function BranchCard({ branchId }: { branchId: string }) {
   const paid = s?.payments[c] ?? 0;
   const collected = billed > 0 ? Math.min(100, (paid / billed) * 100) : 0;
   const alerts = active ? attentionItems([b.id], range, false).length : 0;
-  const team = staff.filter((x) => x.branchId === b.id && x.status !== 'Left').length;
+  const mgr = team.manager(b.id);
+  const duty = team.onDuty(b.id);
   const hasAddress = b.address && b.address !== NOT_ON_RECORD;
   return (
-    <button type="button" onClick={() => navigate(`/branches/${b.id}`)} className="press block w-full rounded-[22px] bg-white p-4 text-left shadow-[0_6px_20px_rgba(30,74,160,0.07)] ring-1 ring-line/70">
+    <button type="button" onClick={() => navigate(`/branches/${b.id}`)} className="press block w-full rounded-[22px] bg-white p-3.5 text-left shadow-[0_6px_20px_rgba(30,74,160,0.07)] ring-1 ring-line/70">
       <span className="flex items-start gap-3">
-        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-brand-50 text-brand-600">
-          <Building2 size={22} />
+        <span className="grid h-[60px] w-[60px] shrink-0 place-items-center rounded-[16px] bg-linear-to-br from-[#e8f1ff] to-[#cfe2ff]">
+          <Sticker name="hospital" size={44} />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[17px] font-bold text-ink">{b.name}</span>
+          <span className="flex items-start justify-between gap-2">
+            <span className="truncate text-[17px] font-bold text-ink">{b.name}</span>
+            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11.5px] font-semibold ${active ? 'bg-tint-green text-good-ink' : 'bg-[#fff1e0] text-[#b45309]'}`}>{b.status}</span>
+          </span>
           <span className="flex items-center gap-1 text-[12.5px] text-muted">
             <MapPin size={13} className="shrink-0" />
-            <span className="truncate">{hasAddress ? `${b.address}, ${b.city}` : `${b.city}, ${b.country} · address not on record`}</span>
+            <span className="truncate">{hasAddress ? `${b.address}, ${b.city}` : `${b.code} · ${b.city}, ${b.country}`}</span>
           </span>
-        </span>
-        <span className="flex shrink-0 flex-col items-end gap-1.5">
-          <span className={`rounded-md px-2 py-0.5 text-[11.5px] font-semibold ${active ? 'bg-tint-green text-good-ink' : 'bg-[#fff1e0] text-[#b45309]'}`}>{b.status}</span>
-          <span className="relative grid h-8 w-8 place-items-center rounded-full bg-page text-ink-2" aria-label={`${alerts} item${alerts === 1 ? '' : 's'} need attention`}>
-            <Bell size={16} />
-            {alerts > 0 && <b className="absolute -right-1 -top-1 grid h-[17px] min-w-[17px] place-items-center rounded-full bg-[#ef4444] px-1 text-[10px] text-white">{alerts}</b>}
-          </span>
-        </span>
-      </span>
-
-      <span className="mt-3 flex gap-2 text-[12px]">
-        <span className="rounded-md bg-page px-2 py-1 text-ink-2">
-          Code <b className="text-ink">{b.code}</b>
-        </span>
-        <span className="rounded-md bg-page px-2 py-1 text-ink-2">
-          Patient IDs <b className="text-ink">{b.idCode ? `${b.idCode}-R` : 'Not set'}</b>
-        </span>
-        <span className="rounded-md bg-page px-2 py-1 text-ink-2">
-          Referrals <b className="text-ink">{s ? formatCount(s.referrals) : '—'}</b>
+          {s && (
+            <span className="mt-1.5 flex flex-wrap gap-1.5">
+              <Tag tone="bg-brand-50 text-brand-700">{formatCount(s.patients)} patients</Tag>
+              <Tag tone="bg-tint-purple text-violet">{formatCount(s.referrals)} referred</Tag>
+              {alerts > 0 && <Tag tone="bg-[#fdecec] text-[#b42318]">{alerts} need attention</Tag>}
+            </span>
+          )}
         </span>
       </span>
 
       {s ? (
         <>
-          <span className="mt-3 block rounded-2xl bg-tint-green/60 p-3">
-            <span className="flex items-baseline justify-between gap-2">
-              <span className="text-[12.5px] font-medium text-good-ink">Payments received</span>
-              <span className="text-[17px] font-bold text-good-ink">{formatMoney(paid, c)}</span>
-            </span>
-            <span className="mt-1.5 block h-1.5 overflow-hidden rounded-full bg-white">
-              <span className="block h-full rounded-full bg-good" style={{ width: `${Math.max(billed > 0 ? 2 : 0, collected)}%` }} />
-            </span>
-            <span className="mt-1 block text-[11.5px] text-good-ink/80">{billed > 0 ? `${Math.round(collected)}% of ${formatMoney(billed, c)} billed` : 'Nothing billed in this period'}</span>
+          <span className="mt-3 grid grid-cols-3 gap-2">
+            <Mini label="Made" value={formatMoney(billed, c, true)} tone="bg-tint-blue text-brand-800" />
+            <Mini label="Received" value={formatMoney(paid, c, true)} tone="bg-tint-green text-[#14633a]" />
+            <Mini label="Spent" value={formatMoney(s.expenses[c] ?? 0, c, true)} tone="bg-tint-orange text-warn-ink" />
           </span>
-          <span className="mt-2 grid grid-cols-3 gap-2">
-            {(
-              [
-                ['Visits', formatCount(s.patients)],
-                ['New patients', formatCount(s.newPatients)],
-                ['Revenue', formatMoney(billed, c, true)],
-                ['Outstanding', formatMoney(s.outstanding[c] ?? 0, c, true)],
-                ['Expenses', formatMoney(s.expenses[c] ?? 0, c, true)],
-                ['Staff', formatCount(team)],
-              ] as const
-            ).map(([l, v]) => (
-              <span key={l} className="min-w-0 rounded-xl bg-page px-2.5 py-2">
-                <span className={`block truncate text-[14.5px] font-bold ${l === 'Outstanding' && (s.outstanding[c] ?? 0) > 0 ? 'text-[#b42318]' : 'text-ink'}`}>{v}</span>
-                <span className="block truncate text-[11px] text-muted">{l}</span>
-              </span>
-            ))}
+          <span className="mt-2.5 block h-1.5 overflow-hidden rounded-full bg-page">
+            <span className="block h-full rounded-full bg-good" style={{ width: `${Math.max(billed > 0 ? 2 : 0, collected)}%` }} />
           </span>
+          <span className="mt-1 block text-[11.5px] text-muted">{billed > 0 ? `${Math.round(collected)}% of billed collected · ${formatMoney(s.outstanding[c] ?? 0, c, true)} still owed` : 'Nothing billed in this period'}</span>
         </>
       ) : (
         <span className="mt-3 block rounded-2xl bg-page p-3 text-[13px] text-muted">Setup in progress. Figures start once the branch is active.</span>
       )}
-      <span className="mt-3 flex items-center justify-between text-[12.5px] text-muted">
-        <span>
-          <span className="mr-1.5 rounded bg-brand-50 px-1.5 py-0.5 font-semibold text-brand-700">{c}</span>
-          Manager: {b.manager || 'Not assigned yet'}
+
+      <span className="mt-3 flex items-center justify-between gap-2 border-t border-line pt-3">
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="flex -space-x-2">
+            {[mgr, duty].filter(Boolean).map((p) => (
+              <Face key={p!.name} who={p!} size={30} ring />
+            ))}
+          </span>
+          <span className="min-w-0 text-[12px] leading-tight text-muted">
+            <span className="block truncate">Manager: {mgr?.name ?? (b.manager || 'Not assigned yet')}</span>
+            {duty && <span className="block truncate">On duty: {duty.name}</span>}
+          </span>
         </span>
-        <span className="flex items-center font-semibold text-brand-600">
-          Open <ChevronRight size={15} />
+        <span className="flex shrink-0 items-center text-[13px] font-semibold text-brand-600">
+          Open <ChevronRight size={16} />
         </span>
       </span>
     </button>
   );
 }
 
+function Mini({ label, value, tone }: { label: string; value: string; tone: string }) {
+  return (
+    <span className={`min-w-0 rounded-xl px-2.5 py-2 ${tone}`}>
+      <span className="block truncate text-[15px] font-bold">{value}</span>
+      <span className="block text-[11px] opacity-80">{label}</span>
+    </span>
+  );
+}
+
+function Face({ who, size, ring }: { who: Who; size: number; ring?: boolean }) {
+  return who.photo ? <img src={who.photo} alt="" className={`shrink-0 rounded-full object-cover ${ring ? 'ring-2 ring-white' : ''}`} style={{ width: size, height: size }} /> : <InitialsAvatar name={who.name} size={size} />;
+}
+
+/* ─────────────── one branch ─────────────── */
+
+/** Desktop wording uses dashes; the mobile app reads them as commas. */
+const tidy = (t: string) => t.replace(/s[—–-]s/g, ', ');
+
 const SEVERITY: Record<Severity, { label: string; tone: string; icon: React.ReactNode }> = {
-  urgent: { label: 'Urgent', tone: 'bg-[#fdecec] text-[#b42318]', icon: <ShieldAlert size={17} /> },
-  attention: { label: 'Needs attention', tone: 'bg-[#fff1e0] text-[#b45309]', icon: <AlertTriangle size={17} /> },
-  info: { label: 'For information', tone: 'bg-brand-50 text-brand-700', icon: <Info size={17} /> },
+  urgent: { label: 'Urgent', tone: 'bg-[#fdecec] text-[#b42318]', icon: <ShieldAlert size={18} /> },
+  attention: { label: 'Needs attention', tone: 'bg-[#fff1e0] text-[#b45309]', icon: <AlertTriangle size={18} /> },
+  info: { label: 'For information', tone: 'bg-brand-50 text-brand-700', icon: <Info size={18} /> },
 };
 
 function BranchView({ branchId }: { branchId: string }) {
-  const { period, navigate, staff } = useCompany();
+  const { period, navigate, agents } = useCompany();
+  const team = useTeam();
+  const sent = useAnnouncements();
   const b = getBranch(branchId);
+  const ids = useMemo(() => [branchId], [branchId]);
   const range = resolveRange(period);
+  const c = b?.currency ?? 'NGN';
+  const [detail, setDetail] = useState<{ kind: DetailKind; method?: PaymentMethod } | null>(null);
+  const [pick, setPick] = useState<Focus | null>(null);
+  const [sheet, setSheet] = useState<'agents' | 'announce' | 'changed' | null>(null);
+  const [alert, setAlert] = useState<AttentionItem | null>(null);
+  const insights = useInsightSlides(ids, period);
   const data = useMemo(() => {
     if (!b || b.status !== 'Active') return null;
+    const pr = priorRange(range);
     return {
-      s: summarize([b.id], range),
-      alerts: attentionItems([b.id], range, false),
-      pay: paymentMix([b.id], range, b.currency),
-      services: serviceRanking([b.id], range).filter((x) => x.count > 0).slice(0, 5),
-      agents: agentRanking([b.id], range).slice(0, 5),
+      s: summarize(ids, range),
+      prior: pr ? summarize(ids, pr) : null,
+      alerts: attentionItems(ids, range, false),
+      pay: paymentMix(ids, range, c),
+      services: serviceRanking(ids, range).filter((x) => x.count > 0),
+      agents: agentRanking(ids, range),
+      hospitals: hospitalRanking(ids, range),
+      expenses: expenseMix(ids, range, c).filter((x) => x.value > 0),
+      tr: trend(ids, range, c),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [branchId, range.from.getTime(), range.to.getTime()]);
+
   if (!b)
     return (
-      <>
-        <AdminHeader title="Branch" back scope={false} />
-        <Empty title="Branch not found" />
-      </>
+      <div className="relative">
+        <AdminTopBar back title="Branch" />
+        <div className="mt-10 flex flex-col items-center text-center">
+          <Sticker name="hospital" size={90} />
+          <p className="mt-3 text-[17px] font-bold text-ink">Branch not found</p>
+        </div>
+      </div>
     );
-  const c = b.currency;
-  const team = staff.filter((x) => x.branchId === b.id && x.status !== 'Left');
+
+  const mgr = team.manager(b.id);
+  const duty = team.onDuty(b.id);
+  const desk = team.frontDesk(b.id);
+  const allStaff = team.staff.filter((x) => x.branchId === b.id && x.status !== 'Left');
+  const branchAgents = b.id === agentBranchId() ? agents : [];
+  const activeAgents = data?.agents.length ?? 0;
+  const lastNotice = sent.find((a) => a.audience.kind === 'branch' && a.audience.branchId === b.id);
+  const open = (kind: DetailKind, method?: PaymentMethod) => setDetail({ kind, method });
   const history = statusHistory(b.id);
+  const when = periodWord(period);
+
+  // The branch's own announcement bar: insights + announcing to its PR agents.
+  const slides: Slide[] = [
+    ...insights.slides,
+    lastNotice
+      ? { id: `sent-${lastNotice.id}`, theme: THEMES.teal, sticker: 'megaphone', label: 'Your announcement is live', title: lastNotice.title, text: `Showing to every ${b.name} PR agent since ${new Date(lastNotice.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}.`, actions: [{ label: 'New announcement', onClick: () => setSheet('announce') }] }
+      : { id: 'announce', theme: THEMES.teal, sticker: 'megaphone', label: `${b.name} PR agents`, title: `Tell all ${formatCount(branchAgents.length)} PR agents something`, text: 'New hours, a new test, or a thank you. It shows in their announcement bar.', actions: [{ label: 'Write announcement', onClick: () => setSheet('announce') }] },
+  ];
+
   return (
-    <>
-      <AdminHeader title={`${b.name} branch`} back scope={false} />
-      <ScopeBar periodOnly />
-      {data ? (
-        <>
-          <div className="grid grid-cols-2 gap-2.5">
-            <Kpi icon={<Wallet size={18} />} tone="bg-tint-blue text-brand-700" title="Revenue" value={formatMoney(data.s.revenue[c] ?? 0, c)} />
-            <Kpi icon={<Wallet size={18} />} tone="bg-tint-green text-good-ink" title="Payments" value={formatMoney(data.s.payments[c] ?? 0, c)} note={`${formatCount(data.s.transactions)} transactions`} />
-            <Kpi icon={<Wallet size={18} />} tone="bg-[#fdecec] text-[#b42318]" title="Outstanding" value={formatMoney(data.s.outstanding[c] ?? 0, c)} note={`${formatCount(data.s.openBills)} open bills`} />
-            <Kpi icon={<Wallet size={18} />} tone="bg-tint-orange text-orange" title="Expenses" value={formatMoney(data.s.expenses[c] ?? 0, c)} />
-            <Kpi icon={<Users size={18} />} tone="bg-tint-purple text-violet" title="Patient visits" value={formatCount(data.s.patients)} note={`${formatCount(data.s.newPatients)} new`} />
-            <Kpi icon={<Users size={18} />} tone="bg-tint-blue text-brand-700" title="PR commission" value={formatMoney(data.s.prCommission[c] ?? 0, c)} note={`${formatCount(data.s.referrals)} referrals`} />
+    <div className="relative">
+      <PageGlow />
+      <AdminTopBar back title={`${b.name} branch`} />
+      <div className="relative">
+        {/* Hero */}
+        <div className="relative overflow-hidden rounded-[24px] bg-linear-to-br from-[#1b5fd6] via-[#2b78e8] to-[#5ea6f7] p-5 text-white shadow-[0_14px_34px_rgba(31,99,214,0.25)]">
+          <span aria-hidden="true" className="absolute -right-16 -top-24 h-72 w-72 rounded-full bg-white/10" />
+          <div className="relative max-w-[64%]">
+            <span className={`inline-flex rounded-full px-2 py-0.5 text-[11.5px] font-semibold ${b.status === 'Active' ? 'bg-white/20 text-white' : 'bg-[#fff1e0] text-[#b45309]'}`}>{b.status}</span>
+            <p className="mt-1.5 text-[24px] font-bold leading-tight tracking-[-0.02em]">{b.name}</p>
+            <p className="text-[12.5px] text-white/90">
+              {b.code} · {b.city}, {b.country} · {b.currency}
+            </p>
+            {data && (
+              <p className="mt-2 text-[13px] leading-snug text-white/95">
+                Made <b>{formatMoney(data.s.revenue[c] ?? 0, c, true)}</b> {when}, spent <b>{formatMoney(data.s.expenses[c] ?? 0, c, true)}</b>.
+              </p>
+            )}
           </div>
+          <Sticker name="hospital" size={96} className="absolute right-2 top-5" />
+          <div className="relative z-10 mt-3.5 grid grid-cols-2 gap-2">
+            <TeamButton who={duty} title="On seat" sub={duty ? duty.name.split(' ')[0] : 'No one on duty'} onClick={() => navigate(`/messages/${frontDeskId(b.id)}`)} />
+            <TeamButton who={mgr} title="Manager" sub={mgr ? mgr.name.split(' ')[0] : 'Not assigned'} onClick={() => navigate(`/messages/${managerId(b.id)}`)} />
+          </div>
+        </div>
 
-          <SectionHead title="Needs attention" note={data.alerts.length ? `${data.alerts.length} item${data.alerts.length === 1 ? '' : 's'}` : 'Nothing needs attention'} />
-          {data.alerts.length > 0 && (
-            <div className="space-y-2">
-              {data.alerts.map((a) => (
-                <button key={a.id} type="button" onClick={() => navigate(a.route)} className="press flex w-full items-start gap-3 rounded-[18px] bg-white p-3.5 text-left ring-1 ring-line/70">
-                  <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${SEVERITY[a.severity].tone}`}>{SEVERITY[a.severity].icon}</span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-[14.5px] font-bold leading-snug text-ink">{a.title}</span>
-                    <span className="mt-0.5 block text-[12.5px] leading-snug text-muted">{a.detail}</span>
-                    <span className="mt-1 block text-[12.5px] font-semibold text-brand-600">{a.action}</span>
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
+        <div className="mt-3">
+          <ScopeBar periodOnly />
+        </div>
 
-          <SectionHead title="Payments by method" />
-          <Card className="p-4">
-            <ShareBar parts={data.pay.map((p, i) => ({ label: p.label, value: p.value, color: PALETTE[i]! }))} format={(v) => formatMoney(v, c)} />
-          </Card>
+        {/* The branch's announcement bar */}
+        <SlideCarousel slides={slides} label={`${b.name} announcements`} />
 
-          <SectionHead title="Top diagnostic services" />
-          <Card className="overflow-hidden">{data.services.length ? <BarList color="bg-good" rows={data.services.map((x) => ({ key: String(x.id), label: x.name, sub: `${x.category} · ${formatMoney(x.revenue[c] ?? 0, c)}`, value: x.count, text: formatCount(x.count) }))} /> : <Empty title="No tests in this period" />}</Card>
+        {data ? (
+          <>
+            <SectionTitle title={period.key === 'today' ? 'Today’s Activity' : `Activity · ${periodLabel(period)}`} />
+            <ActivityTiles summary={data.s} prior={data.prior} c={c} open={open} />
 
-          <SectionHead title="Top PR agents" action="PR Management" onAction={() => navigate('/pr')} />
-          <Card className="overflow-hidden">{data.agents.length ? <BarList rows={data.agents.map((a) => ({ key: String(a.id), label: a.name, sub: `${a.hospitalKey || 'No hospital'} · commission ${formatMoney(a.commission[c] ?? 0, c)}`, value: a.referrals, text: `${formatCount(a.referrals)} ref.` }))} /> : <Empty title="No referrals in this period" />}</Card>
-        </>
-      ) : (
-        <Card className="mt-2 p-4 text-[14px] text-muted">This branch is {b.status.toLowerCase()}. Figures start once it is active.</Card>
-      )}
-
-      <SectionHead title="Staff" note={`${team.length} assigned`} action="Staff Management" onAction={() => navigate('/staff')} />
-      <Card className="divide-y divide-line">
-        {team.length ? (
-          team.map((p) => (
-            <div key={p.id} className="flex items-center justify-between gap-3 px-4 py-3">
-              <span className="min-w-0">
-                <span className="block truncate text-[14.5px] font-semibold text-ink">{p.name}</span>
-                <span className="block text-[12.5px] text-muted">
-                  {p.role} · {p.employment}
-                </span>
+            {/* What changed */}
+            <button type="button" onClick={() => setSheet('changed')} className="press relative mt-5 flex w-full items-center gap-3 overflow-hidden rounded-[22px] bg-linear-to-br from-[#eef1ff] to-[#dfe4ff] p-4 text-left ring-1 ring-[#dfe3ff]">
+              <Sticker name="brain" size={54} />
+              <span className="min-w-0 flex-1">
+                <span className="block text-[16px] font-bold text-ink">What changed {when}?</span>
+                <span className="block text-[12.5px] leading-snug text-ink-2">Why revenue, patients and spending moved against the period before.</span>
               </span>
-              <span className={`shrink-0 rounded-md px-2 py-0.5 text-[11.5px] font-semibold ${p.status === 'Active' ? 'bg-tint-green text-good-ink' : 'bg-[#fff1e0] text-[#b45309]'}`}>{p.status}</span>
-            </div>
-          ))
-        ) : (
-          <Empty title="No staff assigned yet" />
-        )}
-      </Card>
+              <ChevronRight size={20} className="shrink-0 text-brand-600" />
+            </button>
 
-      <SectionHead title="Branch details" />
-      <Card className="divide-y divide-line">
-        {(
-          [
-            ['Branch code', b.code],
-            ['Patient ID prefix', b.idCode ? `${b.idCode}-R / ${b.idCode}-W` : 'Not set'],
-            ['Currency', b.currency],
-            ['Address', b.address || NOT_ON_RECORD],
-            ['Phone', b.phone || NOT_ON_RECORD],
-            ['Manager', b.manager || 'Not assigned yet'],
-            ['Opened', b.openedOn || NOT_ON_RECORD],
-          ] as const
-        ).map(([l, v]) => (
-          <div key={l} className="flex items-start justify-between gap-4 px-4 py-3 text-[14px]">
-            <span className="shrink-0 text-muted">{l}</span>
-            <span className="text-right font-medium text-ink">{v}</span>
-          </div>
-        ))}
-      </Card>
-      {history.length > 0 && (
-        <>
-          <SectionHead title="Status history" />
-          <Card className="divide-y divide-line">
-            {[...history].reverse().map((h, i) => (
-              <div key={i} className="px-4 py-3 text-[13.5px]">
-                <p className="font-semibold text-ink">
-                  {h.from} → {h.to}
-                </p>
-                <p className="text-muted">
-                  {h.reason} · {h.by} · {new Date(h.at).toLocaleDateString('en-GB')}
+            <PaymentsCard title={`Payments received · ${periodLabel(period)}`} paid={data.s.payments[c] ?? 0} billed={data.s.revenue[c] ?? 0} c={c} mix={data.pay} open={open} />
+
+            {/* Needs attention */}
+            <SectionTitle title="Needs attention" />
+            {data.alerts.length === 0 ? (
+              <div className="flex items-center gap-3 rounded-[20px] bg-white p-4 ring-1 ring-line/70">
+                <Sticker name="check" size={40} />
+                <p className="text-[14px] text-muted">Nothing needs your attention at {b.name}.</p>
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {data.alerts.map((a) => (
+                  <button key={a.id} type="button" onClick={() => setAlert(a)} className="press flex w-full items-start gap-3 rounded-[20px] bg-white p-3.5 text-left shadow-[0_6px_20px_rgba(30,74,160,0.06)] ring-1 ring-line/70">
+                    <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${SEVERITY[a.severity].tone}`}>{SEVERITY[a.severity].icon}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[14.5px] font-bold leading-snug text-ink">{a.title}</span>
+                      <span className="mt-0.5 line-clamp-2 block text-[12.5px] leading-snug text-muted">{tidy(a.detail)}</span>
+                    </span>
+                    <ChevronRight size={18} className="mt-2.5 shrink-0 text-faint" />
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* PR agent management */}
+            <SectionTitle title="PR Agent Management" action="View all" onAction={() => setSheet('agents')} />
+            <div className="relative overflow-hidden rounded-[22px] bg-linear-to-br from-[#f3eeff] to-[#e2d8ff] p-4 ring-1 ring-[#e2d8ff]">
+              <div className="max-w-[68%]">
+                <p className="text-[12.5px] font-medium text-ink-2">PR agents at {b.name}</p>
+                <p className="mt-0.5 text-[26px] font-bold leading-tight text-ink">{formatCount(branchAgents.length)}</p>
+                <p className="text-[12.5px] text-ink-2">
+                  {formatCount(activeAgents)} referred patients {when} · {formatMoney(data.s.prCommission[c] ?? 0, c, true)} commission
                 </p>
               </div>
-            ))}
-          </Card>
-        </>
+              <Sticker name="stethoscope" size={78} className="absolute right-2 top-3" />
+              <div className="relative z-10 mt-3 grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => setSheet('agents')} className="press flex min-h-11 items-center justify-center gap-1.5 rounded-xl bg-white text-[13.5px] font-semibold text-violet shadow-sm">
+                  <Users size={17} /> View all agents
+                </button>
+                <button type="button" onClick={() => setSheet('announce')} className="press flex min-h-11 items-center justify-center gap-1.5 rounded-xl bg-violet text-[13.5px] font-semibold text-white shadow-sm">
+                  <Megaphone size={17} /> Announce
+                </button>
+              </div>
+            </div>
+            <TopAgents title={`Top PR agents ${when}`} agents={data.agents} onPick={setPick} onAll={() => setSheet('agents')} action="View all" />
+          </>
+        ) : (
+          <div className="mt-4 flex items-center gap-3 rounded-[20px] bg-white p-4 ring-1 ring-line/70">
+            <Sticker name="rocket" size={44} />
+            <p className="text-[14px] text-muted">This branch is {b.status.toLowerCase()}. Figures start once it is active.</p>
+          </div>
+        )}
+
+        <DutyRota branchId={b.id} />
+
+        {/* Team */}
+        <SectionTitle title="Team" action="Staff Management" onAction={() => navigate('/staff')} />
+        <div className="space-y-2">
+          {allStaff.length === 0 && <p className="rounded-[20px] bg-white p-4 text-[14px] text-muted ring-1 ring-line/70">No staff assigned yet.</p>}
+          {allStaff.map((p) => {
+            const isDuty = duty?.name === p.name;
+            const isMgr = mgr?.name === p.name;
+            const conv = isMgr ? managerId(b.id) : desk.some((d) => d.id === p.id) ? frontDeskId(b.id) : null;
+            return (
+              <div key={p.id} className="flex items-center gap-3 rounded-[20px] bg-white p-3 ring-1 ring-line/70">
+                <span className="relative">
+                  <Face who={{ name: p.name, role: p.role, photo: photoOf(p) }} size={46} />
+                  {isDuty && <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full bg-[#22c55e] ring-2 ring-white" aria-label="On duty" />}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[15px] font-semibold text-ink">{p.name}</span>
+                  <span className="block truncate text-[12.5px] text-muted">
+                    {p.role} · {p.employment}
+                  </span>
+                  {isDuty && <span className="mt-1 inline-flex rounded-full bg-tint-green px-2 py-0.5 text-[11.5px] font-semibold text-good-ink">On seat today</span>}
+                </span>
+                {conv && (
+                  <button type="button" onClick={() => navigate(`/messages/${conv}`)} aria-label={`Message ${p.name}`} className="press grid h-10 w-10 shrink-0 place-items-center rounded-full bg-brand-50 text-brand-600">
+                    <MessageCircle size={18} />
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {data && (
+          <>
+            <Hospitals list={data.hospitals} onPick={setPick} onAll={() => open('hospitals')} />
+            <TopServices list={data.services} c={c} onPick={setPick} onAll={() => open('services')} />
+            <ExpensesCard label={`Approved expenses · ${periodLabel(period)}`} total={data.s.expenses[c] ?? 0} mix={data.expenses} c={c} onClick={() => open('expenses')} />
+            <SectionTitle title="Trend" />
+            <div className="rounded-[22px] bg-white p-4 ring-1 ring-line/70">
+              <p className="mb-2 text-[12.5px] text-muted">{data.tr.note}</p>
+              <TrendChart
+                labels={data.tr.labels}
+                series={[
+                  { name: 'Revenue', color: '#2f7df6', values: data.tr.revenue },
+                  { name: 'Payments', color: '#16a34a', values: data.tr.payments },
+                  { name: 'Expenses', color: '#f27a1a', values: data.tr.expenses },
+                ]}
+              />
+            </div>
+          </>
+        )}
+
+        {/* Details */}
+        <SectionTitle title="Branch details" />
+        <div className="divide-y divide-line rounded-[22px] bg-white ring-1 ring-line/70">
+          {(
+            [
+              ['Branch code', b.code],
+              ['Patient ID prefix', b.idCode ? `${b.idCode}-R / ${b.idCode}-W` : 'Not set'],
+              ['Currency', b.currency],
+              ['Address', b.address || NOT_ON_RECORD],
+              ['Phone', b.phone || NOT_ON_RECORD],
+              ['Manager', mgr?.name ?? (b.manager || 'Not assigned yet')],
+              ['Opened', b.openedOn || NOT_ON_RECORD],
+            ] as const
+          ).map(([l, v]) => (
+            <div key={l} className="flex items-start justify-between gap-4 px-4 py-3 text-[14px]">
+              <span className="shrink-0 text-muted">{l}</span>
+              <span className="text-right font-medium text-ink">{v}</span>
+            </div>
+          ))}
+        </div>
+        {history.length > 0 && (
+          <>
+            <SectionTitle title="Status history" />
+            <div className="divide-y divide-line rounded-[22px] bg-white ring-1 ring-line/70">
+              {[...history].reverse().map((h, i) => (
+                <div key={i} className="px-4 py-3 text-[13.5px]">
+                  <p className="font-semibold text-ink">
+                    {h.from} to {h.to}
+                  </p>
+                  <p className="text-muted">
+                    {h.reason} · {h.by} · {new Date(h.at).toLocaleDateString('en-GB')}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
+      {detail && <DetailSheet kind={detail.kind} method={detail.method} branchIds={ids} period={period} scopeText={`${b.name} branch`} onClose={() => setDetail(null)} />}
+      {pick && <FocusSheet focus={pick} branchIds={ids} period={period} onClose={() => setPick(null)} />}
+      {sheet === 'agents' && <AgentsSheet branchId={b.id} period={period} onClose={() => setSheet(null)} />}
+      {sheet === 'announce' && <ComposeSheet audience={{ kind: 'branch', branchId: b.id, branchName: b.name }} branchId={b.id} preset="notice" onClose={() => setSheet(null)} />}
+      {sheet === 'changed' && <WhatChangedSheet branchIds={ids} period={period} title={`${b.name} branch`} onClose={() => setSheet(null)} />}
+      {alert && (
+        <Sheet
+          title={alert.title}
+          subtitle={`${SEVERITY[alert.severity].label} · ${b.name} branch`}
+          onClose={() => setAlert(null)}
+          footer={
+            <button type="button" onClick={() => (setAlert(null), navigate(alert.route))} className="press flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-brand-600 text-[15px] font-semibold text-white">
+              {alert.action} <ChevronRight size={18} />
+            </button>
+          }
+        >
+          <div className="flex items-start gap-3 px-2 pb-3">
+            <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${SEVERITY[alert.severity].tone}`}>{SEVERITY[alert.severity].icon}</span>
+            <p className="text-[14.5px] leading-relaxed text-ink-2">{tidy(alert.detail)}</p>
+          </div>
+        </Sheet>
       )}
-    </>
+      {insights.sheets}
+    </div>
   );
 }
+
+function TeamButton({ who, title, sub, onClick }: { who: Who | null; title: string; sub: string; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} className="press flex min-w-0 items-center gap-2 rounded-2xl bg-white/15 p-2 text-left ring-1 ring-white/30 backdrop-blur-sm">
+      <span className="relative shrink-0">
+        {who ? <Face who={who} size={34} /> : <span className="grid h-[34px] w-[34px] place-items-center rounded-full bg-white/25"><Users size={16} /></span>}
+        {who && title === 'On seat' && <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-[#22c55e] ring-2 ring-white" />}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[12.5px] font-semibold">{title}</span>
+        <span className="block truncate text-[11px] text-white/85">{sub}</span>
+      </span>
+      <MessageCircle size={16} className="shrink-0 text-white/90" />
+    </button>
+  );
+}
+
+/* ─────────────── add a branch ─────────────── */
 
 const EMPTY: BranchInput = { name: '', idCode: '', city: '', state: '', country: 'Nigeria', address: '', phone: '', email: '', contactPerson: '', openedOn: '', timezone: 'Africa/Lagos' };
 
@@ -322,9 +520,33 @@ function AddBranchSheet({ onClose }: { onClose: () => void }) {
     </label>
   );
   return (
-    <Sheet title="Add a branch" onClose={onClose} tall>
+    <Sheet
+      title="Add a branch"
+      subtitle="Starts as “Pending setup”"
+      onClose={onClose}
+      tall
+      footer={
+        <button
+          type="button"
+          onClick={() => {
+            setTried(true);
+            if (!ok) return;
+            const nb = addBranch(f, user.name);
+            showToast(`${nb.name} branch added (pending setup)`);
+            onClose();
+            navigate(`/branches/${nb.id}`);
+          }}
+          className="press min-h-12 w-full rounded-2xl bg-brand-600 text-[15.5px] font-semibold text-white shadow-[0_10px_22px_rgba(31,111,232,0.3)]"
+        >
+          Add branch
+        </button>
+      }
+    >
       <div className="px-2 pb-4">
-        <p className="mb-4 text-[13.5px] text-muted">The branch starts as “Pending setup”. Patient IDs use its three-letter code (e.g. LAG-R000001).</p>
+        <div className="mb-4 flex items-center gap-3 rounded-2xl bg-brand-50 p-3">
+          <Sticker name="rocket" size={40} />
+          <p className="text-[13px] leading-snug text-brand-800">Patient IDs use the branch’s three-letter code (e.g. LAG-R000001), so each code must be unique.</p>
+        </div>
         {field('name', 'Branch name', { placeholder: 'e.g. Wuse II' })}
         {field('idCode', 'Patient ID code (3 letters)', { placeholder: 'e.g. LAG' })}
         {field('city', 'City')}
@@ -334,20 +556,6 @@ function AddBranchSheet({ onClose }: { onClose: () => void }) {
         {field('email', 'Email', { type: 'email' })}
         {field('contactPerson', 'Contact person')}
         {field('openedOn', 'Opening date', { type: 'date' })}
-        <button
-          type="button"
-          onClick={() => {
-            setTried(true);
-            if (!ok) return;
-            const b = addBranch(f, user.name);
-            showToast(`${b.name} branch added (pending setup)`);
-            onClose();
-            navigate(`/branches/${b.id}`);
-          }}
-          className="press mt-2 min-h-12 w-full rounded-2xl bg-brand-600 text-[15.5px] font-semibold text-white shadow-[0_10px_22px_rgba(31,111,232,0.3)]"
-        >
-          Add branch
-        </button>
       </div>
     </Sheet>
   );

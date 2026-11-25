@@ -25,6 +25,7 @@ import { AdminNotifications } from './pages/Notifications';
 import { AdminDashboard } from './pages/Dashboard';
 import { ComingNext } from './pages/ComingNext';
 import { BranchesPage } from './pages/Branches';
+import { PatientsPage } from './pages/Patients';
 
 interface AdminPage {
   id: string;
@@ -40,7 +41,7 @@ export const ADMIN_PAGES: AdminPage[] = [
   { id: 'inventory', label: 'Inventory', icon: Package, screen: () => <ComingNext title="Inventory" /> },
   { id: 'staff', label: 'Staff Management', icon: Users, screen: () => <ComingNext title="Staff Management" /> },
   { id: 'pr', label: 'PR Management', icon: Handshake, screen: () => <ComingNext title="PR Management" /> },
-  { id: 'patients', label: 'Patients', icon: UserRound, screen: () => <ComingNext title="Patients" /> },
+  { id: 'patients', label: 'Patients', icon: UserRound, screen: PatientsPage },
   { id: 'finance', label: 'Finance & Expenses', icon: Wallet, screen: () => <ComingNext title="Finance & Expenses" /> },
   { id: 'reports', label: 'Reports', icon: ChartLine, screen: () => <ComingNext title="Reports" /> },
   { id: 'settings', label: 'Settings', icon: Settings, screen: () => <ComingNext title="Settings" /> },

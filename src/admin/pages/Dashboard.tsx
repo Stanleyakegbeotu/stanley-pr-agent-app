@@ -1,36 +1,32 @@
 /**
- * Company Admin Dashboard on mobile (owner, 2026-11-25: redesigned in the
- * referring-clinician app's style, not the desktop's). Same figures and rules
- * as the desktop CompanyDashboard (shared logic in src/company), shown as:
- *  greeting + scope · search · quick-notification carousel · Today's Activity
- *  tiles · live ticker · payments card · quick actions · branches · top PR
- *  agents · top hospitals · top services · expenses.
+ * Company Admin Dashboard on mobile (owner, 2026-11-25): the referring-
+ * clinician app's style, not the desktop's. Same figures and rules as the
+ * desktop CompanyDashboard (shared logic in src/company), shown as:
+ *  greeting + scope · search · smart announcement bar (top PR agent to thank,
+ *  each branch's day with "what changed", notifications) · Today's Activity ·
+ *  live ticker · payments card · quick actions · branches · top PR agents ·
+ *  hospitals · services · expenses.
  * Every card opens a slide-up card with the records behind the figure, for
  * the branch scope being viewed (admin/details.tsx).
  */
-import { useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent as RPointerEvent } from 'react';
-import { ArrowRight, Bell, Clock3, MessageCircle, CreditCard, FileText, Menu, Percent, ShieldCheck, TrendingUp, Users } from 'lucide-react';
+import { useMemo, useState, type FormEvent } from 'react';
+import { ShieldCheck } from 'lucide-react';
 import { useApp as useCompany } from '@company/app/AppState';
 import { BRANCHES, getBranch } from '@company/data/company';
 import type { Currency, PaymentMethod } from '@company/data/types';
 import { agentRanking, branchPerformance, compareCount, compareMoney, expenseMix, hospitalRanking, paymentMix, periodLabel, resolveBranchIds, serviceRanking } from '@company/services/analytics';
-import { isRead, markRead, useNotifications, type Note } from '@company/services/notifications';
 import { formatCount, formatMoney, greeting } from '@company/shared/format';
 import { ADMIN } from '@/data/team';
-import { serviceByName } from '@/data/services';
-import type { StickerKey } from '@/assets';
-import { InitialsAvatar, SearchField, FilterButton, ServiceThumb, Sticker } from '@/ui/kit';
+import { FilterButton, InitialsAvatar, SearchField, Sticker } from '@/ui/kit';
 import { useDashboardData } from '../useDashboardData';
-import { useAdminShell } from '../shell';
 import { ScopeBar } from '../ui';
 import { DetailSheet, FocusSheet, type DetailKind, type Focus } from '../details';
-import { NOTE_LOOK, NoteSheet } from '../notes';
-
-const firstPct = (p: Partial<Record<Currency, number | null>>) => Object.values(p)[0] ?? null;
+import { Action, ActivityTiles, AdminTopBar, PageGlow, PaymentsCard, SectionTitle, SlideCarousel, Tag, Ticker, firstPct } from '../kit';
+import { ExpensesCard, Hospitals, TopAgents, TopServices } from '../sections';
+import { useInsightSlides } from '../insights';
 
 export function AdminDashboard() {
   const { context, period, user, navigate } = useCompany();
-  const { openMenu, unread, inboxUnread } = useAdminShell();
   const branchIds = useMemo(() => resolveBranchIds(context), [context]);
   const { range, summary, prior } = useDashboardData(branchIds, period);
   const focus = context === 'all' ? null : getBranch(context);
@@ -40,37 +36,26 @@ export function AdminDashboard() {
   const [detail, setDetail] = useState<{ kind: DetailKind; method?: PaymentMethod } | null>(null);
   const [pick, setPick] = useState<Focus | null>(null);
   const [q, setQ] = useState('');
+  const insights = useInsightSlides(branchIds, period);
 
-  // Frosted top bar once content scrolls under it (as on the clinician Home).
-  const sentinel = useRef<HTMLDivElement>(null);
-  const [scrolled, setScrolled] = useState(false);
-  useEffect(() => {
-    const el = sentinel.current;
-    if (!el) return;
-    const io = new IntersectionObserver(([e]) => setScrolled(!e!.isIntersecting), { threshold: 0 });
-    io.observe(el);
-    return () => io.disconnect();
-  }, []);
-
-  const data = useMemo(() => {
-    const agents = agentRanking(branchIds, range);
-    return {
+  const data = useMemo(
+    () => ({
       pay: paymentMix(branchIds, range, c),
       branches: branchPerformance(range).filter((b) => !focus || b.branch.id === focus.id),
-      agents,
+      agents: agentRanking(branchIds, range),
       hospitals: hospitalRanking(branchIds, range),
       services: serviceRanking(branchIds, range).filter((s) => s.count > 0),
       expenses: expenseMix(branchIds, range, c).filter((x) => x.value > 0),
-    };
+    }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [branchIds.join(','), range.from.getTime(), range.to.getTime(), c]);
+    [branchIds.join(','), range.from.getTime(), range.to.getTime(), c],
+  );
 
-  const m = (v: number, compact = true) => formatMoney(v, c, compact);
+  const m = (v: number) => formatMoney(v, c, true);
   const rev = summary.revenue[c] ?? 0;
   const paid = summary.payments[c] ?? 0;
   const collected = rev > 0 ? Math.min(100, (paid / rev) * 100) : 0;
   const open = (kind: DetailKind, method?: PaymentMethod) => setDetail({ kind, method });
-
   const search = (e: FormEvent) => {
     e.preventDefault();
     navigate(q.trim() ? `/patients?q=${encodeURIComponent(q.trim())}` : '/patients');
@@ -78,24 +63,8 @@ export function AdminDashboard() {
 
   return (
     <div className="relative">
-      <div aria-hidden="true" className="pointer-events-none absolute -inset-x-5 top-0 -z-0 h-[460px] bg-[radial-gradient(120%_70%_at_75%_0%,#d6e6ff_0%,#e9f1ff_45%,rgba(244,248,254,0)_100%)] md:-inset-x-8" />
-      <div ref={sentinel} className="absolute top-0 h-px w-px" aria-hidden="true" />
-      <header className={`sticky top-0 z-30 -mx-5 flex min-h-16 items-center justify-between px-5 pt-[var(--safe-top)] transition-[background-color,box-shadow] duration-300 md:-mx-8 md:px-8 ${scrolled ? 'bg-[#eef4fe]/90 shadow-[0_6px_20px_rgba(30,74,160,0.08)] backdrop-blur-xl' : 'bg-transparent'}`}>
-        <button type="button" onClick={openMenu} aria-label="Menu" className="press -ml-2 grid h-11 w-11 place-items-center rounded-full text-ink md:invisible">
-          <Menu size={26} strokeWidth={2} />
-        </button>
-        <span className="-mr-2 flex items-center gap-1">
-        <button type="button" onClick={() => navigate('/messages')} aria-label={inboxUnread ? `Inbox, ${inboxUnread} unread` : 'Inbox'} className="press relative grid h-11 w-11 place-items-center rounded-full text-ink">
-          <MessageCircle size={25} strokeWidth={1.9} />
-          {inboxUnread > 0 && <span className="absolute right-0.5 top-1 grid h-[19px] min-w-[19px] place-items-center rounded-full bg-brand-600 px-1 text-[11px] font-bold leading-none text-white ring-2 ring-[#e9f1ff]">{inboxUnread > 9 ? '9+' : inboxUnread}</span>}
-        </button>
-        <button type="button" onClick={() => navigate('/notifications')} aria-label={unread ? `Notifications, ${unread} unread` : 'Notifications'} className="press relative grid h-11 w-11 place-items-center rounded-full text-ink">
-          <Bell size={26} strokeWidth={1.9} />
-          {unread > 0 && <span className="absolute right-0.5 top-1 grid h-[19px] min-w-[19px] place-items-center rounded-full bg-[#ef4444] px-1 text-[11px] font-bold text-white ring-2 ring-[#e9f1ff]">{unread > 9 ? '9+' : unread}</span>}
-        </button>
-        </span>
-      </header>
-
+      <PageGlow />
+      <AdminTopBar />
       <div className="relative">
         {/* Greeting */}
         <section className="mb-4 flex items-center justify-between gap-3 pt-1">
@@ -118,24 +87,17 @@ export function AdminDashboard() {
 
         {/* Search + scope */}
         <form onSubmit={search} className="mb-3 flex gap-3" role="search">
-          <SearchField value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search patients, tests, branches..." aria-label="Search" className="[&_input]:text-[14.5px]" />
+          <SearchField value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search patients by name, ID or phone..." aria-label="Search patients" className="[&_input]:text-[14.5px]" />
           <FilterButton onClick={() => navigate('/reports')} label="Reports" />
         </form>
         <ScopeBar />
 
-        {/* Quick notifications */}
-        <NoteCarousel />
+        {/* Smart announcement bar */}
+        <SlideCarousel slides={insights.slides} label="What needs you" />
 
         {/* Today's activity */}
         <SectionTitle title={period.key === 'today' ? 'Today’s Activity' : `Activity · ${periodText}`} />
-        <div className="grid grid-cols-3 gap-2.5">
-          <Tile tint="bg-tint-blue border-[#d6e7ff]" icon={<TrendingUp size={26} className="text-brand-500" strokeWidth={2.4} />} label="Revenue" value={m(rev)} ink="text-brand-800" pct={firstPct(compareMoney(summary.revenue, prior?.revenue ?? null))} onClick={() => open('revenue')} />
-          <Tile tint="bg-tint-green border-[#cdeedb]" icon={<CreditCard size={26} className="text-good" fill="currentColor" fillOpacity={0.18} strokeWidth={2.2} />} label="Payments" value={m(paid)} ink="text-[#14633a]" pct={firstPct(compareMoney(summary.payments, prior?.payments ?? null))} onClick={() => open('payments')} />
-          <Tile tint="bg-tint-purple border-[#e2d8ff]" icon={<Users size={26} className="text-violet" fill="currentColor" strokeWidth={1.4} />} label="Patients" value={formatCount(summary.patients)} ink="text-violet" pct={compareCount(summary.patients, prior?.patients ?? null)} onClick={() => open('patients')} />
-          <Tile tint="bg-tint-orange border-[#ffe2c6]" icon={<FileText size={25} className="text-orange" fill="currentColor" fillOpacity={0.18} strokeWidth={2.2} />} label="Expenses" value={m(summary.expenses[c] ?? 0)} ink="text-warn-ink" pct={firstPct(compareMoney(summary.expenses, prior?.expenses ?? null))} invert onClick={() => open('expenses')} />
-          <Tile tint="bg-[#fdecec] border-[#f9d4d4]" icon={<Clock3 size={25} className="text-[#d93036]" fill="currentColor" fillOpacity={0.15} strokeWidth={2.2} />} label="Outstanding" value={m(summary.outstanding[c] ?? 0)} ink="text-[#b42318]" pct={firstPct(compareMoney(summary.outstanding, prior?.outstanding ?? null))} invert onClick={() => open('outstanding')} />
-          <Tile tint="bg-[#eef1ff] border-[#dfe3ff]" icon={<Percent size={25} className="text-[#4f46e5]" strokeWidth={2.4} />} label="PR commission" value={m(summary.prCommission[c] ?? 0)} ink="text-[#3730a3]" pct={firstPct(compareMoney(summary.prCommission, prior?.prCommission ?? null))} onClick={() => open('commission')} />
-        </div>
+        <ActivityTiles summary={summary} prior={prior} c={c} open={open} />
 
         {/* Live ticker */}
         <Ticker
@@ -154,41 +116,19 @@ export function AdminDashboard() {
           ]}
         />
 
-        {/* Payments received */}
-        <div role="button" tabIndex={0} onClick={() => open('payments')} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), open('payments'))} aria-label="Payments received, see every payment" className="press relative mt-5 block w-full cursor-pointer overflow-hidden rounded-[24px] bg-linear-to-br from-[#0f8a4b] via-[#16a35a] to-[#4cc98a] p-5 text-left text-white shadow-[0_14px_30px_rgba(22,163,74,0.28)]">
-          <span aria-hidden="true" className="absolute -right-16 -top-20 h-64 w-64 rounded-full bg-white/10" />
-          <span className="relative block max-w-[64%]">
-            <span className="text-[13px] font-medium text-white/90">{period.key === 'today' ? 'Payments received today' : `Payments received · ${periodText}`}</span>
-            <span className="mt-1 block text-[30px] font-bold leading-none tracking-[-0.02em]">{formatMoney(paid, c)}</span>
-            <span className="mt-2 block h-1.5 overflow-hidden rounded-full bg-white/25">
-              <span className="block h-full rounded-full bg-white" style={{ width: `${Math.max(rev > 0 ? 3 : 0, collected)}%` }} />
-            </span>
-            <span className="mt-1.5 block text-[12.5px] text-white/90">{rev > 0 ? `${Math.round(collected)}% of ${formatMoney(rev, c)} billed` : 'Nothing billed in this period'}</span>
-          </span>
-          <span className="relative z-10 mt-3.5 grid grid-cols-3 gap-2">
-            {data.pay.map((p) => (
-              <button key={p.label} type="button" onClick={(e) => (e.stopPropagation(), open('payments', p.label as PaymentMethod))} aria-label={`Patients who paid by ${p.label}`} className="press min-w-0 rounded-xl bg-white/15 px-2.5 py-1.5 text-left text-[12px] ring-1 ring-white/20 backdrop-blur-sm hover:bg-white/25">
-                <span className="flex items-center justify-between text-white/85">
-                  {p.label} <ArrowRight size={12} />
-                </span>
-                <b className="block truncate text-[13.5px]">{m(p.value)}</b>
-              </button>
-            ))}
-          </span>
-          <Sticker name="moneyBag" size={96} className="absolute right-2 top-3" />
-        </div>
+        <PaymentsCard title={period.key === 'today' ? 'Payments received today' : `Payments received · ${periodText}`} paid={paid} billed={rev} c={c} mix={data.pay} open={open} />
 
         {/* Quick actions */}
         <SectionTitle title="Quick Actions" />
         <div className="grid grid-cols-4 gap-2.5">
-          <Action tint="bg-tint-blue border-[#d6e7ff]" sticker="hospital" label={'Branches'} onClick={() => navigate('/branches')} />
-          <Action tint="bg-tint-purple border-[#e2d8ff]" sticker="stethoscope" label={'Patients'} onClick={() => navigate('/patients')} />
-          <Action tint="bg-tint-green border-[#cdeedb]" sticker="moneyBag" label={'Finance'} onClick={() => navigate('/finance')} />
-          <Action tint="bg-tint-orange border-[#ffe2c6]" sticker="megaphone" label={'PR agents'} onClick={() => navigate('/pr')} />
-          <Action tint="bg-tint-pink border-[#ffd8e4]" sticker="healthWorker" label={'Staff'} onClick={() => navigate('/staff')} />
-          <Action tint="bg-[#e0f7f5] border-[#c4ece7]" sticker="testTube" label={'Inventory'} onClick={() => navigate('/inventory')} />
-          <Action tint="bg-[#eef1ff] border-[#dfe3ff]" sticker="chart" label={'Reports'} onClick={() => navigate('/reports')} />
-          <Action tint="bg-[#f4f6fa] border-line" sticker="sparkles" label={'Settings'} onClick={() => navigate('/settings')} />
+          <Action tint="bg-tint-blue border-[#d6e7ff]" sticker="hospital" label="Branches" onClick={() => navigate('/branches')} />
+          <Action tint="bg-tint-purple border-[#e2d8ff]" sticker="stethoscope" label="Patients" onClick={() => navigate('/patients')} />
+          <Action tint="bg-tint-green border-[#cdeedb]" sticker="moneyBag" label="Finance" onClick={() => navigate('/finance')} />
+          <Action tint="bg-tint-orange border-[#ffe2c6]" sticker="megaphone" label="PR agents" onClick={() => navigate('/pr')} />
+          <Action tint="bg-tint-pink border-[#ffd8e4]" sticker="healthWorker" label="Staff" onClick={() => navigate('/staff')} />
+          <Action tint="bg-[#e0f7f5] border-[#c4ece7]" sticker="testTube" label="Inventory" onClick={() => navigate('/inventory')} />
+          <Action tint="bg-[#eef1ff] border-[#dfe3ff]" sticker="chart" label="Reports" onClick={() => navigate('/reports')} />
+          <Action tint="bg-[#f4f6fa] border-line" sticker="sparkles" label="Settings" onClick={() => navigate('/settings')} />
         </div>
 
         {/* Branches */}
@@ -226,285 +166,15 @@ export function AdminDashboard() {
           {BRANCHES.length === 0 && <p className="text-[14px] text-muted">No branches yet.</p>}
         </div>
 
-        {/* Top PR agents */}
-        <SectionTitle title="Top PR Agents" action="See all" onAction={() => open('referrals')} />
-        {data.agents.length === 0 ? (
-          <EmptyCard sticker="stethoscope" text="No referrals in this period." />
-        ) : (
-          <ul className="space-y-2.5">
-            {data.agents.slice(0, 3).map((a, i) => (
-              <li key={a.id}>
-                <button type="button" onClick={() => setPick({ kind: 'agent', id: a.id })} className="press flex w-full items-start gap-3.5 rounded-[20px] bg-white p-3 text-left shadow-[0_6px_20px_rgba(30,74,160,0.07)] ring-1 ring-line/70">
-                  <span className="relative">
-                    <InitialsAvatar name={a.name} size={56} />
-                    <span className="absolute -bottom-1 -right-1 grid h-6 w-6 place-items-center rounded-full bg-white text-[11px] font-bold text-brand-700 shadow-sm">#{i + 1}</span>
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-start justify-between gap-2">
-                      <span className="truncate text-[15px] font-bold text-ink">{a.name}</span>
-                      <span className="shrink-0 text-[14.5px] font-bold text-violet">{formatMoney(a.commission[a.branch.currency] ?? 0, a.branch.currency)}</span>
-                    </span>
-                    <span className="block truncate text-[12.5px] text-muted">{a.hospitalKey || 'No hospital assigned'} · commission</span>
-                    <span className="mt-1.5 flex flex-wrap gap-1.5">
-                      <Tag tone="bg-brand-50 text-brand-700">{formatCount(a.referrals)} referral{a.referrals === 1 ? '' : 's'}</Tag>
-                      <Tag tone="bg-page text-ink-2">{formatMoney(a.revenue[a.branch.currency] ?? 0, a.branch.currency, true)} billed</Tag>
-                    </span>
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {/* Top hospitals */}
-        <SectionTitle title="Referring Hospitals" action="See all" onAction={() => open('hospitals')} />
-        {data.hospitals.length === 0 ? (
-          <EmptyCard sticker="hospital" text="No hospital referrals in this period." />
-        ) : (
-          <div className="-mx-5 flex gap-2.5 overflow-x-auto px-5 pb-1 md:-mx-8 md:px-8">
-            {data.hospitals.slice(0, 8).map((h) => (
-              <button key={h.key} type="button" onClick={() => setPick({ kind: 'hospital', key: h.key, name: h.name })} className="press relative w-[150px] shrink-0 overflow-hidden rounded-[20px] bg-linear-to-br from-[#eef9ff] to-[#d7efff] p-3.5 text-left ring-1 ring-[#cfe8fb]">
-                <span className="block truncate text-[15px] font-bold text-ink">{h.name}</span>
-                <span className="block text-[12px] text-ink-2">
-                  {h.activeAgents} of {h.agentCount} agents
-                </span>
-                <span className="mt-6 block text-[22px] font-bold leading-none text-brand-700">{formatCount(h.referrals)}</span>
-                <span className="text-[11.5px] text-muted">referrals</span>
-                <Sticker name="hospital" size={54} className="absolute -bottom-1 -right-1" />
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Top services */}
-        <SectionTitle title="Top Diagnostic Services" action="See all" onAction={() => open('services')} />
-        {data.services.length === 0 ? (
-          <EmptyCard sticker="microscope" text="No tests in this period." />
-        ) : (
-          <ul className="space-y-2.5">
-            {data.services.slice(0, 4).map((s) => {
-              const svc = serviceByName(s.name);
-              return (
-                <li key={s.id}>
-                  <button type="button" onClick={() => setPick({ kind: 'service', id: s.id, name: s.name })} className="press flex w-full items-start gap-3.5 rounded-[20px] bg-white p-3 text-left shadow-[0_6px_20px_rgba(30,74,160,0.07)] ring-1 ring-line/70">
-                    {svc ? (
-                      <ServiceThumb service={svc} className="h-[64px] w-[64px] shrink-0 rounded-[16px]" />
-                    ) : (
-                      <span className="grid h-[64px] w-[64px] shrink-0 place-items-center rounded-[16px] bg-tint-blue">
-                        <Sticker name="microscope" size={44} />
-                      </span>
-                    )}
-                    <span className="min-w-0 flex-1">
-                      <span className="flex items-start justify-between gap-2">
-                        <span className="line-clamp-2 text-[15px] font-semibold leading-snug text-ink">{s.name}</span>
-                        <span className="shrink-0 text-[15px] font-bold text-brand-600">×{formatCount(s.count)}</span>
-                      </span>
-                      <span className="mt-1.5 flex flex-wrap gap-1.5">
-                        <Tag tone="bg-brand-50 text-brand-700">{s.category}</Tag>
-                        <Tag tone="bg-tint-green text-good-ink">{formatMoney(s.revenue[c] ?? 0, c)} billed</Tag>
-                      </span>
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-
-        {/* Expenses */}
-        <button type="button" onClick={() => open('expenses')} className="press relative mt-6 block w-full overflow-hidden rounded-[24px] bg-linear-to-br from-[#fff3e2] to-[#ffe0b8] p-5 text-left ring-1 ring-[#ffe2c6]">
-          <span className="block max-w-[66%]">
-            <span className="text-[13px] font-semibold text-warn-ink">Approved expenses · {periodText}</span>
-            <span className="mt-1 block text-[26px] font-bold leading-tight text-ink">{formatMoney(summary.expenses[c] ?? 0, c)}</span>
-            <span className="mt-2 block space-y-1">
-              {data.expenses.slice(0, 3).map((x) => (
-                <span key={x.label} className="flex justify-between gap-3 text-[12.5px] text-ink-2">
-                  <span className="truncate">{x.label}</span>
-                  <b className="shrink-0 text-ink">{m(x.value)}</b>
-                </span>
-              ))}
-            </span>
-            <span className="mt-3 inline-flex items-center gap-1.5 text-[13.5px] font-semibold text-brand-700">
-              See every expense <ArrowRight size={15} />
-            </span>
-          </span>
-          <Sticker name="clipboard" size={104} className="absolute -bottom-2 right-2 rotate-[8deg]" />
-        </button>
+        <TopAgents agents={data.agents} onPick={setPick} onAll={() => open('referrals')} />
+        <Hospitals list={data.hospitals} onPick={setPick} onAll={() => open('hospitals')} />
+        <TopServices list={data.services} c={c} onPick={setPick} onAll={() => open('services')} />
+        <ExpensesCard label={`Approved expenses · ${periodText}`} total={summary.expenses[c] ?? 0} mix={data.expenses} c={c} onClick={() => open('expenses')} />
       </div>
 
       {detail && <DetailSheet kind={detail.kind} method={detail.method} branchIds={branchIds} period={period} scopeText={scopeText} onClose={() => setDetail(null)} />}
       {pick && <FocusSheet focus={pick} branchIds={branchIds} period={period} onClose={() => setPick(null)} />}
+      {insights.sheets}
     </div>
   );
 }
-
-/* ─────────────── pieces (the clinician dashboard's card language) ─────────────── */
-
-function SectionTitle({ title, action, onAction }: { title: string; action?: string; onAction?: () => void }) {
-  return (
-    <div className="mb-3 mt-6 flex items-center justify-between">
-      <h2 className="text-[19px] font-bold tracking-[-0.01em] text-ink">{title}</h2>
-      {action && (
-        <button type="button" onClick={onAction} className="flex items-center gap-1 text-[14.5px] font-semibold text-brand-600">
-          {action} <span aria-hidden="true">→</span>
-        </button>
-      )}
-    </div>
-  );
-}
-
-function Tile({ tint, icon, label, value, ink, pct, invert, onClick }: { tint: string; icon: React.ReactNode; label: string; value: string; ink: string; pct?: number | null; invert?: boolean; onClick: () => void }) {
-  const good = pct == null ? null : invert ? pct <= 0 : pct >= 0;
-  return (
-    <button type="button" onClick={onClick} className={`press flex min-h-[124px] min-w-0 flex-col items-start rounded-[18px] border p-3 text-left ${tint}`}>
-      {icon}
-      <span className="mt-2 text-[13px] leading-tight text-ink-2">{label}</span>
-      <span className={`mt-auto w-full truncate pt-1 font-bold leading-none tracking-[-0.03em] ${ink} ${value.length > 7 ? 'text-[17px]' : value.length > 5 ? 'text-[20px]' : 'text-[24px]'}`}>{value}</span>
-      {pct != null && Number.isFinite(pct) && <span className={`mt-1 text-[11px] font-semibold ${good ? 'text-good' : 'text-[#d93036]'}`}>{`${pct >= 0 ? '▲' : '▼'} ${Math.abs(pct).toFixed(0)}%`}</span>}
-    </button>
-  );
-}
-
-function Action({ tint, sticker, label, onClick }: { tint: string; sticker: StickerKey; label: string; onClick: () => void }) {
-  return (
-    <button type="button" onClick={onClick} className={`press flex min-h-[100px] min-w-0 flex-col items-center justify-center gap-1.5 rounded-[18px] border px-1 ${tint}`}>
-      <Sticker name={sticker} size={40} />
-      <span className="text-center text-[13px] font-medium leading-tight text-ink">{label}</span>
-    </button>
-  );
-}
-
-function Tag({ tone, children }: { tone: string; children: React.ReactNode }) {
-  return <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11.5px] font-medium ${tone}`}>{children}</span>;
-}
-
-function EmptyCard({ sticker, text }: { sticker: StickerKey; text: string }) {
-  return (
-    <div className="flex items-center gap-3 rounded-[20px] bg-white p-4 ring-1 ring-line/70">
-      <Sticker name={sticker} size={40} />
-      <p className="text-[14px] text-muted">{text}</p>
-    </div>
-  );
-}
-
-/** Live ticker: a fintech-style scrolling band of key figures (pauses on touch). */
-function Ticker({ items }: { items: { label: string; value: string; pct?: number | null; invert?: boolean }[] }) {
-  const run = [...items, ...items];
-  return (
-    <div className="ticker -mx-5 mt-5 overflow-hidden bg-[#0b1a3a] py-2.5 md:-mx-8" aria-label="Live figures">
-      <div className="ticker-track flex w-max items-center" style={{ ['--ticker-s' as string]: `${Math.max(24, items.length * 4)}s` }}>
-        {run.map((it, i) => {
-          const good = it.pct == null ? null : it.invert ? it.pct <= 0 : it.pct >= 0;
-          return (
-            <span key={i} className="flex shrink-0 items-center gap-2 px-4 text-[13px] text-white/75" aria-hidden={i >= items.length}>
-              <span className="h-1.5 w-1.5 rounded-full bg-[#34d07f]" />
-              {it.label}
-              <b className="max-w-[180px] truncate text-white">{it.value}</b>
-              {it.pct != null && Number.isFinite(it.pct) && <span className={`text-[12px] font-semibold ${good ? 'text-[#34d07f]' : 'text-[#ff6b6b]'}`}>{`${it.pct >= 0 ? '▲' : '▼'}${Math.abs(it.pct).toFixed(1)}%`}</span>}
-              <span className="ml-2 text-white/20">|</span>
-            </span>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-/* ─────────────── quick notifications carousel ─────────────── */
-
-const AUTOPLAY_MS = 5000;
-
-function NoteCarousel() {
-  const { notes } = useNotifications();
-  const { navigate } = useCompany();
-  const list = useMemo(() => notes.slice(0, 6), [notes]);
-  const [index, setIndex] = useState(0);
-  const [drag, setDrag] = useState(0);
-  const [paused, setPaused] = useState(false);
-  const [openNote, setOpenNote] = useState<Note | null>(null);
-  const start = useRef<{ x: number; y: number; t: number } | null>(null);
-  const width = useRef(1);
-  const moved = useRef(false);
-  const n = list.length;
-  useEffect(() => {
-    if (paused || n < 2 || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const t = window.setInterval(() => !document.hidden && setIndex((i) => (i + 1) % n), AUTOPLAY_MS);
-    return () => window.clearInterval(t);
-  }, [paused, n]);
-  if (!n) return null;
-  const at = Math.min(index, n - 1);
-  const down = (e: RPointerEvent<HTMLDivElement>) => {
-    start.current = { x: e.clientX, y: e.clientY, t: Date.now() };
-    width.current = e.currentTarget.clientWidth || 1;
-    moved.current = false;
-    setPaused(true);
-  };
-  const move = (e: RPointerEvent<HTMLDivElement>) => {
-    if (!start.current) return;
-    const dx = e.clientX - start.current.x;
-    if (!moved.current && Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(e.clientY - start.current.y)) {
-      moved.current = true;
-      e.currentTarget.setPointerCapture(e.pointerId);
-    }
-    if (moved.current) setDrag(dx);
-  };
-  const up = () => {
-    if (start.current && moved.current) {
-      const limit = Date.now() - start.current.t < 300 ? 25 : width.current * 0.22;
-      if (drag < -limit) setIndex((at + 1) % n);
-      else if (drag > limit) setIndex((at - 1 + n) % n);
-    }
-    start.current = null;
-    setDrag(0);
-    window.setTimeout(() => setPaused(false), 1500);
-  };
-  return (
-    <section aria-roledescription="carousel" aria-label="Quick notifications" className="mt-2">
-      <div className="overflow-hidden rounded-[24px] shadow-[0_14px_34px_rgba(31,99,214,0.22)]" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} style={{ touchAction: 'pan-y' }}>
-        <div className="flex" style={{ transform: `translateX(calc(${-at * 100}% + ${drag}px))`, transition: drag ? 'none' : 'transform 520ms cubic-bezier(.22,.8,.24,1)' }}>
-          {list.map((note, i) => {
-            const look = NOTE_LOOK[note.kind];
-            return (
-              <article key={note.id} aria-hidden={i !== at} className={`relative isolate h-[196px] w-full shrink-0 select-none overflow-hidden bg-linear-to-r text-white ${look.theme}`}>
-                <span aria-hidden="true" className="absolute -right-20 -top-28 -z-10 h-80 w-80 rounded-full bg-white/10" />
-                <div className="relative z-10 flex h-full w-[62%] flex-col justify-center py-4 pl-5">
-                  <p className="mb-1.5 flex items-center gap-2 text-[12.5px] font-medium text-white/95">
-                    <Sticker name="megaphone" size={22} className="-rotate-12" />
-                    {look.label}
-                    {!isRead(note) && <span className="rounded-full bg-white px-1.5 text-[10.5px] font-bold text-brand-700">NEW</span>}
-                  </p>
-                  <h3 className="line-clamp-2 text-[18px] font-bold leading-[1.15] tracking-[-0.01em]">{note.title}</h3>
-                  <p className="mt-1 line-clamp-2 text-[12.5px] leading-snug text-white/90">{note.summary}</p>
-                  <button
-                    type="button"
-                    tabIndex={i === at ? 0 : -1}
-                    onClick={() => {
-                      if (moved.current) return;
-                      markRead(note.id);
-                      setOpenNote(note);
-                    }}
-                    className="press mt-3 inline-flex w-fit items-center gap-2 rounded-xl bg-white px-3.5 py-1.5 text-[13.5px] font-semibold text-brand-700 shadow-[0_6px_16px_rgba(0,0,0,0.12)]"
-                  >
-                    View details <ArrowRight size={15} strokeWidth={2.4} />
-                  </button>
-                </div>
-                <Sticker name={look.sticker} size={124} className="absolute -bottom-2 -right-3" />
-              </article>
-            );
-          })}
-        </div>
-      </div>
-      {n > 1 && (
-        <div className="mt-3 flex justify-center gap-2">
-          {list.map((note, i) => (
-            <button key={note.id} type="button" onClick={() => setIndex(i)} aria-label={`Notification ${i + 1} of ${n}`} aria-current={i === at} className="grid h-6 place-items-center">
-              <span className={`block h-2 rounded-full transition-all duration-300 ${i === at ? 'w-5 bg-brand-600' : 'w-2 bg-[#cfd8e6]'}`} />
-            </button>
-          ))}
-        </div>
-      )}
-      {openNote && <NoteSheet note={openNote} onClose={() => setOpenNote(null)} />}
-    </section>
-  );
-}
-

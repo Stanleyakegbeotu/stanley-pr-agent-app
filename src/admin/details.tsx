@@ -30,6 +30,7 @@ import { InitialsAvatar, ServiceThumb, Sticker } from '@/ui/kit';
 import type { StickerKey } from '@/assets';
 import { Sheet, useSheetPeriod } from './ui';
 import { useTeam, type Who } from './people';
+import { AgentProfileSheet } from './agents';
 
 export type DetailKind = 'revenue' | 'payments' | 'patients' | 'expenses' | 'outstanding' | 'commission' | 'referrals' | 'hospitals' | 'services';
 /** A single record opened on top of a list. */
@@ -42,7 +43,7 @@ const timeOf = (d: Date) => d.toLocaleTimeString('en-GB', { hour: '2-digit', min
 const dateOf = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 const when = (d: Date, oneDay: boolean) => (oneDay ? timeOf(d) : `${d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}, ${timeOf(d)}`);
 const CATEGORY = new Map(SERVICES.map((s) => [s.id, s.category]));
-const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
+export const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
 
 const META: Record<DetailKind, { title: string; sticker: StickerKey; tone: string; note: string; search: string }> = {
   revenue: { title: 'Revenue generated', sticker: 'chart', tone: 'from-[#e8f1ff] to-[#d6e6ff]', note: 'Every visit billed. Revenue is billed value, not money received. Tap a patient for the full visit record.', search: 'Search patient, ID or test' },
@@ -56,7 +57,7 @@ const META: Record<DetailKind, { title: string; sticker: StickerKey; tone: strin
   services: { title: 'Diagnostic services', sticker: 'microscope', tone: 'from-[#e6f8ee] to-[#cfeedd]', note: 'Every service performed, with its billed value. Tap one for the patients who did it.', search: 'Search test or category' },
 };
 
-interface Row {
+export interface Row {
   key: string;
   /** Lower-case text the search matches against. */
   text: string;
@@ -132,7 +133,7 @@ export function DetailSheet({ kind, branchIds, period, scopeText, onClose, metho
   );
 }
 
-interface Ctx {
+export interface Ctx {
   open: (f: Focus) => void;
   team: ReturnType<typeof useTeam>;
   agentName: (id: number | null) => string | null;
@@ -145,7 +146,7 @@ function sumBy<T>(items: T[], branch: (t: T) => string, amount: (t: T) => number
 }
 const money = (v: number, b: string) => formatMoney(v, cur(b));
 const visitText = (v: PatientVisit, x: Ctx) => norm([v.patientName, v.patientRef, v.phone ?? '', branchName(v.branchId), ...v.services.map((s) => s.name), x.agentName(v.agentId) ?? '', x.team.processedBy(v)?.name ?? ''].join(' '));
-const visitRow = (v: PatientVisit, x: Ctx, extra: Partial<VisitRowProps> = {}): Row => ({
+export const visitRow = (v: PatientVisit, x: Ctx, extra: Partial<VisitRowProps> = {}): Row => ({
   key: v.id + (extra.tag ?? ''),
   text: visitText(v, x),
   method: extra.method ?? v.method,
@@ -278,7 +279,7 @@ export function FocusSheet({ focus, branchIds, period: start, onClose }: { focus
     case 'service':
       return <ServiceSheet id={focus.id} name={focus.name} branchIds={branchIds} start={start} onClose={onClose} />;
     case 'agent':
-      return <AgentSheet id={focus.id} branchIds={branchIds} start={start} onClose={onClose} />;
+      return <AgentProfileSheet id={focus.id} branchIds={branchIds} period={start} onClose={onClose} />;
     case 'hospital':
       return <HospitalSheet hkey={focus.key} name={focus.name} branchIds={branchIds} start={start} onClose={onClose} />;
   }
@@ -286,6 +287,14 @@ export function FocusSheet({ focus, branchIds, period: start, onClose }: { focus
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 /** Shared bits of the record sheets: their own dates and search, a visit list and a stacked record. */
+/** Context for visit rows: who processed it, who referred, and opening a record on top. */
+export function useRowCtx(open: (f: Focus) => void): Ctx {
+  const team = useTeam();
+  const { agents } = useCompany();
+  const agentName = (id: number | null) => (id == null ? null : (agents.find((a) => a.id === id)?.name ?? `PR agent #${id}`));
+  return { open, team, agentName };
+}
+
 function useRecordList(start: PeriodSelection) {
   const p = useSheetPeriod(start);
   const [q, setQ] = useState('');
@@ -315,55 +324,6 @@ function ServiceSheet({ id, name, branchIds, start, onClose }: { id: number; nam
         <span className="absolute -bottom-1 right-2">{svc ? <ServiceThumb service={svc} className="h-[78px] w-[78px] rounded-2xl" /> : <Sticker name="microscope" size={78} />}</span>
       </div>
       <Rows rows={rows} oneDay={L.range.days <= 1} multi={multi} empty={L.t ? `No patient matches “${L.q}”.` : 'No patient did this test in this period.'} />
-      {L.focus && <FocusSheet focus={L.focus} branchIds={branchIds} period={L.period} onClose={() => L.setFocus(null)} />}
-    </Sheet>
-  );
-}
-
-function AgentSheet({ id, branchIds, start, onClose }: { id: number; branchIds: string[]; start: PeriodSelection; onClose: () => void }) {
-  const L = useRecordList(start);
-  const { navigate } = useCompany();
-  const rec = L.agents.find((a) => a.id === id);
-  const rank = useMemo(() => agentRanking(branchIds, L.range).find((a) => a.id === id), [branchIds, L.range, id]);
-  const visits = useMemo(() => patientVisits(branchIds, L.range).filter((v) => v.agentId === id), [branchIds, L.range, id]);
-  const name = rec?.name ?? rank?.name ?? `PR agent #${id}`;
-  const c = rank?.branch.currency ?? cur(branchIds[0] ?? '');
-  const billed = visits.reduce((a, v) => a + v.billed, 0);
-  const commission = rank ? (rank.commission[c] ?? 0) : visits.reduce((a, v) => a + commissionOn(v.billed, id), 0);
-  const rows = visits.map((v) => visitRow(v, L.ctx, { amountNote: `${formatMoney(commissionOn(v.billed, id), cur(v.branchId))} commission` })).filter((r) => !L.t || r.text.includes(L.t));
-  const hospital = rank?.hospitalKey || rec?.hospital.trim().toUpperCase() || 'No hospital assigned';
-  const phone = rec?.phone && rec.phone !== 'N/A' ? rec.phone : null;
-  return (
-    <Sheet
-      back
-      title={name}
-      subtitle={`PR agent · ${hospital}`}
-      onClose={onClose}
-      tall
-      search={{ value: L.q, onChange: L.setQ, placeholder: 'Search patient, ID or test' }}
-      filter={L.filter}
-      footer={
-        <button type="button" onClick={() => navigate(`/messages/adm-pr-${id}`)} className="press flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-brand-600 text-[15px] font-semibold text-white">
-          <MessageCircle size={18} /> Message {name.split(' ').slice(0, 2).join(' ')}
-        </button>
-      }
-    >
-      <div className="relative mb-3 overflow-hidden rounded-[22px] bg-linear-to-br from-[#f3eeff] to-[#e4dbff] p-4">
-        <div className="flex items-center gap-3">
-          <InitialsAvatar name={name} size={52} />
-          <div className="min-w-0">
-            <p className="truncate text-[16px] font-bold text-ink">{name}</p>
-            <p className="truncate text-[12.5px] text-ink-2">{[hospital, phone].filter(Boolean).join(' · ')}</p>
-          </div>
-        </div>
-        <div className="mt-3 grid grid-cols-3 gap-2">
-          <Stat label="Patients" value={formatCount(visits.length)} />
-          <Stat label="Billed" value={formatMoney(billed, c, true)} />
-          <Stat label="Commission" value={formatMoney(commission, c, true)} strong />
-        </div>
-      </div>
-      <p className="mb-2 px-1 text-[13px] font-semibold text-ink-2">Patients referred</p>
-      <Rows rows={rows} oneDay={L.range.days <= 1} multi={branchIds.length > 1} empty={L.t ? `No patient matches “${L.q}”.` : 'No referred patients in this period.'} />
       {L.focus && <FocusSheet focus={L.focus} branchIds={branchIds} period={L.period} onClose={() => L.setFocus(null)} />}
     </Sheet>
   );
@@ -515,7 +475,7 @@ export function VisitSheet({ visit, onClose }: { visit: PatientVisit; onClose: (
 
 /* ─────────────── pieces (same card language as the clinician app) ─────────────── */
 
-function Rows({ rows, oneDay, multi, empty }: { rows: Row[]; oneDay: boolean; multi: boolean; empty: string }) {
+export function Rows({ rows, oneDay, multi, empty }: { rows: Row[]; oneDay: boolean; multi: boolean; empty: string }) {
   const [shown, setShown] = useState(PAGE);
   if (!rows.length) return <p className="px-4 py-10 text-center text-[14px] text-muted">{empty}</p>;
   return (
@@ -591,7 +551,7 @@ function Fact({ icon, label, value, sub, photo, onClick }: { icon: ReactNode; la
   );
 }
 
-function Line({ title, sub, right, tags, initials, sticker, tint = 'bg-tint-orange', service, onClick }: { title: string; sub?: string; right: string; tags?: string[]; initials?: string; sticker?: StickerKey; tint?: string; service?: string; onClick?: () => void }) {
+export function Line({ title, sub, right, tags, initials, sticker, tint = 'bg-tint-orange', service, onClick }: { title: string; sub?: string; right: string; tags?: string[]; initials?: string; sticker?: StickerKey; tint?: string; service?: string; onClick?: () => void }) {
   const svc = service ? serviceByName(service) : undefined;
   const inner = (
     <>
@@ -633,7 +593,7 @@ function Line({ title, sub, right, tags, initials, sticker, tint = 'bg-tint-oran
   );
 }
 
-interface VisitRowProps {
+export interface VisitRowProps {
   v: PatientVisit;
   oneDay: boolean;
   multi: boolean;
