@@ -27,6 +27,7 @@ import { ComingNext } from './pages/ComingNext';
 import { BranchesPage } from './pages/Branches';
 import { PatientsPage } from './pages/Patients';
 import { FinancePage } from './pages/Finance';
+import { PRPage } from './pages/PR';
 
 interface AdminPage {
   id: string;
@@ -41,7 +42,7 @@ export const ADMIN_PAGES: AdminPage[] = [
   { id: 'branches', label: 'Branches', icon: Building2, screen: BranchesPage },
   { id: 'inventory', label: 'Inventory', icon: Package, screen: () => <ComingNext title="Inventory" /> },
   { id: 'staff', label: 'Staff Management', icon: Users, screen: () => <ComingNext title="Staff Management" /> },
-  { id: 'pr', label: 'PR Management', icon: Handshake, screen: () => <ComingNext title="PR Management" /> },
+  { id: 'pr', label: 'PR Management', icon: Handshake, screen: PRPage },
   { id: 'patients', label: 'Patients', icon: UserRound, screen: PatientsPage },
   { id: 'finance', label: 'Finance & Expenses', icon: Wallet, screen: FinancePage },
   { id: 'reports', label: 'Reports', icon: ChartLine, screen: () => <ComingNext title="Reports" /> },

@@ -11,7 +11,7 @@
  * Same logic and figures as the desktop PR Management (src/company).
  */
 import { useMemo, useRef, useState } from 'react';
-import { Building2, Camera, Check, Copy, Hospital, Landmark, Megaphone, MessageCircle, Pencil, Phone, Send, ShieldAlert, Sparkles, Users } from 'lucide-react';
+import { Building2, Camera, Check, Copy, Hospital, Landmark, Megaphone, MessageCircle, Pencil, Phone, Plus, RotateCcw, Send, ShieldAlert, Sparkles, Trash2, Users } from 'lucide-react';
 import { useApp as useCompany } from '@company/app/AppState';
 import { getBranch } from '@company/data/company';
 import { LEGACY_BRANCH_ID } from '@company/data/legacy';
@@ -19,7 +19,7 @@ import type { DateRange, PeriodSelection } from '@company/data/types';
 import { DATA_START, TODAY, diffDays } from '@company/data/demo/generator';
 import { patientVisits } from '@company/data/demo/dailyLines';
 import { agentRanking } from '@company/services/analytics';
-import { commissionOn, pct, rateFor } from '@company/services/commission';
+import { agentRate, commissionOn, pct, rateFor } from '@company/services/commission';
 import { formatCount, formatMoney } from '@company/shared/format';
 import { useNav } from '@/app/store';
 import { moneyWordsIn, sendAnnouncement, useAnnouncements, type AnnouncementAudience } from '@/domain/announcements';
@@ -32,6 +32,9 @@ import { saveAgentBank, useAgentBanks } from './agentBanks';
 import { Sheet, useSheetPeriod } from './ui';
 import { FocusSheet, Rows, norm, useRowCtx, visitRow, type Focus } from './details';
 import { agentConvId } from './chat';
+import { AddAgentSheet, AgentEditSheet, TrashSheet } from './prManage';
+import { hasPhone, hospitalKey } from '@company/data/legacy';
+import { BASELINE_AGENTS } from '@company/data/userRecords';
 
 const ALL_TIME: DateRange = { from: DATA_START, to: TODAY, days: diffDays(DATA_START, TODAY) + 1 };
 /** PR agents belong to the branch their referrals go to (the legacy branch until agents carry a branch). */
@@ -41,11 +44,13 @@ const firstName = (n: string) => n.replace(/^(dr\.?|mr\.?|mrs\.?|ms\.?|miss|barr
 
 /* ─────────────── every PR agent of a branch ─────────────── */
 
-export function AgentsSheet({ branchId, period, onClose }: { branchId: string; period: PeriodSelection; onClose: () => void }) {
-  const { agents } = useCompany();
+export function AgentsSheet({ branchId, period, onClose, hospital, initialShow = 'all', canAdd }: { branchId: string; period: PeriodSelection; onClose: () => void; /** A hospital code, null for agents with no hospital, or all agents. */ hospital?: string | null; initialShow?: 'all' | 'active' | 'quiet' | 'nophone' | 'edited'; canAdd?: boolean }) {
+  const { agents: everyone, agentEdits } = useCompany();
+  const [adding, setAdding] = useState(false);
+  const agents = hospital === undefined ? everyone : everyone.filter((a) => hospitalKey(a.hospital) === (hospital ?? ''));
   const { range, filter, period: sel } = useSheetPeriod(period);
   const [q, setQ] = useState('');
-  const [show, setShow] = useState<'all' | 'active' | 'quiet'>('all');
+  const [show, setShow] = useState<'all' | 'active' | 'quiet' | 'nophone' | 'edited'>(initialShow);
   const [open, setOpen] = useState<number | null>(null);
   const [shown, setShown] = useState(40);
   const banks = useAgentBanks();
@@ -57,27 +62,43 @@ export function AgentsSheet({ branchId, period, onClose }: { branchId: string; p
     () =>
       mine
         .map((a) => ({ a, s: stats.get(a.id) }))
-        .filter(({ a, s }) => (show === 'all' || (show === 'active' ? !!s : !s)) && (!t || norm(`${a.name} ${a.hospital} ${a.phone}`).includes(t)))
+        .filter(({ a, s }) => (show === 'all' || (show === 'active' ? !!s : show === 'quiet' ? !s : show === 'nophone' ? !hasPhone(a.phone) : !!agentEdits[a.id])) && (!t || norm(`${a.name} ${a.hospital} ${a.phone} ${a.id}`).includes(t)))
         .sort((x, y) => (y.s?.referrals ?? 0) - (x.s?.referrals ?? 0) || x.a.name.localeCompare(y.a.name)),
-    [mine, stats, show, t],
+    [mine, stats, show, t, agentEdits],
   );
   const active = mine.filter((a) => stats.has(a.id)).length;
   return (
-    <Sheet title="PR agents" subtitle={`${branch?.name ?? ''} branch · ${formatCount(mine.length)} agents`} onClose={onClose} tall search={{ value: q, onChange: setQ, placeholder: 'Search name, hospital or phone' }} filter={filter}>
+    <Sheet
+      title={hospital === undefined ? 'PR agents' : hospital === null ? 'No hospital assigned' : hospital}
+      subtitle={`${branch?.name ?? ''} branch · ${formatCount(mine.length)} agents`}
+      onClose={onClose}
+      tall
+      search={{ value: q, onChange: setQ, placeholder: 'Search name, hospital, phone or ID' }}
+      filter={filter}
+      footer={
+        canAdd ? (
+          <button type="button" onClick={() => setAdding(true)} className="press flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-brand-600 text-[15px] font-semibold text-white">
+            <Plus size={18} /> Add PR agent{hospital ? ` to ${hospital}` : ''}
+          </button>
+        ) : undefined
+      }
+    >
       <div className="relative mb-3 overflow-hidden rounded-[22px] bg-linear-to-br from-[#f3eeff] to-[#e4dbff] p-4">
         <p className="text-[12.5px] font-medium text-ink-2">Referred patients in this period</p>
         <p className="mt-0.5 text-[26px] font-bold leading-tight text-ink">
           {formatCount(active)} <span className="text-[15px] font-semibold text-ink-2">of {formatCount(mine.length)} agents</span>
         </p>
-        <p className="mt-1 max-w-[70%] text-[12px] leading-snug text-ink-2/80">Tap an agent for their profile, account details, chat and announcements.</p>
+        <p className="mt-1 max-w-[70%] text-[12px] leading-snug text-ink-2/80">{hospital === null ? 'Agents without a hospital code. Assign one from their profile, under Edit profile.' : 'Tap an agent for their profile, account details, chat and announcements.'}</p>
         <Sticker name="stethoscope" size={80} className="absolute -bottom-1 right-1" />
       </div>
-      <div className="mb-3 flex gap-2 px-1">
+      <div className="-mx-1 mb-3 flex gap-2 overflow-x-auto px-2 pb-0.5">
         {(
           [
             ['all', `All (${mine.length})`],
             ['active', `Referred (${active})`],
             ['quiet', `No referrals (${mine.length - active})`],
+            ['nophone', `No phone (${mine.filter((a) => !hasPhone(a.phone)).length})`],
+            ...(mine.some((a) => agentEdits[a.id]) ? ([['edited', `Edited (${mine.filter((a) => agentEdits[a.id]).length})`]] as const) : []),
           ] as const
         ).map(([k, l]) => (
           <button key={k} type="button" onClick={() => (setShow(k), setShown(40))} aria-pressed={show === k} className={`press min-h-9 shrink-0 rounded-full px-3.5 text-[13px] font-semibold ${show === k ? 'bg-brand-600 text-white' : 'bg-page text-ink-2'}`}>
@@ -112,6 +133,8 @@ export function AgentsSheet({ branchId, period, onClose }: { branchId: string; p
                       <span className="rounded-full bg-page px-2 py-0.5 text-[11.5px] font-medium text-muted">No referrals in this period</span>
                     )}
                     {(a.bank || banks[a.id]) && <span className="rounded-full bg-tint-green px-2 py-0.5 text-[11.5px] font-medium text-good-ink">Bank on record</span>}
+                    {agentEdits[a.id] && <span className="rounded-full bg-[#fff1e0] px-2 py-0.5 text-[11.5px] font-medium text-[#b45309]">Edited</span>}
+                    {a.source === 'user' && <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[11.5px] font-medium text-brand-700">Added in STANLEY</span>}
                   </span>
                 </span>
               </button>
@@ -125,6 +148,7 @@ export function AgentsSheet({ branchId, period, onClose }: { branchId: string; p
         </button>
       )}
       {open != null && <AgentProfileSheet id={open} branchIds={[branchId]} period={sel} onClose={() => setOpen(null)} />}
+      {adding && <AddAgentSheet hospital={hospital ?? ''} onClose={() => setAdding(false)} onAdded={setOpen} />}
     </Sheet>
   );
 }
@@ -132,9 +156,11 @@ export function AgentsSheet({ branchId, period, onClose }: { branchId: string; p
 /* ─────────────── one agent's profile ─────────────── */
 
 export function AgentProfileSheet({ id, branchIds, period, onClose }: { id: number; branchIds: string[]; period: PeriodSelection; onClose: () => void }) {
-  const { agents, navigate } = useCompany();
+  const { agents, navigate, agentEdits, revertAgent, moveAgentToTrash } = useCompany();
   const { showToast } = useNav();
   const { range, filter, period: sel } = useSheetPeriod(period);
+  const [editing, setEditing] = useState(false);
+  const [trash, setTrash] = useState(false);
   const [q, setQ] = useState('');
   const [focus, setFocus] = useState<Focus | null>(null);
   const [compose, setCompose] = useState(false);
@@ -239,7 +265,7 @@ export function AgentProfileSheet({ id, branchIds, period, onClose }: { id: numb
         <Figure label="Patients referred" value={formatCount(visits.length)} sub={`${formatCount(life?.referrals ?? 0)} since records began`} />
         <Figure label="Billed for their patients" value={formatMoney(billed, c, true)} sub={`${formatMoney(life?.revenue[c] ?? 0, c, true)} since records began`} />
         <Figure label="Commission" value={formatMoney(commission, c)} sub={`${formatMoney(life?.commission[c] ?? 0, c, true)} since records began`} strong />
-        <Figure label="Commission rate" value={pct(rateFor(id))} sub="Set in PR Management" />
+        <Figure label="Commission rate" value={pct(rateFor(id))} sub={agentRate(id) !== undefined ? "This agent's own rate" : 'Company rate'} onClick={found ? () => setEditing(true) : undefined} />
       </div>
 
       {/* Contact and account */}
@@ -276,6 +302,37 @@ export function AgentProfileSheet({ id, branchIds, period, onClose }: { id: numb
         )}
       </div>
 
+      {/* Manage (desktop: Edit profile, Restore recorded details, Move to trash) */}
+      {found && (
+        <div className="mb-3 flex flex-wrap gap-2">
+          <button type="button" onClick={() => setEditing(true)} className="press flex min-h-10 items-center gap-1.5 rounded-full bg-white px-3.5 text-[13.5px] font-semibold text-brand-700 ring-1 ring-line">
+            <Pencil size={15} /> Edit profile
+          </button>
+          {agentEdits[id] && (
+            <button
+              type="button"
+              onClick={() => {
+                revertAgent(id);
+                showToast(`${BASELINE_AGENTS.find((a) => a.id === id)?.name ?? name} restored to the recorded details`);
+              }}
+              className="press flex min-h-10 items-center gap-1.5 rounded-full bg-white px-3.5 text-[13.5px] font-semibold text-ink-2 ring-1 ring-line"
+            >
+              <RotateCcw size={15} /> Restore recorded details
+            </button>
+          )}
+          {found.source === 'user' && (
+            <button type="button" onClick={() => setTrash(true)} className="press flex min-h-10 items-center gap-1.5 rounded-full bg-white px-3.5 text-[13.5px] font-semibold text-[#b42318] ring-1 ring-[#f9d4d4]">
+              <Trash2 size={15} /> Move to trash
+            </button>
+          )}
+        </div>
+      )}
+      {agentEdits[id] && (
+        <p className="-mt-1 mb-3 rounded-2xl bg-[#fff7ec] px-3 py-2 text-[12.5px] text-[#9a4a07]">
+          Edited in STANLEY. Recorded as {BASELINE_AGENTS.find((a) => a.id === id)?.name ?? name}, {hospitalOf(BASELINE_AGENTS.find((a) => a.id === id)?.hospital ?? '')}.
+        </p>
+      )}
+
       {mineSent.length > 0 && (
         <div className="mb-3 rounded-[20px] bg-white p-3 ring-1 ring-line/70">
           <p className="mb-2 px-1 text-[13px] font-semibold text-ink-2">Your announcements to {firstName(name)}</p>
@@ -297,6 +354,20 @@ export function AgentProfileSheet({ id, branchIds, period, onClose }: { id: numb
       <Rows rows={rows} oneDay={range.days <= 1} multi={branchIds.length > 1} empty={t ? `No patient matches “${q}”.` : 'No referred patients in this period.'} />
       {focus && <FocusSheet focus={focus} branchIds={branchIds} period={sel} onClose={() => setFocus(null)} />}
       {editBank && <BankSheet id={id} name={name} onClose={() => setEditBank(false)} />}
+      {editing && <AgentEditSheet id={id} onClose={() => setEditing(false)} />}
+      {trash && (
+        <TrashSheet
+          name={name}
+          what="PR agent (added in the app)"
+          onClose={() => setTrash(false)}
+          onConfirm={(reason) => {
+            moveAgentToTrash(id, reason);
+            showToast(`${name} moved to trash. Restore it from Trash within 30 days`);
+            setTrash(false);
+            onClose();
+          }}
+        />
+      )}
       {compose && <ComposeSheet audience={{ kind: 'agent', agentId: id, name, phone: phone ?? '' }} branchId={branch?.id ?? agentBranchId()} preset="message" onClose={() => setCompose(false)} />}
     </Sheet>
   );
@@ -319,13 +390,14 @@ function QuickBtn({ icon, label, onClick, href }: { icon: React.ReactNode; label
   );
 }
 
-function Figure({ label, value, sub, strong }: { label: string; value: string; sub?: string; strong?: boolean }) {
+function Figure({ label, value, sub, strong, onClick }: { label: string; value: string; sub?: string; strong?: boolean; onClick?: () => void }) {
+  const Tag = onClick ? 'button' : 'div';
   return (
-    <div className="min-w-0 rounded-2xl bg-white p-3 ring-1 ring-line/70">
+    <Tag {...(onClick ? { type: 'button' as const, onClick } : {})} className={`min-w-0 rounded-2xl bg-white p-3 text-left ring-1 ring-line/70 ${onClick ? 'press' : ''}`}>
       <p className="truncate text-[11.5px] font-medium text-muted">{label}</p>
       <p className={`mt-0.5 truncate text-[18px] font-bold ${strong ? 'text-violet' : 'text-ink'}`}>{value}</p>
       {sub && <p className="truncate text-[11px] text-muted">{sub}</p>}
-    </div>
+    </Tag>
   );
 }
 
