@@ -8,6 +8,7 @@
  *  • To one agent: shown on that agent's Referrer Portal, matched by the
  *    phone number on their PR agent record and their portal account.
  *  • To a branch: shown to every PR agent of that branch.
+ *  • To chosen agents: shown to each agent the admin picked.
  *
  * COMPLIANCE: the Referrer Portal never shows money (commission, payouts,
  * prices). Announcements are checked for money words before they are sent and
@@ -18,7 +19,11 @@
  */
 import { useEffect, useState } from 'react';
 
-export type AnnouncementAudience = { kind: 'agent'; agentId: number; name: string; phone: string } | { kind: 'branch'; branchId: string; branchName: string };
+export type AnnouncementAudience =
+  | { kind: 'agent'; agentId: number; name: string; phone: string }
+  | { kind: 'branch'; branchId: string; branchName: string }
+  /** Agents the admin picked (e.g. one hospital's agents). */
+  | { kind: 'agents'; branchId: string; agents: { id: number; name: string; phone: string }[] };
 
 export interface AdminAnnouncement {
   id: string;
@@ -86,7 +91,13 @@ const digits = (p: string) => p.replace(/\D/g, '').replace(/^234/, '0');
 export function announcementsFor(list: AdminAnnouncement[], me: { phone?: string; branchId: string }): AdminAnnouncement[] {
   const mine = me.phone ? digits(me.phone) : '';
   const since = Date.now() - 30 * 86_400_000;
-  return list.filter((a) => new Date(a.at).getTime() >= since && (a.audience.kind === 'branch' ? a.audience.branchId === me.branchId : !!mine && digits(a.audience.phone) === mine));
+  return list.filter((a) => {
+    if (new Date(a.at).getTime() < since) return false;
+    const au = a.audience;
+    if (au.kind === 'branch') return au.branchId === me.branchId;
+    if (!mine) return false;
+    return au.kind === 'agent' ? digits(au.phone) === mine : au.agents.some((x) => digits(x.phone) === mine);
+  });
 }
 
 /** Words that would put money on the Referrer Portal (never allowed there). */

@@ -40,8 +40,8 @@ export function ResumeDraftPrompt() {
   const services = servicesOf(draft);
   const step = draft.step ?? (services.length ? 1 : 0);
   return (
-    <div className="fixed inset-0 z-[75] flex items-end justify-center bg-[#0b1730]/45 md:items-center" onClick={close}>
-      <div className="w-full max-w-md rounded-t-[26px] bg-white px-5 pb-[max(18px,var(--safe-bottom))] pt-3 shadow-2xl md:rounded-[26px]" onClick={(e) => e.stopPropagation()}>
+    <div data-slide-layer className="fade-in fixed inset-0 z-[75] flex items-end justify-center bg-[#0b1730]/45 md:items-center" onClick={close}>
+      <div data-sheet-panel className="sheet-up w-full max-w-md rounded-t-[26px] bg-white px-5 pb-[max(18px,var(--safe-bottom))] pt-3 shadow-2xl md:rounded-[26px]" onClick={(e) => e.stopPropagation()}>
         <span className="mx-auto mb-3 block h-1.5 w-10 rounded-full bg-line md:hidden" />
         <div className="mb-3 flex items-start gap-3.5">
           <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-brand-600 text-white shadow-[0_8px_18px_rgba(31,111,232,0.3)]">

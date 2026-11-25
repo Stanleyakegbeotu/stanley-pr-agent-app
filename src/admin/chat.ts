@@ -16,6 +16,7 @@ import { ACTIVE_BRANCHES, getBranch } from '@company/data/company';
 import { LEGACY_BRANCH_ID } from '@company/data/legacy';
 import { registerConversations, type Conversation, type Person } from '@/data/team';
 import { photoOf, useTeam, type Who } from './people';
+import { useAgentPhotos } from './agentPhotos';
 
 export const AGENT_PREFIX = 'adm-pr-';
 export const frontDeskId = (branchId: string) => `adm-fd-${branchId}`;
@@ -28,6 +29,7 @@ const person = (w: Who): Person => ({ id: w.name, name: w.name, role: w.role, ph
 export function useAdminConversations() {
   const team = useTeam();
   const { agents } = useCompany();
+  const photos = useAgentPhotos();
   return useMemo(() => {
     const fixed: Conversation[] = [];
     for (const b of ACTIVE_BRANCHES) {
@@ -70,7 +72,7 @@ export function useAdminConversations() {
         kind: 'agent',
         name: a.name,
         role: ['PR agent', hospital, home ? `${home.name} branch` : ''].filter(Boolean).join(', '),
-        face: { id: String(a.id), name: a.name, role: 'PR agent' },
+        face: { id: String(a.id), name: a.name, role: 'PR agent', photo: photos.photoOf(a.id, a.phone) },
         members: [{ id: String(a.id), name: a.name, role: 'PR agent' }],
         shared: false,
         messages: [],
@@ -78,5 +80,6 @@ export function useAdminConversations() {
     });
     registerConversations([...fixed, ...agentConvs]);
     return { fixed, agentConvs, home };
-  }, [team, agents]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [team, agents, photos]);
 }

@@ -146,8 +146,8 @@ export function Profile() {
 
       {editing && <EditProfile onClose={() => setEditing(false)} onSaved={() => (setEditing(false), showToast('Profile updated'))} onPhoto={() => file.current?.click()} />}
       {confirmOut && (
-        <div className="fixed inset-0 z-[70] flex items-end justify-center bg-[#0b1730]/40 md:items-center" onClick={() => setConfirmOut(false)}>
-          <div className="w-full max-w-md rounded-t-[26px] bg-white px-5 pb-[max(18px,var(--safe-bottom))] pt-5 shadow-2xl md:rounded-[26px]" onClick={(e) => e.stopPropagation()}>
+        <div data-slide-layer className="fade-in fixed inset-0 z-[70] flex items-end justify-center bg-[#0b1730]/40 md:items-center" onClick={() => setConfirmOut(false)}>
+          <div data-sheet-panel className="sheet-up w-full max-w-md rounded-t-[26px] bg-white px-5 pb-[max(18px,var(--safe-bottom))] pt-5 shadow-2xl md:rounded-[26px]" onClick={(e) => e.stopPropagation()}>
             <p className="text-[19px] font-bold text-ink">Sign out of this device?</p>
             <p className="mb-4 mt-1 text-[14px] leading-snug text-muted">Everything this app saved on the phone is deleted, including unsent requests, drafts and chat.{SIGN_IN_ENABLED ? ' You’ll need your password and a one-time code to sign in again.' : ' You’ll set up a new PIN next time.'}</p>
             <div className="grid grid-cols-2 gap-3">
@@ -226,8 +226,8 @@ function EditProfile({ onClose, onSaved, onPhoto }: { onClose: () => void; onSav
     onSaved();
   };
   return (
-    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-[#0b1730]/40 md:items-center" onClick={onClose}>
-      <div className="max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-t-[26px] bg-white px-5 pb-[max(18px,var(--safe-bottom))] pt-3 shadow-2xl md:rounded-[26px]" onClick={(e) => e.stopPropagation()}>
+    <div data-slide-layer className="fade-in fixed inset-0 z-[70] flex items-end justify-center bg-[#0b1730]/40 md:items-center" onClick={onClose}>
+      <div data-sheet-panel className="sheet-up max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-t-[26px] bg-white px-5 pb-[max(18px,var(--safe-bottom))] pt-3 shadow-2xl md:rounded-[26px]" onClick={(e) => e.stopPropagation()}>
         <span className="mx-auto mb-3 block h-1.5 w-10 rounded-full bg-line md:hidden" />
         <p className="mb-4 text-[19px] font-bold text-ink">Edit profile</p>
         <div className="mb-5 flex items-center gap-4">

@@ -34,6 +34,9 @@ const ENTRIES = [
   'data/demo/dailyLines.ts',
   'data/demo/records.ts',
   'data/userRecords.ts',
+  'data/geo/countries.ts',
+  'services/config.ts',
+  'services/receiptProfile.ts',
 ];
 const KEEP_MOBILE = new Set(['app/router.ts']);
 

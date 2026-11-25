@@ -15,7 +15,7 @@ import { AlertTriangle, ChevronRight, Info, MapPin, Megaphone, MessageCircle, Pl
 import { useApp as useCompany } from '@company/app/AppState';
 import { ACTIVE_BRANCHES, BRANCHES, NOT_ON_RECORD, getBranch } from '@company/data/company';
 import type { PaymentMethod } from '@company/data/types';
-import { addBranch, idCodeProblem, normCode, statusHistory, useBranches, type BranchInput } from '@company/services/org';
+import { statusHistory, useBranches } from '@company/services/org';
 import { agentRanking, expenseMix, hospitalRanking, paymentMix, periodLabel, priorRange, resolveBranchIds, resolveRange, serviceRanking, summarize, trend } from '@company/services/analytics';
 import { attentionItems, type AttentionItem, type Severity } from '@company/services/insights';
 import { formatCount, formatMoney } from '@company/shared/format';
@@ -30,6 +30,7 @@ import { AgentsSheet, ComposeSheet, agentBranchId } from '../agents';
 import { frontDeskId, managerId } from '../chat';
 import { photoOf, useTeam, type Who } from '../people';
 import { DutyRota } from '../duty';
+import { AddBranchSheet } from '../addBranch';
 
 export function BranchesPage({ sub }: { sub?: string }) {
   useBranches(); // re-render when a branch is added or changes status
@@ -497,66 +498,5 @@ function TeamButton({ who, title, sub, onClick }: { who: Who | null; title: stri
       </span>
       <MessageCircle size={16} className="shrink-0 text-white/90" />
     </button>
-  );
-}
-
-/* ─────────────── add a branch ─────────────── */
-
-const EMPTY: BranchInput = { name: '', idCode: '', city: '', state: '', country: 'Nigeria', address: '', phone: '', email: '', contactPerson: '', openedOn: '', timezone: 'Africa/Lagos' };
-
-function AddBranchSheet({ onClose }: { onClose: () => void }) {
-  const { user, showToast, navigate } = useCompany();
-  const [f, setF] = useState<BranchInput>(EMPTY);
-  const [tried, setTried] = useState(false);
-  const set = (k: keyof BranchInput, v: string) => setF((x) => ({ ...x, [k]: v }));
-  const codeErr = idCodeProblem(f.idCode);
-  const errs = { name: f.name.trim().length < 2 ? 'Enter the branch name.' : '', idCode: codeErr ?? '', city: f.city.trim().length < 2 ? 'Enter the city.' : '' };
-  const ok = !errs.name && !errs.idCode && !errs.city;
-  const field = (k: keyof BranchInput, label: string, props: React.InputHTMLAttributes<HTMLInputElement> = {}) => (
-    <label className="mb-3 block">
-      <span className="mb-1.5 block text-[14px] font-semibold text-ink">{label}</span>
-      <input value={f[k]} onChange={(e) => set(k, k === 'idCode' ? normCode(e.target.value).slice(0, 3) : e.target.value)} className="min-h-12 w-full rounded-2xl border-[1.5px] border-brand-500 bg-white px-4 text-[15px] text-ink outline-none ring-4 ring-brand-100 focus:border-brand-600 focus:ring-brand-200" {...props} />
-      {tried && (errs as Record<string, string>)[k] && <span className="mt-1 block text-[12.5px] font-medium text-[#d93036]">{(errs as Record<string, string>)[k]}</span>}
-    </label>
-  );
-  return (
-    <Sheet
-      title="Add a branch"
-      subtitle="Starts as “Pending setup”"
-      onClose={onClose}
-      tall
-      footer={
-        <button
-          type="button"
-          onClick={() => {
-            setTried(true);
-            if (!ok) return;
-            const nb = addBranch(f, user.name);
-            showToast(`${nb.name} branch added (pending setup)`);
-            onClose();
-            navigate(`/branches/${nb.id}`);
-          }}
-          className="press min-h-12 w-full rounded-2xl bg-brand-600 text-[15.5px] font-semibold text-white shadow-[0_10px_22px_rgba(31,111,232,0.3)]"
-        >
-          Add branch
-        </button>
-      }
-    >
-      <div className="px-2 pb-4">
-        <div className="mb-4 flex items-center gap-3 rounded-2xl bg-brand-50 p-3">
-          <Sticker name="rocket" size={40} />
-          <p className="text-[13px] leading-snug text-brand-800">Patient IDs use the branch’s three-letter code (e.g. LAG-R000001), so each code must be unique.</p>
-        </div>
-        {field('name', 'Branch name', { placeholder: 'e.g. Wuse II' })}
-        {field('idCode', 'Patient ID code (3 letters)', { placeholder: 'e.g. LAG' })}
-        {field('city', 'City')}
-        {field('state', 'State')}
-        {field('address', 'Street address')}
-        {field('phone', 'Phone', { type: 'tel', inputMode: 'tel' })}
-        {field('email', 'Email', { type: 'email' })}
-        {field('contactPerson', 'Contact person')}
-        {field('openedOn', 'Opening date', { type: 'date' })}
-      </div>
-    </Sheet>
   );
 }

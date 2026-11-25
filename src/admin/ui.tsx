@@ -169,8 +169,8 @@ export function Sheet({ title, subtitle, onClose, children, tall, footer, search
   };
   const iconBtn = 'press relative grid h-9 w-9 shrink-0 place-items-center rounded-full';
   return createPortal(
-    <div className={cx('fade-in fixed inset-0 flex items-end justify-center md:items-center', level ? 'bg-[#0b1730]/25' : 'bg-[#0b1730]/45')} style={{ zIndex: 80 + level }} onClick={onClose}>
-      <div role="dialog" aria-label={title} className="sheet-up flex w-full max-w-lg flex-col overflow-hidden rounded-t-[28px] bg-white shadow-[0_-12px_40px_rgba(11,23,48,0.18)] md:rounded-[28px]" style={tall ? { height: `calc(100dvh - ${top})` } : { maxHeight: `calc(100dvh - ${top})` }} onClick={(e) => e.stopPropagation()}>
+    <div data-slide-layer className={cx('fade-in fixed inset-0 flex items-end justify-center md:items-center', level ? 'bg-[#0b1730]/25' : 'bg-[#0b1730]/45')} style={{ zIndex: 80 + level }} onClick={onClose}>
+      <div role="dialog" aria-label={title} data-sheet-panel className="sheet-up flex w-full max-w-lg flex-col overflow-hidden rounded-t-[28px] bg-white shadow-[0_-12px_40px_rgba(11,23,48,0.18)] md:rounded-[28px]" style={tall ? { height: `calc(100dvh - ${top})` } : { maxHeight: `calc(100dvh - ${top})` }} onClick={(e) => e.stopPropagation()}>
         <span className="mx-auto mt-2.5 block h-1.5 w-11 shrink-0 rounded-full bg-[#d6dde8] md:hidden" />
         <div className="relative shrink-0">
           {searching && search ? (

@@ -26,8 +26,8 @@ export function PatientMessageButton({ r }: { r: Referral }) {
 function PatientMessageSheet({ r, onClose }: { r: Referral; onClose: () => void }) {
   const [state, setState] = useState<MessageState | null>(null);
   return (
-    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-[#0b1730]/40 md:items-center" onClick={onClose}>
-      <div className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-t-[26px] bg-white px-5 pb-[max(18px,var(--safe-bottom))] pt-3 text-left shadow-2xl md:rounded-[26px]" onClick={(e) => e.stopPropagation()}>
+    <div data-slide-layer className="fade-in fixed inset-0 z-[70] flex items-end justify-center bg-[#0b1730]/40 md:items-center" onClick={onClose}>
+      <div data-sheet-panel className="sheet-up max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-t-[26px] bg-white px-5 pb-[max(18px,var(--safe-bottom))] pt-3 text-left shadow-2xl md:rounded-[26px]" onClick={(e) => e.stopPropagation()}>
         <span className="mx-auto mb-3 block h-1.5 w-10 rounded-full bg-line md:hidden" />
         <div className="mb-1 flex items-center justify-between">
           <p className="text-[19px] font-bold text-ink">Message to the patient</p>

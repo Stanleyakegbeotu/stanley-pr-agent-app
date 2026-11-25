@@ -604,8 +604,8 @@ function FileChip({ f, onRemove }: { f: File; onRemove: () => void }) {
 
 function Sheet({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   return (
-    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-[#0b1730]/40 md:items-center" onClick={onClose}>
-      <div className="w-full max-w-md rounded-t-[26px] bg-white p-3 pb-[max(14px,var(--safe-bottom))] shadow-2xl md:rounded-[26px]" onClick={(e) => e.stopPropagation()}>
+    <div data-slide-layer className="fade-in fixed inset-0 z-[70] flex items-end justify-center bg-[#0b1730]/40 md:items-center" onClick={onClose}>
+      <div data-sheet-panel className="sheet-up w-full max-w-md rounded-t-[26px] bg-white p-3 pb-[max(14px,var(--safe-bottom))] shadow-2xl md:rounded-[26px]" onClick={(e) => e.stopPropagation()}>
         <span className="mx-auto mb-2 block h-1.5 w-10 rounded-full bg-line md:hidden" />
         {children}
       </div>

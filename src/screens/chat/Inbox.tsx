@@ -126,8 +126,8 @@ function PeoplePicker({ onClose, onPick }: { onClose: () => void; onPick: (convI
     agent: 'PR agent',
   };
   return (
-    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-[#0b1730]/40 md:items-center" onClick={onClose}>
-      <div className="w-full max-w-md rounded-t-[26px] bg-white px-2 pb-[max(14px,var(--safe-bottom))] pt-3 shadow-2xl md:rounded-[26px]" onClick={(e) => e.stopPropagation()}>
+    <div data-slide-layer className="fade-in fixed inset-0 z-[70] flex items-end justify-center bg-[#0b1730]/40 md:items-center" onClick={onClose}>
+      <div data-sheet-panel className="sheet-up w-full max-w-md rounded-t-[26px] bg-white px-2 pb-[max(14px,var(--safe-bottom))] pt-3 shadow-2xl md:rounded-[26px]" onClick={(e) => e.stopPropagation()}>
         <span className="mx-auto mb-3 block h-1.5 w-10 rounded-full bg-line md:hidden" />
         <p className="px-3 text-[19px] font-bold text-ink">New chat</p>
         <p className="mb-2 px-3 text-[13.5px] text-muted">Who do you want to message at {BRANCH.label}?</p>

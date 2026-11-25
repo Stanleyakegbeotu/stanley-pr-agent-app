@@ -10,8 +10,8 @@
  *    agent of a branch, with a preview of how it looks on their phone.
  * Same logic and figures as the desktop PR Management (src/company).
  */
-import { useMemo, useState } from 'react';
-import { Building2, Check, Copy, Hospital, Landmark, Megaphone, MessageCircle, Phone, Send, ShieldAlert, Sparkles } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
+import { Building2, Camera, Check, Copy, Hospital, Landmark, Megaphone, MessageCircle, Pencil, Phone, Send, ShieldAlert, Sparkles, Users } from 'lucide-react';
 import { useApp as useCompany } from '@company/app/AppState';
 import { getBranch } from '@company/data/company';
 import { LEGACY_BRANCH_ID } from '@company/data/legacy';
@@ -24,7 +24,11 @@ import { formatCount, formatMoney } from '@company/shared/format';
 import { useNav } from '@/app/store';
 import { moneyWordsIn, sendAnnouncement, useAnnouncements, type AnnouncementAudience } from '@/domain/announcements';
 import { postText } from '@/domain/chat';
-import { InitialsAvatar, Sticker } from '@/ui/kit';
+import { Sticker } from '@/ui/kit';
+import { squarePhoto } from '@/domain/profile';
+import { NIGERIAN_BANKS, isNuban } from '@company/data/userRecords';
+import { AgentAvatar, setAgentPhoto, useAgentPhotos } from './agentPhotos';
+import { saveAgentBank, useAgentBanks } from './agentBanks';
 import { Sheet, useSheetPeriod } from './ui';
 import { FocusSheet, Rows, norm, useRowCtx, visitRow, type Focus } from './details';
 import { agentConvId } from './chat';
@@ -44,6 +48,7 @@ export function AgentsSheet({ branchId, period, onClose }: { branchId: string; p
   const [show, setShow] = useState<'all' | 'active' | 'quiet'>('all');
   const [open, setOpen] = useState<number | null>(null);
   const [shown, setShown] = useState(40);
+  const banks = useAgentBanks();
   const branch = getBranch(branchId);
   const mine = branchId === agentBranchId() ? agents : [];
   const stats = useMemo(() => new Map(agentRanking([branchId], range).map((a) => [a.id, a])), [branchId, range]);
@@ -87,7 +92,7 @@ export function AgentsSheet({ branchId, period, onClose }: { branchId: string; p
           {list.slice(0, shown).map(({ a, s }) => (
             <li key={a.id}>
               <button type="button" onClick={() => setOpen(a.id)} className="press flex w-full items-center gap-3 rounded-[18px] bg-white p-3 text-left ring-1 ring-line/70">
-                <InitialsAvatar name={a.name} size={46} />
+                <AgentAvatar id={a.id} name={a.name} phone={a.phone} size={46} />
                 <span className="min-w-0 flex-1">
                   <span className="flex items-start justify-between gap-2">
                     <span className="truncate text-[14.5px] font-semibold text-ink">{a.name}</span>
@@ -106,7 +111,7 @@ export function AgentsSheet({ branchId, period, onClose }: { branchId: string; p
                     ) : (
                       <span className="rounded-full bg-page px-2 py-0.5 text-[11.5px] font-medium text-muted">No referrals in this period</span>
                     )}
-                    {a.bank && <span className="rounded-full bg-tint-green px-2 py-0.5 text-[11.5px] font-medium text-good-ink">Bank on record</span>}
+                    {(a.bank || banks[a.id]) && <span className="rounded-full bg-tint-green px-2 py-0.5 text-[11.5px] font-medium text-good-ink">Bank on record</span>}
                   </span>
                 </span>
               </button>
@@ -133,9 +138,14 @@ export function AgentProfileSheet({ id, branchIds, period, onClose }: { id: numb
   const [q, setQ] = useState('');
   const [focus, setFocus] = useState<Focus | null>(null);
   const [compose, setCompose] = useState(false);
+  const [editBank, setEditBank] = useState(false);
+  const photoInput = useRef<HTMLInputElement>(null);
+  const photos = useAgentPhotos();
+  const banks = useAgentBanks();
   const ctx = useRowCtx(setFocus);
   const sent = useAnnouncements();
-  const rec = agents.find((a) => a.id === id);
+  const found = agents.find((a) => a.id === id);
+  const rec = found ? { ...found, bank: found.bank ?? banks[id] } : undefined;
   const rank = useMemo(() => agentRanking(branchIds, range).find((a) => a.id === id), [branchIds, range, id]);
   const life = useMemo(() => agentRanking(branchIds, ALL_TIME).find((a) => a.id === id), [branchIds, id]);
   const visits = useMemo(() => patientVisits(branchIds, range).filter((v) => v.agentId === id), [branchIds, range, id]);
@@ -148,7 +158,7 @@ export function AgentProfileSheet({ id, branchIds, period, onClose }: { id: numb
   const hospital = hospitalOf(rec?.hospital ?? rank?.hospital ?? '');
   const t = norm(q);
   const rows = visits.map((v) => visitRow(v, ctx, { amountNote: `${formatMoney(commissionOn(v.billed, id), c)} commission` })).filter((r) => !t || r.text.includes(t));
-  const mineSent = sent.filter((a) => a.audience.kind === 'agent' && a.audience.agentId === id).slice(0, 3);
+  const mineSent = sent.filter((a) => (a.audience.kind === 'agent' && a.audience.agentId === id) || (a.audience.kind === 'agents' && a.audience.agents.some((x) => x.id === id))).slice(0, 3);
   const copy = async (text: string, what: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -181,14 +191,38 @@ export function AgentProfileSheet({ id, branchIds, period, onClose }: { id: numb
       {/* Who */}
       <div className="relative mb-3 overflow-hidden rounded-[22px] bg-linear-to-br from-[#f3eeff] to-[#e0d6ff] p-4">
         <div className="flex items-center gap-3">
-          <InitialsAvatar name={name} size={58} />
+          <span className="relative shrink-0">
+            <span className="block rounded-full ring-[3px] ring-white">
+              <AgentAvatar id={id} name={name} phone={phone ?? undefined} size={64} />
+            </span>
+            <button type="button" onClick={() => photoInput.current?.click()} aria-label={photos.photoOf(id, phone ?? undefined) ? 'Change photo' : 'Add photo'} className="press absolute -bottom-1 -right-1 grid h-7 w-7 place-items-center rounded-full bg-violet text-white ring-2 ring-white">
+              <Camera size={14} />
+            </button>
+            <input
+              ref={photoInput}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                e.target.value = '';
+                if (!file) return;
+                try {
+                  setAgentPhoto(id, await squarePhoto(file, 320));
+                  showToast('Photo saved');
+                } catch (err) {
+                  showToast((err as Error).message);
+                }
+              }}
+            />
+          </span>
           <div className="min-w-0 flex-1">
             <p className="truncate text-[17px] font-bold text-ink">{name}</p>
             <p className="truncate text-[12.5px] text-ink-2">
               {hospital} · {branch?.name ?? ''} branch
             </p>
             <p className="mt-0.5 text-[12px] text-muted">
-              Agent #{id} · {rec?.source === 'user' ? 'Added in STANLEY' : 'From the legacy records'}
+              Agent #{id} · {photos.fromPortal(phone ?? undefined) ? 'Photo from their Referrer Portal' : rec?.source === 'user' ? 'Added in STANLEY' : 'From the legacy records'}
             </p>
           </div>
         </div>
@@ -213,14 +247,32 @@ export function AgentProfileSheet({ id, branchIds, period, onClose }: { id: numb
         <InfoRow icon={<Phone size={16} />} label="Phone" value={phone ?? 'Not on record'} action={phone ? () => copy(phone, 'Phone number') : undefined} />
         <InfoRow icon={<Hospital size={16} />} label="Hospital" value={hospital} />
         <InfoRow icon={<Building2 size={16} />} label="Branch" value={branch ? `${branch.name} · ${branch.code}` : 'Not assigned'} />
+      </div>
+
+      {/* Account details (for monthly payouts) */}
+      <div className="mb-3 overflow-hidden rounded-[20px] bg-white ring-1 ring-line/70">
+        <div className="flex items-center justify-between gap-2 bg-linear-to-r from-[#e6f8ee] to-[#d4f1e2] px-3.5 py-2.5">
+          <span className="flex items-center gap-2 text-[13.5px] font-bold text-good-ink">
+            <Landmark size={16} /> Account details
+          </span>
+          <button type="button" onClick={() => setEditBank(true)} className="press flex items-center gap-1 rounded-full bg-white px-3 py-1 text-[12.5px] font-semibold text-brand-600 shadow-sm">
+            <Pencil size={13} /> {rec?.bank ? 'Change' : 'Add'}
+          </button>
+        </div>
         {rec?.bank ? (
-          <>
+          <div className="divide-y divide-line">
             <InfoRow icon={<Landmark size={16} />} label="Bank" value={rec.bank.bankName} />
             <InfoRow icon={<Landmark size={16} />} label="Account number" value={rec.bank.accountNumber} action={() => copy(rec.bank!.accountNumber, 'Account number')} />
-            <InfoRow icon={<Landmark size={16} />} label="Account name" value={rec.bank.accountName} sub={`Updated ${new Date(rec.bank.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`} />
-          </>
+            <InfoRow icon={<Landmark size={16} />} label="Account name" value={rec.bank.accountName} sub={`Updated ${new Date(rec.bank.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`} action={() => copy(rec.bank!.accountName, 'Account name')} />
+          </div>
         ) : (
-          <InfoRow icon={<Landmark size={16} />} label="Account details" value="Not on record yet" sub="Add them in PR Management for monthly payouts" />
+          <button type="button" onClick={() => setEditBank(true)} className="press flex w-full items-center gap-3 px-3.5 py-3 text-left">
+            <Sticker name="coin" size={34} />
+            <span className="min-w-0 flex-1">
+              <span className="block text-[14px] font-semibold text-ink">No account details yet</span>
+              <span className="block text-[12px] text-muted">Add the bank, account number and name for monthly payouts.</span>
+            </span>
+          </button>
         )}
       </div>
 
@@ -244,6 +296,7 @@ export function AgentProfileSheet({ id, branchIds, period, onClose }: { id: numb
       <p className="mb-2 px-1 text-[13px] font-semibold text-ink-2">Patients referred · {filter.label}</p>
       <Rows rows={rows} oneDay={range.days <= 1} multi={branchIds.length > 1} empty={t ? `No patient matches “${q}”.` : 'No referred patients in this period.'} />
       {focus && <FocusSheet focus={focus} branchIds={branchIds} period={sel} onClose={() => setFocus(null)} />}
+      {editBank && <BankSheet id={id} name={name} onClose={() => setEditBank(false)} />}
       {compose && <ComposeSheet audience={{ kind: 'agent', agentId: id, name, phone: phone ?? '' }} branchId={branch?.id ?? agentBranchId()} preset="message" onClose={() => setCompose(false)} />}
     </Sheet>
   );
@@ -294,6 +347,83 @@ function InfoRow({ icon, label, value, sub, action }: { icon: React.ReactNode; l
   );
 }
 
+/* ─────────────── account details (PR Management rule: same as the desktop) ─────────────── */
+
+/** Add or change an agent's bank account for monthly payouts. Saved through the desktop logic (audit logged). */
+function BankSheet({ id, name, onClose }: { id: number; name: string; onClose: () => void }) {
+  const { agents, setAgentBank } = useCompany();
+  const { showToast } = useNav();
+  const saved = useAgentBanks();
+  const cur = agents.find((a) => a.id === id)?.bank ?? saved[id];
+  const [bank, setBank] = useState(cur?.bankName ?? '');
+  const [num, setNum] = useState(cur?.accountNumber ?? '');
+  const [acct, setAcct] = useState(cur?.accountName ?? name);
+  const [q, setQ] = useState('');
+  const [tried, setTried] = useState(false);
+  const errs = { bank: bank ? '' : 'Choose the bank.', num: isNuban(num) ? '' : 'Enter the 10-digit account number.', acct: acct.trim().length >= 3 ? '' : 'Enter the name on the account.' };
+  const ok = !errs.bank && !errs.num && !errs.acct;
+  const banks = NIGERIAN_BANKS.filter((b) => !q || b.toLowerCase().includes(q.trim().toLowerCase()));
+  const inputCls = 'min-h-12 w-full rounded-2xl border-[1.5px] border-brand-500 bg-white px-4 text-[15px] text-ink outline-none ring-4 ring-brand-100';
+  const save = () => {
+    setTried(true);
+    if (!ok) return;
+    const details = { bankName: bank, accountNumber: num.trim(), accountName: acct.trim() };
+    setAgentBank(id, details);
+    saveAgentBank(id, details);
+    showToast('Account details saved');
+    onClose();
+  };
+  return (
+    <Sheet
+      back
+      title={cur ? 'Change account details' : 'Add account details'}
+      subtitle={`${name} · for monthly payouts`}
+      onClose={onClose}
+      tall
+      footer={
+        <div className="flex gap-2">
+          {cur && (
+            <button type="button" onClick={() => (setAgentBank(id, null), saveAgentBank(id, null), showToast('Account details removed'), onClose())} className="press min-h-12 rounded-2xl bg-[#fdecec] px-4 text-[14.5px] font-semibold text-[#b42318]">
+              Remove
+            </button>
+          )}
+          <button type="button" onClick={save} className="press min-h-12 flex-1 rounded-2xl bg-brand-600 text-[15px] font-semibold text-white">
+            Save account details
+          </button>
+        </div>
+      }
+    >
+      <div className="px-1 pb-2">
+        <div className="mb-4 flex items-start gap-3 rounded-2xl bg-brand-50 p-3">
+          <Sticker name="coin" size={36} />
+          <p className="text-[12.5px] leading-snug text-brand-800">Used only by the company for the agent’s monthly payout. It is never shown on the Referrer Portal. Every change is recorded in the Audit Log.</p>
+        </div>
+        <p className="mb-1.5 text-[14px] font-semibold text-ink">Bank {bank && <span className="font-normal text-brand-700">· {bank}</span>}</p>
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search all Nigerian banks" aria-label="Search banks" className={inputCls} />
+        <div className="mt-2 max-h-48 overflow-y-auto rounded-2xl bg-page p-1">
+          {banks.map((b) => (
+            <button key={b} type="button" onClick={() => (setBank(b), setQ(''))} className={`press flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-[14px] ${bank === b ? 'bg-white font-semibold text-brand-700 shadow-sm' : 'text-ink'}`}>
+              {b} {bank === b && <Check size={16} />}
+            </button>
+          ))}
+          {!banks.length && <p className="px-3 py-3 text-[13px] text-muted">No bank matches “{q}”.</p>}
+        </div>
+        {tried && errs.bank && <p className="mt-1 text-[12.5px] font-medium text-[#d93036]">{errs.bank}</p>}
+        <label className="mt-3 block">
+          <span className="mb-1.5 block text-[14px] font-semibold text-ink">Account number</span>
+          <input value={num} onChange={(e) => setNum(e.target.value.replace(/\D/g, '').slice(0, 10))} inputMode="numeric" placeholder="10 digits" className={inputCls} />
+          {tried && errs.num && <span className="mt-1 block text-[12.5px] font-medium text-[#d93036]">{errs.num}</span>}
+        </label>
+        <label className="mt-3 block">
+          <span className="mb-1.5 block text-[14px] font-semibold text-ink">Account name</span>
+          <input value={acct} onChange={(e) => setAcct(e.target.value)} placeholder="Name on the bank account" className={inputCls} />
+          {tried && errs.acct && <span className="mt-1 block text-[12.5px] font-medium text-[#d93036]">{errs.acct}</span>}
+        </label>
+      </div>
+    </Sheet>
+  );
+}
+
 /* ─────────────── message / thank you / notice to agents ─────────────── */
 
 type Kind = 'message' | 'thanks' | 'notice';
@@ -302,24 +432,29 @@ const KINDS: { id: Kind; label: string; sticker: 'envelope' | 'trophy' | 'megaph
   { id: 'thanks', label: 'Thank you', sticker: 'trophy' },
   { id: 'notice', label: 'Notice', sticker: 'megaphone' },
 ];
+type Picked = { id: number; name: string; phone: string };
+type Mode = 'one' | 'all' | 'pick';
 
 /**
- * Compose an announcement for one agent or a whole branch. "Also send in
- * chat" puts the same words in the agent's chat with the admin, so the
- * announcement can point them to it ("Read and reply").
+ * Compose an announcement. Who sees it: only this agent, every agent of the
+ * branch, or agents the admin chooses (search, by hospital). "Also send in
+ * chat" puts the same words in each chosen agent's chat with the admin, so
+ * the announcement can say "Read and reply".
  */
 export function ComposeSheet({ audience, branchId, preset, draft, onClose }: { audience: AnnouncementAudience; branchId: string; preset: Kind; draft?: { title: string; text: string }; onClose: () => void }) {
   const { user } = useCompany();
   const { showToast } = useNav();
   const branch = getBranch(branchId);
   const agentAud = audience.kind === 'agent' ? audience : null;
-  const [toAll, setToAll] = useState(audience.kind === 'branch');
+  const [mode, setMode] = useState<Mode>(agentAud ? 'one' : 'all');
+  const [picked, setPicked] = useState<Picked[]>(audience.kind === 'agents' ? audience.agents : agentAud ? [{ id: agentAud.agentId, name: agentAud.name, phone: agentAud.phone }] : []);
+  const [picking, setPicking] = useState(false);
   const [kind, setKind] = useState<Kind>(preset);
   const who = agentAud ? firstName(agentAud.name) : '';
   const template = (k: Kind) =>
     draft ??
     (k === 'thanks'
-      ? { title: agentAud && !toAll ? `Thank you, ${who}!` : 'Thank you for your referrals', text: `We appreciate every patient you trust us with at ${branch?.name ?? 'our'} branch. Thank you for working with ${'Silhouette'}.` }
+      ? { title: agentAud && mode === 'one' ? `Thank you, ${who}!` : 'Thank you for your referrals', text: `We appreciate every patient you trust us with at ${branch?.name ?? 'our'} branch. Thank you for working with Silhouette.` }
       : k === 'message'
         ? { title: 'The Admin sent you a message', text: '' }
         : { title: '', text: '' });
@@ -328,47 +463,74 @@ export function ComposeSheet({ audience, branchId, preset, draft, onClose }: { a
   const [inChat, setInChat] = useState(true);
   const [tried, setTried] = useState(false);
   const money = moneyWordsIn(`${title} ${text}`);
-  const problem = !title.trim() ? 'Add a short title.' : !text.trim() ? 'Write the message.' : money.length ? `The Referrer Portal never shows money. Remove: ${money.join(', ')}.` : '';
+  const problem = !title.trim() ? 'Add a short title.' : !text.trim() ? 'Write the message.' : money.length ? `The Referrer Portal never shows money. Remove: ${money.join(', ')}.` : mode === 'pick' && !picked.length ? 'Choose at least one agent.' : '';
   const pickKind = (k: Kind) => {
     setKind(k);
     const t = template(k);
     setTitle(t.title);
     setText(t.text);
   };
+  const personal = mode === 'one' || mode === 'pick';
+  const sendLabel = mode === 'one' ? `Send to ${who}` : mode === 'all' ? `Send to all ${branch?.name ?? ''} agents` : `Send to ${picked.length} agent${picked.length === 1 ? '' : 's'}`;
   const send = async () => {
     setTried(true);
     if (problem) return;
-    const aud: AnnouncementAudience = toAll || !agentAud ? { kind: 'branch', branchId, branchName: branch?.name ?? branchId } : agentAud;
-    sendAnnouncement({ from: { name: user.name, role: 'Company Admin' }, audience: aud, kind, title: title.trim(), text: text.trim(), replyInChat: aud.kind === 'agent' && inChat });
-    if (aud.kind === 'agent' && inChat) await postText(agentConvId(aud.agentId), `${title.trim()}\n\n${text.trim()}`);
-    showToast(aud.kind === 'agent' ? `Sent to ${who}${inChat ? ', in chat and their announcement bar' : "'s announcement bar"}` : `Announced to every PR agent at ${branch?.name ?? ''}`);
+    const aud: AnnouncementAudience = mode === 'one' && agentAud ? agentAud : mode === 'pick' ? { kind: 'agents', branchId, agents: picked } : { kind: 'branch', branchId, branchName: branch?.name ?? branchId };
+    sendAnnouncement({ from: { name: user.name, role: 'Company Admin' }, audience: aud, kind, title: title.trim(), text: text.trim(), replyInChat: personal && inChat });
+    if (personal && inChat) {
+      const ids = mode === 'one' && agentAud ? [agentAud.agentId] : picked.map((p) => p.id);
+      for (const pid of ids) await postText(agentConvId(pid), `${title.trim()}\n\n${text.trim()}`);
+    }
+    showToast(mode === 'one' ? `Sent to ${who}${inChat ? ', in chat and their announcement bar' : "'s announcement bar"}` : mode === 'pick' ? `Sent to ${picked.length} agent${picked.length === 1 ? '' : 's'}` : `Announced to every PR agent at ${branch?.name ?? ''}`);
     onClose();
   };
   const look = KINDS.find((k) => k.id === kind)!;
+  const modes: { id: Mode; label: string }[] = [...(agentAud ? [{ id: 'one' as const, label: `Only ${who}` }] : []), { id: 'all', label: `All ${branch?.name ?? ''}` }, { id: 'pick', label: 'Choose agents' }];
+  const chooseMode = (m: Mode) => {
+    setMode(m);
+    if (m === 'pick' && !picked.length) setPicking(true);
+  };
   return (
     <Sheet
       back
       title={kind === 'thanks' ? 'Say thank you' : kind === 'message' ? 'Send a message' : 'Send a notice'}
-      subtitle="Shows in the agent’s announcement bar"
+      subtitle="Shows in the agents’ announcement bar"
       onClose={onClose}
       tall
       footer={
         <button type="button" onClick={send} className="press flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-brand-600 text-[15px] font-semibold text-white">
-          <Send size={18} /> {toAll || !agentAud ? `Send to all ${branch?.name ?? ''} agents` : `Send to ${who}`}
+          <Send size={18} /> {sendLabel}
         </button>
       }
     >
       <div className="px-1 pb-2">
-        {agentAud && (
-          <div className="mb-3 grid grid-cols-2 gap-1 rounded-2xl bg-page p-1" role="tablist" aria-label="Send to">
-            <button type="button" role="tab" aria-selected={!toAll} onClick={() => setToAll(false)} className={`press min-h-10 truncate rounded-xl px-2 text-[13.5px] font-semibold ${!toAll ? 'bg-white text-brand-700 shadow-sm' : 'text-muted'}`}>
-              Only {who}
+        <p className="mb-1.5 text-[14px] font-semibold text-ink">Who should see it?</p>
+        <div className={`mb-2 grid gap-1 rounded-2xl bg-page p-1 ${modes.length === 3 ? 'grid-cols-3' : 'grid-cols-2'}`} role="tablist" aria-label="Send to">
+          {modes.map((m) => (
+            <button key={m.id} type="button" role="tab" aria-selected={mode === m.id} onClick={() => chooseMode(m.id)} className={`press min-h-10 truncate rounded-xl px-2 text-[13px] font-semibold ${mode === m.id ? 'bg-white text-brand-700 shadow-sm' : 'text-muted'}`}>
+              {m.label}
             </button>
-            <button type="button" role="tab" aria-selected={toAll} onClick={() => setToAll(true)} className={`press min-h-10 truncate rounded-xl px-2 text-[13.5px] font-semibold ${toAll ? 'bg-white text-brand-700 shadow-sm' : 'text-muted'}`}>
-              All {branch?.name} agents
-            </button>
-          </div>
+          ))}
+        </div>
+        {mode === 'pick' && (
+          <button type="button" onClick={() => setPicking(true)} className="press mb-3 flex w-full items-center gap-3 rounded-2xl bg-white p-3 text-left ring-1 ring-line">
+            <span className="flex -space-x-2">
+              {picked.slice(0, 4).map((p) => (
+                <span key={p.id} className="rounded-full ring-2 ring-white">
+                  <AgentAvatar id={p.id} name={p.name} phone={p.phone} size={32} />
+                </span>
+              ))}
+              {!picked.length && <Users size={22} className="text-brand-600" />}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[14px] font-semibold text-ink">{picked.length ? `${picked.length} agent${picked.length === 1 ? '' : 's'} chosen` : 'Choose who sees it'}</span>
+              <span className="block truncate text-[12px] text-muted">{picked.length ? picked.map((p) => p.name).join(', ') : 'Search by name or pick a whole hospital'}</span>
+            </span>
+            <span className="shrink-0 text-[13px] font-semibold text-brand-600">{picked.length ? 'Change' : 'Choose'}</span>
+          </button>
         )}
+        {mode === 'all' && <p className="mb-3 px-1 text-[12px] text-muted">Every PR agent of {branch?.name} branch sees it.</p>}
+
         <div className="mb-3 grid grid-cols-3 gap-2">
           {KINDS.map((k) => (
             <button key={k.id} type="button" onClick={() => pickKind(k.id)} aria-pressed={kind === k.id} className={`press flex min-h-[78px] flex-col items-center justify-center gap-1 rounded-2xl border text-[13px] font-semibold ${kind === k.id ? 'border-brand-500 bg-brand-50 text-brand-700 ring-4 ring-brand-100' : 'border-line bg-white text-ink-2'}`}>
@@ -388,7 +550,7 @@ export function ComposeSheet({ audience, branchId, preset, draft, onClose }: { a
         </label>
         <p className="mb-3 text-right text-[11.5px] text-muted">{text.length}/280</p>
 
-        {agentAud && !toAll && (
+        {personal && (
           <button type="button" onClick={() => setInChat((v) => !v)} aria-pressed={inChat} className="press mb-3 flex w-full items-center gap-3 rounded-2xl bg-page p-3 text-left">
             <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-md border-2 ${inChat ? 'border-brand-600 bg-brand-600 text-white' : 'border-line bg-white'}`}>{inChat && <Check size={15} strokeWidth={3} />}</span>
             <span className="min-w-0">
@@ -414,12 +576,127 @@ export function ComposeSheet({ audience, branchId, preset, draft, onClose }: { a
             <p className="mb-1 text-[12px] font-medium text-white/90">{kind === 'thanks' ? 'A thank you from the Admin' : kind === 'message' ? 'Message from the Admin' : 'Notice from the Admin'}</p>
             <p className="line-clamp-2 text-[17px] font-bold leading-tight">{title || 'Your title'}</p>
             <p className="mt-1 line-clamp-2 text-[12px] leading-snug text-white/90">{text || 'Your message appears here.'}</p>
-            <span className="mt-2.5 inline-flex rounded-xl bg-white px-3 py-1.5 text-[12.5px] font-semibold text-brand-700">{agentAud && !toAll && inChat ? 'Read and reply' : 'Open'}</span>
+            <span className="mt-2.5 inline-flex rounded-xl bg-white px-3 py-1.5 text-[12.5px] font-semibold text-brand-700">{personal && inChat ? 'Read and reply' : 'Reply to Admin'}</span>
           </div>
           <Sticker name={look.sticker} size={104} className="absolute -bottom-2 -right-2" />
         </div>
         <p className="mt-3 px-1 text-[12px] leading-relaxed text-muted">The Referrer Portal never shows money, so commission, payments and prices can’t be announced there. Don’t include patient details.</p>
       </div>
+      {picking && (
+        <AgentPicker
+          branchId={branchId}
+          value={picked}
+          onDone={(v) => {
+            setPicked(v);
+            setPicking(false);
+            setMode(v.length ? 'pick' : agentAud ? 'one' : 'all');
+          }}
+          onClose={() => setPicking(false)}
+        />
+      )}
+    </Sheet>
+  );
+}
+
+/** Choose which agents see an announcement: search, filter by hospital or recent referrals, select several. */
+function AgentPicker({ branchId, value, onDone, onClose }: { branchId: string; value: Picked[]; onDone: (v: Picked[]) => void; onClose: () => void }) {
+  const { agents } = useCompany();
+  const [q, setQ] = useState('');
+  const [hosp, setHosp] = useState<string | null>(null);
+  const [recent, setRecent] = useState(false);
+  const [sel, setSel] = useState<Map<number, Picked>>(() => new Map(value.map((p) => [p.id, p])));
+  const [shown, setShown] = useState(50);
+  const mine = branchId === agentBranchId() ? agents : [];
+  const month = useMemo(() => {
+    const to = TODAY;
+    const from = new Date(to.getFullYear(), to.getMonth(), 1);
+    return new Set(agentRanking([branchId], { from, to, days: diffDays(from, to) + 1 }).map((a) => a.id));
+  }, [branchId]);
+  const hospitals = useMemo(() => {
+    const n = new Map<string, number>();
+    for (const a of mine) {
+      const h = a.hospital.trim().toUpperCase();
+      if (h) n.set(h, (n.get(h) ?? 0) + 1);
+    }
+    return [...n.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12);
+  }, [mine]);
+  const t = norm(q);
+  const list = mine.filter((a) => (!hosp || a.hospital.trim().toUpperCase() === hosp) && (!recent || month.has(a.id)) && (!t || norm(`${a.name} ${a.hospital} ${a.phone}`).includes(t))).sort((a, b) => a.name.localeCompare(b.name));
+  const toPick = (a: (typeof mine)[number]): Picked => ({ id: a.id, name: a.name, phone: a.phone !== 'N/A' ? a.phone : '' });
+  const toggle = (a: (typeof mine)[number]) =>
+    setSel((m) => {
+      const n = new Map(m);
+      if (n.has(a.id)) n.delete(a.id);
+      else n.set(a.id, toPick(a));
+      return n;
+    });
+  const allShown = list.length > 0 && list.every((a) => sel.has(a.id));
+  const toggleAll = () =>
+    setSel((m) => {
+      const n = new Map(m);
+      if (allShown) list.forEach((a) => n.delete(a.id));
+      else list.forEach((a) => n.set(a.id, toPick(a)));
+      return n;
+    });
+  return (
+    <Sheet
+      back
+      title="Choose agents"
+      subtitle={`${sel.size} chosen · ${formatCount(mine.length)} agents at ${getBranch(branchId)?.name ?? ''}`}
+      onClose={onClose}
+      tall
+      search={{ value: q, onChange: setQ, placeholder: 'Search name, hospital or phone' }}
+      footer={
+        <button type="button" onClick={() => onDone([...sel.values()])} className="press flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-brand-600 text-[15px] font-semibold text-white">
+          <Check size={18} /> Done, {sel.size} chosen
+        </button>
+      }
+    >
+      <div className="-mx-3 mb-2 flex gap-2 overflow-x-auto px-3 pb-1">
+        <button type="button" onClick={() => setRecent((v) => !v)} aria-pressed={recent} className={`press min-h-9 shrink-0 rounded-full px-3.5 text-[13px] font-semibold ${recent ? 'bg-violet text-white' : 'bg-tint-purple text-violet'}`}>
+          Referred this month
+        </button>
+        <button type="button" onClick={() => setHosp(null)} aria-pressed={!hosp} className={`press min-h-9 shrink-0 rounded-full px-3.5 text-[13px] font-semibold ${!hosp ? 'bg-brand-600 text-white' : 'bg-page text-ink-2'}`}>
+          All hospitals
+        </button>
+        {hospitals.map(([h, n]) => (
+          <button key={h} type="button" onClick={() => setHosp(hosp === h ? null : h)} aria-pressed={hosp === h} className={`press min-h-9 shrink-0 rounded-full px-3.5 text-[13px] font-semibold ${hosp === h ? 'bg-brand-600 text-white' : 'bg-page text-ink-2'}`}>
+            {h} <span className={hosp === h ? 'text-white/80' : 'text-muted'}>{n}</span>
+          </button>
+        ))}
+      </div>
+      <button type="button" onClick={toggleAll} disabled={!list.length} className="press mb-2 flex w-full items-center gap-3 rounded-2xl bg-brand-50 px-3 py-2.5 text-left disabled:opacity-40">
+        <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-md border-2 ${allShown ? 'border-brand-600 bg-brand-600 text-white' : 'border-brand-300 bg-white'}`}>{allShown && <Check size={15} strokeWidth={3} />}</span>
+        <span className="text-[14px] font-semibold text-brand-700">
+          {allShown ? 'Unselect' : 'Select'} all {formatCount(list.length)} shown{hosp ? ` from ${hosp}` : ''}
+        </span>
+      </button>
+      <ul className="space-y-1">
+        {list.slice(0, shown).map((a) => {
+          const on = sel.has(a.id);
+          return (
+            <li key={a.id}>
+              <button type="button" onClick={() => toggle(a)} aria-pressed={on} className={`press flex w-full items-center gap-3 rounded-2xl px-2.5 py-2 text-left ${on ? 'bg-brand-50' : 'hover:bg-page'}`}>
+                <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-md border-2 ${on ? 'border-brand-600 bg-brand-600 text-white' : 'border-line bg-white'}`}>{on && <Check size={15} strokeWidth={3} />}</span>
+                <AgentAvatar id={a.id} name={a.name} phone={a.phone} size={40} />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[14.5px] font-semibold text-ink">{a.name}</span>
+                  <span className="block truncate text-[12px] text-muted">
+                    {hospitalOf(a.hospital)}
+                    {month.has(a.id) ? ' · referred this month' : ''}
+                  </span>
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      {shown < list.length && (
+        <button type="button" onClick={() => setShown((n) => n + 50)} className="press mx-auto mt-2 block rounded-full bg-page px-5 py-2.5 text-[14px] font-semibold text-brand-600">
+          Show more ({formatCount(list.length - shown)} more)
+        </button>
+      )}
+      {!list.length && <p className="py-8 text-center text-[14px] text-muted">No agent matches.</p>}
     </Sheet>
   );
 }

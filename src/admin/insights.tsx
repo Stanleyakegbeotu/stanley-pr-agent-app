@@ -22,6 +22,7 @@ import { formatCount, formatMoney } from '@company/shared/format';
 import { InitialsAvatar, Sticker } from '@/ui/kit';
 import { THEMES, type Slide } from './kit';
 import { NOTE_LOOK, NoteSheet } from './notes';
+import { AgentAvatar } from './agentPhotos';
 import { Sheet, TrendChart, useSheetPeriod } from './ui';
 import { DetailSheet, FocusSheet, type DetailKind, type Focus } from './details';
 import { ComposeSheet, agentBranchId } from './agents';
@@ -296,7 +297,7 @@ function Movers({ title, list, invert, onOpen }: { title: string; list: Mover[];
       {list.map((x) => (
         <button key={x.key} type="button" onClick={() => x.open && onOpen(x.open)} className="press flex w-full items-center gap-3 rounded-2xl px-2 py-2.5 text-left hover:bg-page">
           {x.avatar === 'agent' ? (
-            <InitialsAvatar name={x.label} size={36} />
+            <AgentAvatar id={Number(x.key.slice(1))} name={x.label} size={36} />
           ) : (
             <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-page">
               <Sticker name={x.avatar === 'expense' ? 'clipboard' : 'testTube'} size={24} />

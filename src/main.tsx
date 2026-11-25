@@ -5,6 +5,9 @@ import './index.css';
 import { Root } from './app/Root';
 import { Gate } from './app/Gate';
 import { watchSafeArea } from './app/safeArea';
+import { installSlideAway } from './ui/motion';
+
+installSlideAway();
 import { initSecureStore } from './domain/secureStore';
 import { migrateLegacyChat } from './domain/chat';
 import { migrateLegacyVoice } from './domain/referralVoice';

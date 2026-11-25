@@ -31,6 +31,7 @@ import type { StickerKey } from '@/assets';
 import { Sheet, useSheetPeriod } from './ui';
 import { useTeam, type Who } from './people';
 import { AgentProfileSheet } from './agents';
+import { AgentAvatar } from './agentPhotos';
 
 export type DetailKind = 'revenue' | 'payments' | 'patients' | 'expenses' | 'outstanding' | 'commission' | 'referrals' | 'hospitals' | 'services';
 /** A single record opened on top of a list. */
@@ -229,6 +230,8 @@ function build(kind: DetailKind, ids: string[], range: ReturnType<typeof useShee
             <Line
               onClick={() => x.open({ kind: 'agent', id: a.id })}
               initials={a.name}
+              agentId={a.id}
+              agentPhone={a.phone}
               title={`${i + 1}. ${a.name}`}
               sub={[a.hospitalKey || 'No hospital assigned', multi ? a.branch.name : '', a.phone !== 'N/A' ? a.phone : ''].filter(Boolean).join(' · ')}
               right={kind === 'commission' ? formatMoney(a.commission[a.branch.currency] ?? 0, a.branch.currency) : `${formatCount(a.referrals)} ref.`}
@@ -342,7 +345,7 @@ function HospitalSheet({ hkey, name, branchIds, start, onClose }: { hkey: string
     .map((a) => ({
       key: String(a.id),
       text: norm(`${a.name} ${a.phone}`),
-      render: () => <Line onClick={() => L.setFocus({ kind: 'agent', id: a.id })} initials={a.name} title={a.name} sub={a.phone !== 'N/A' ? a.phone : 'No phone on file'} right={formatMoney(a.commission[a.branch.currency] ?? 0, a.branch.currency)} tags={[`${formatCount(a.referrals)} patient${a.referrals === 1 ? '' : 's'}`, `${formatMoney(a.revenue[a.branch.currency] ?? 0, a.branch.currency)} billed`]} />,
+      render: () => <Line onClick={() => L.setFocus({ kind: 'agent', id: a.id })} initials={a.name} agentId={a.id} agentPhone={a.phone} title={a.name} sub={a.phone !== 'N/A' ? a.phone : 'No phone on file'} right={formatMoney(a.commission[a.branch.currency] ?? 0, a.branch.currency)} tags={[`${formatCount(a.referrals)} patient${a.referrals === 1 ? '' : 's'}`, `${formatMoney(a.revenue[a.branch.currency] ?? 0, a.branch.currency)} billed`]} />,
     }))
     .filter((r) => !L.t || r.text.includes(L.t));
   return (
@@ -551,11 +554,13 @@ function Fact({ icon, label, value, sub, photo, onClick }: { icon: ReactNode; la
   );
 }
 
-export function Line({ title, sub, right, tags, initials, sticker, tint = 'bg-tint-orange', service, onClick }: { title: string; sub?: string; right: string; tags?: string[]; initials?: string; sticker?: StickerKey; tint?: string; service?: string; onClick?: () => void }) {
+export function Line({ title, sub, right, tags, initials, agentId, agentPhone, sticker, tint = 'bg-tint-orange', service, onClick }: { title: string; sub?: string; right: string; tags?: string[]; initials?: string; agentId?: number; agentPhone?: string; sticker?: StickerKey; tint?: string; service?: string; onClick?: () => void }) {
   const svc = service ? serviceByName(service) : undefined;
   const inner = (
     <>
-      {initials ? (
+      {initials && agentId != null ? (
+        <AgentAvatar id={agentId} name={initials} phone={agentPhone} size={44} />
+      ) : initials ? (
         <InitialsAvatar name={initials} size={44} />
       ) : svc ? (
         <ServiceThumb service={svc} className="h-11 w-11 shrink-0 rounded-xl" />

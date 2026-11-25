@@ -7,6 +7,7 @@ import { serviceByName } from '@/data/services';
 import { InitialsAvatar, ServiceThumb, Sticker } from '@/ui/kit';
 import { EmptyCard, SectionTitle, Tag } from './kit';
 import type { Focus } from './details';
+import { AgentAvatar } from './agentPhotos';
 
 const CARD = 'press flex w-full items-start gap-3.5 rounded-[20px] bg-white p-3 text-left shadow-[0_6px_20px_rgba(30,74,160,0.07)] ring-1 ring-line/70';
 
@@ -22,7 +23,7 @@ export function TopAgents({ title = 'Top PR Agents', agents, onPick, onAll, acti
             <li key={a.id}>
               <button type="button" onClick={() => onPick({ kind: 'agent', id: a.id })} className={CARD}>
                 <span className="relative">
-                  <InitialsAvatar name={a.name} size={56} />
+                  <AgentAvatar id={a.id} name={a.name} phone={a.phone} size={56} />
                   <span className="absolute -bottom-1 -right-1 grid h-6 w-6 place-items-center rounded-full bg-white text-[11px] font-bold text-brand-700 shadow-sm">#{i + 1}</span>
                 </span>
                 <span className="min-w-0 flex-1">
