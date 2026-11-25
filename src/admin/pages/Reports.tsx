@@ -14,7 +14,7 @@
  *   is recorded in the Audit Log.
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ArrowDownRight, ArrowUpRight, Check, ChevronDown, ChevronRight, Download, Eye, FileSpreadsheet, Printer, ZoomIn, ZoomOut } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, CalendarDays, Check, ChevronDown, ChevronRight, Clock3, CreditCard, Download, Eye, FileSpreadsheet, FlaskConical, Handshake, Printer, Receipt, TrendingUp, Users, Wallet, ZoomIn, ZoomOut } from 'lucide-react';
 import { useApp as useCompany } from '@company/app/AppState';
 import { ACTIVE_BRANCHES, BRANCHES, getBranch } from '@company/data/company';
 import type { DateRange, PeriodSelection } from '@company/data/types';
@@ -34,7 +34,7 @@ import { Sticker } from '@/ui/kit';
 import { BarList, ScopeBar, Sheet } from '../ui';
 import { FocusSheet, type Focus } from '../details';
 import { AdminTopBar, PageGlow, SectionTitle } from '../kit';
-import { Donut, LineChart } from '../charts';
+import { CountUp, Donut, LineChart, Spark, useSeen } from '../charts';
 import { useAgentBanks } from '../agentBanks';
 import { Chips, PageTitle } from '../branchFirst';
 
@@ -60,9 +60,9 @@ export function ReportsPage() {
 
         <SectionTitle title="Choose a report" />
         <p className="-mt-1 mb-3 text-[13px] text-muted">Create report lets you choose the period, branch and content, then preview it before printing, downloading or exporting.</p>
-        <div className="space-y-3">
-          {REPORTS.map((r) => (
-            <ReportCard key={r.id} spec={r} onCreate={() => setOpen(r)} />
+        <div className="grid grid-cols-2 gap-3">
+          {REPORTS.map((r, i) => (
+            <ReportCard key={r.id} i={i} spec={r} onCreate={() => setOpen(r)} />
           ))}
         </div>
       </div>
@@ -77,6 +77,7 @@ function Analysis({ ids }: { ids: string[] }) {
   const { version } = useCommission();
   const [key, setKey] = useState<PeriodSelection['key']>('month');
   const [focus, setFocus] = useState<Focus | null>(null);
+  const { ref: heroRef, seen: heroSeen } = useSeen<HTMLDivElement>(0.2);
   const range = useMemo(() => resolveRange({ key }), [key]);
   const prior = useMemo(() => priorRange(range), [range]);
   const data = useMemo(() => {
@@ -98,56 +99,82 @@ function Analysis({ ids }: { ids: string[] }) {
   );
   const { s, p, fin } = data;
   const change = (cur: number, prev: number | null | undefined) => (prev == null ? null : compareCount(cur, prev));
-  const tiles: { label: string; value: string; sub: string; delta: number | null; tone?: string; invert?: boolean }[] = [
-    { label: 'Money in', value: naira(s.payments.NGN ?? 0, true), sub: 'Paid at visits and balances recovered', delta: p ? (compareMoney(s.payments, p.payments).NGN ?? null) : null },
-    { label: 'Billed', value: naira(s.revenue.NGN ?? 0, true), sub: `${formatCount(s.transactions)} bills`, delta: p ? (compareMoney(s.revenue, p.revenue).NGN ?? null) : null },
-    { label: 'Patients', value: formatCount(s.patients), sub: `${formatCount(s.newPatients)} new · ${formatCount(s.patients - s.newPatients)} returning`, delta: change(s.patients, p?.patients) },
-    { label: 'Tests done', value: formatCount(data.tests), sub: s.patients ? `${(data.tests / s.patients).toFixed(1)} per patient` : 'None', delta: null },
-    { label: 'Referred patients', value: formatCount(s.referrals), sub: s.patients ? `${Math.round((s.referrals / s.patients) * 100)}% of patients` : 'None', delta: change(s.referrals, p?.referrals) },
-    { label: 'Still owed', value: naira(s.outstanding.NGN ?? 0, true), sub: `${formatCount(s.openBills)} open bills at the end`, delta: null, tone: (s.outstanding.NGN ?? 0) > 0 ? 'text-[#b42318]' : undefined },
-    { label: 'Costs', value: naira(fin.costs, true), sub: 'Approved expenses and PR commission', delta: null, tone: 'text-warn-ink' },
-    { label: fin.net < 0 ? 'Net loss' : 'Net profit', value: naira(Math.abs(fin.net), true), sub: fin.income ? `${fin.net < 0 ? 'Costs above money in' : `${Math.round((fin.net / fin.income) * 100)}% of money in`} · admin only` : 'Admin only', delta: null, tone: fin.net < 0 ? 'text-[#b42318]' : 'text-good-ink' },
+  const moneyDelta = p ? (compareMoney(s.payments, p.payments).NGN ?? null) : null;
+  const tiles: Fig[] = [
+    { label: 'Billed', value: s.revenue.NGN ?? 0, money: true, sub: `${formatCount(s.transactions)} bills`, delta: p ? (compareMoney(s.revenue, p.revenue).NGN ?? null) : null, look: LOOK.blue, icon: <Receipt size={22} strokeWidth={2.3} /> },
+    { label: 'Patients', value: s.patients, sub: `${formatCount(s.newPatients)} new · ${formatCount(s.patients - s.newPatients)} returning`, delta: change(s.patients, p?.patients), look: LOOK.purple, icon: <Users size={22} strokeWidth={2.3} /> },
+    { label: 'Tests done', value: data.tests, sub: s.patients ? `${(data.tests / s.patients).toFixed(1)} per patient` : 'None yet', delta: null, look: LOOK.teal, icon: <FlaskConical size={22} strokeWidth={2.3} /> },
+    { label: 'Referred patients', value: s.referrals, sub: s.patients ? `${Math.round((s.referrals / s.patients) * 100)}% of patients` : 'None yet', delta: change(s.referrals, p?.referrals), look: LOOK.violet, icon: <Handshake size={22} strokeWidth={2.3} /> },
+    { label: 'Still owed', value: s.outstanding.NGN ?? 0, money: true, sub: `${formatCount(s.openBills)} open bills at the end`, delta: null, look: LOOK.red, icon: <Clock3 size={22} strokeWidth={2.3} /> },
+    { label: 'Costs', value: fin.costs, money: true, sub: 'Expenses and PR commission', delta: null, look: LOOK.orange, icon: <ArrowDownRight size={22} strokeWidth={2.4} /> },
   ];
   const methodTotal = data.methods.reduce((n, m) => n + m.value, 0);
+  const loss = fin.net < 0;
   return (
     <>
-      <div className="-mx-5 flex gap-2.5 overflow-x-auto px-5 pb-1 md:-mx-8 md:px-8">
+      {/* Money in, the hero of the page */}
+      <div ref={heroRef} className="relative overflow-hidden rounded-[28px] bg-linear-to-br from-[#123e9c] via-[#1f6fe8] to-[#5ea6f7] p-5 text-white shadow-[0_18px_40px_rgba(31,99,214,0.32)]">
+        <span aria-hidden="true" className="absolute -right-20 -top-24 h-72 w-72 rounded-full bg-white/10" />
+        <span aria-hidden="true" className="absolute -bottom-28 -left-16 h-64 w-64 rounded-full bg-black/10" />
+        <Sticker name="moneyBag" size={60} className="absolute right-4 top-[68px] drop-shadow-[0_10px_18px_rgba(0,0,0,0.25)]" />
+        <div className="relative flex gap-1 rounded-full bg-white/15 p-1 ring-1 ring-white/20 backdrop-blur-sm" role="group" aria-label="Analysis period" style={{ width: 'fit-content' }}>
+          {(['today', 'yesterday', 'week', 'month', 'year'] as const).map((k) => (
+            <button key={k} type="button" aria-pressed={key === k} onClick={() => setKey(k)} className={`press min-h-8 rounded-full px-2.5 text-[12px] font-semibold ${key === k ? 'bg-white text-brand-700 shadow' : 'text-white/90'}`}>
+              {k === 'today' ? 'Today' : k === 'yesterday' ? 'Yest.' : k === 'week' ? 'Week' : k === 'month' ? 'Month' : 'Year'}
+            </button>
+          ))}
+        </div>
+        <p className="relative mt-4 text-[13px] font-medium text-white/85">Money in · {SHORT[key]}</p>
+        <p className="relative text-[34px] font-bold leading-none tracking-[-0.02em]">
+          <CountUp value={s.payments.NGN ?? 0} format={(n) => naira(n)} seen={heroSeen} />
+        </p>
+        <p className="relative mt-2 flex flex-wrap items-center gap-2 text-[12.5px] text-white/90">
+          {moneyDelta !== null && Number.isFinite(moneyDelta) && (
+            <span className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[12px] font-bold ${moneyDelta >= 0 ? 'bg-[#34d07f]/25 text-[#d8ffe9]' : 'bg-[#ff6b6b]/25 text-[#ffe1e1]'}`}>
+              {moneyDelta >= 0 ? <ArrowUpRight size={13} /> : <ArrowDownRight size={13} />}
+              {Math.abs(moneyDelta).toFixed(1)}%
+            </span>
+          )}
+          <span>{rangeText(range)}{prior ? ' · vs the period before' : ''}</span>
+        </p>
+        <div className="relative -mx-1 mt-3">
+          <Spark values={data.tr.payments} />
+        </div>
+        <div className="relative mt-2 grid grid-cols-3 gap-2">
+          {[
+            { l: 'Billed', v: naira(s.revenue.NGN ?? 0, true) },
+            { l: 'Costs', v: naira(fin.costs, true) },
+            { l: loss ? 'Net loss' : 'Net profit', v: naira(Math.abs(fin.net), true), hot: true },
+          ].map((x) => (
+            <span key={x.l} className={`min-w-0 rounded-2xl px-2.5 py-2 ring-1 backdrop-blur-sm ${x.hot ? (loss ? 'bg-[#ff6b6b]/25 ring-[#ffb4b4]/40' : 'bg-[#34d07f]/25 ring-[#9cf0c4]/40') : 'bg-white/15 ring-white/20'}`}>
+              <span className="block truncate text-[11px] text-white/85">{x.l}</span>
+              <b className="block truncate text-[15px]">{x.v}</b>
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* Money in at a glance */}
+      <div className="-mx-5 mt-3 flex gap-2 overflow-x-auto px-5 pb-1 md:-mx-8 md:px-8">
         {glance.map((g) => (
-          <button key={g.key} type="button" onClick={() => setKey(g.key)} aria-pressed={key === g.key} className={`press min-w-[150px] shrink-0 rounded-[20px] p-3.5 text-left ${key === g.key ? 'bg-linear-to-br from-[#1b5fd6] to-[#5ea6f7] text-white shadow-[0_10px_24px_rgba(31,99,214,0.28)]' : 'bg-white text-ink ring-1 ring-line/70'}`}>
-            <span className={`block text-[12px] font-medium ${key === g.key ? 'text-white/90' : 'text-muted'}`}>Money in · {SHORT[g.key]}</span>
-            <b className="mt-0.5 block text-[19px] leading-tight">{naira(g.value, true)}</b>
-            <span className={`block text-[11px] ${key === g.key ? 'text-white/80' : 'text-muted'}`}>{g.sub}</span>
+          <button key={g.key} type="button" onClick={() => setKey(g.key)} aria-pressed={key === g.key} className={`press min-w-[132px] shrink-0 rounded-[18px] px-3 py-2.5 text-left ring-1 transition-colors ${key === g.key ? 'bg-brand-50 ring-brand-200' : 'bg-white ring-line/70'}`}>
+            <span className="flex items-center gap-1.5 text-[11.5px] font-semibold text-muted">
+              <CalendarDays size={13} className={key === g.key ? 'text-brand-600' : ''} /> {SHORT[g.key]}
+            </span>
+            <b className={`block text-[16px] ${key === g.key ? 'text-brand-700' : 'text-ink'}`}>{naira(g.value, true)}</b>
           </button>
         ))}
       </div>
-      <div className="mt-3">
-        <Chips label="Analysis period" value={key} onChange={setKey} options={(['today', 'yesterday', 'week', 'month', 'year'] as const).map((k) => ({ value: k, label: SHORT[k]! }))} />
-      </div>
-      <p className="-mt-1 mb-2 text-[12.5px] text-muted">
-        {rangeText(range)}
-        {prior ? ' · compared with the period before' : ''}
-      </p>
+
+      {/* Key figures */}
+      <h2 className="mb-2.5 mt-5 text-[18px] font-bold tracking-[-0.01em] text-ink">Key figures</h2>
       <div className="grid grid-cols-2 gap-2.5">
-        {tiles.map((t) => (
-          <div key={t.label} className="min-w-0 rounded-[18px] bg-white p-3 ring-1 ring-line/70">
-            <p className="truncate text-[12px] font-medium text-muted">{t.label}</p>
-            <p className={`mt-0.5 truncate text-[20px] font-bold leading-tight ${t.tone ?? 'text-ink'}`}>{t.value}</p>
-            <p className="mt-0.5 flex items-center gap-1.5 text-[11px] leading-snug text-muted">
-              {t.delta !== null && Number.isFinite(t.delta) && (
-                <span className={`inline-flex shrink-0 items-center font-semibold ${t.delta >= 0 ? 'text-good' : 'text-[#d93036]'}`}>
-                  {t.delta >= 0 ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
-                  {Math.abs(t.delta).toFixed(1)}%
-                </span>
-              )}
-              <span className="line-clamp-2">{t.sub}</span>
-            </p>
-          </div>
+        {tiles.map((t, i) => (
+          <FigTile key={t.label} t={t} i={i} />
         ))}
       </div>
 
-      <section className="mt-4 rounded-[22px] bg-white p-4 ring-1 ring-line/70">
-        <h2 className="text-[16px] font-bold text-ink">Billed and money in</h2>
-        <p className="mb-3 text-[12px] text-muted">{data.tr.note}</p>
+      <Section icon={<TrendingUp size={18} />} tint="bg-brand-50 text-brand-600" title="Billed and money in" note={`${data.tr.note} · tap the chart to read a day`}>
         <LineChart
           labels={data.tr.labels}
           format={(n) => naira(n, true)}
@@ -157,10 +184,8 @@ function Analysis({ ids }: { ids: string[] }) {
             { name: 'Expenses', color: '#f27a1a', values: data.tr.expenses },
           ]}
         />
-      </section>
-      <section className="mt-4 rounded-[22px] bg-white p-4 ring-1 ring-line/70">
-        <h2 className="text-[16px] font-bold text-ink">Money in and costs</h2>
-        <p className="mb-3 text-[12px] text-muted">What the money received paid for, and what was left as profit</p>
+      </Section>
+      <Section icon={<Wallet size={18} />} tint="bg-tint-green text-good" title="Money in and costs" note="What the money received paid for, and what was left as profit">
         <Donut
           label="Money in"
           total={naira(fin.income, true)}
@@ -170,74 +195,126 @@ function Analysis({ ids }: { ids: string[] }) {
             ...(fin.net > 0 ? [{ label: 'Net profit', value: fin.net, color: '#16a34a', sub: 'admin only' }] : []),
           ]}
         />
-        {fin.net < 0 && <p className="mt-2 rounded-2xl bg-[#fdecec] px-3 py-2 text-[12.5px] font-medium text-[#b42318]">Costs were {naira(-fin.net, true)} more than the money received.</p>}
-      </section>
+        {loss && <p className="mt-2 rounded-2xl bg-[#fdecec] px-3 py-2 text-[12.5px] font-medium text-[#b42318]">Costs were {naira(-fin.net, true)} more than the money received.</p>}
+      </Section>
       {methodTotal > 0 && (
-        <section className="mt-4 rounded-[22px] bg-white p-4 ring-1 ring-line/70">
-          <h2 className="mb-3 text-[16px] font-bold text-ink">Payment methods</h2>
+        <Section icon={<CreditCard size={18} />} tint="bg-tint-orange text-orange" title="Payment methods" note="How patients paid in this period">
           <Donut label="Received" total={naira(methodTotal, true)} format={(v) => naira(v, true)} parts={data.methods.map((m, i) => ({ label: m.label, value: m.value, color: ['#1f6fe8', '#16a34a', '#f59e0b'][i] ?? '#64748b' }))} />
-        </section>
+        </Section>
       )}
       {data.services.length > 0 && (
-        <section className="mt-4 overflow-hidden rounded-[22px] bg-white ring-1 ring-line/70">
-          <h2 className="px-4 pt-4 text-[16px] font-bold text-ink">Most done tests</h2>
+        <Section icon={<FlaskConical size={18} />} tint="bg-[#e6f6f7] text-[#0c7f86]" title="Most done tests" note="Tap a test for the patients who did it" flush>
           <BarList
+            color="bg-[#139aa0]"
             rows={data.services.map((x) => ({ key: String(x.id), label: x.name, sub: x.category, value: x.count, text: `×${formatCount(x.count)}` }))}
             onRow={(k) => {
               const x = data.services.find((y) => String(y.id) === k);
               if (x) setFocus({ kind: 'service', id: x.id, name: x.name });
             }}
           />
-        </section>
+        </Section>
       )}
       {data.agents.length > 0 && (
-        <section className="mt-4 overflow-hidden rounded-[22px] bg-white ring-1 ring-line/70">
-          <h2 className="px-4 pt-4 text-[16px] font-bold text-ink">Top PR agents</h2>
+        <Section icon={<Handshake size={18} />} tint="bg-tint-purple text-violet" title="Top PR agents" note="Tap an agent for their profile" flush>
           <BarList color="bg-violet" rows={data.agents.map((a) => ({ key: String(a.id), label: a.name, sub: a.hospitalKey || 'No hospital assigned', value: a.referrals, text: `${formatCount(a.referrals)} ref.` }))} onRow={(k) => setFocus({ kind: 'agent', id: Number(k) })} />
-        </section>
+        </Section>
       )}
       {focus && <FocusSheet focus={focus} branchIds={ids} period={{ key }} onClose={() => setFocus(null)} />}
     </>
   );
 }
 
+/* ─────────────── figure tiles and section cards ─────────────── */
+
+const LOOK = {
+  blue: { bg: 'from-[#eef5ff] to-[#dcebff]', icon: 'bg-brand-600 text-white', ink: 'text-brand-800', ring: 'ring-[#d6e7ff]' },
+  purple: { bg: 'from-[#f5f0ff] to-[#e9e0ff]', icon: 'bg-violet text-white', ink: 'text-violet', ring: 'ring-[#e2d8ff]' },
+  teal: { bg: 'from-[#eafafa] to-[#d3f1f1]', icon: 'bg-[#0c7f86] text-white', ink: 'text-[#0c6b71]', ring: 'ring-[#c9ecec]' },
+  violet: { bg: 'from-[#f1efff] to-[#e1ddff]', icon: 'bg-[#4f46e5] text-white', ink: 'text-[#3730a3]', ring: 'ring-[#dcd8ff]' },
+  red: { bg: 'from-[#fff1f1] to-[#ffdede]', icon: 'bg-[#d93036] text-white', ink: 'text-[#b42318]', ring: 'ring-[#f9d4d4]' },
+  orange: { bg: 'from-[#fff6ec] to-[#ffe7cc]', icon: 'bg-orange text-white', ink: 'text-warn-ink', ring: 'ring-[#ffe0b8]' },
+};
+interface Fig {
+  label: string;
+  value: number;
+  money?: boolean;
+  sub: string;
+  delta: number | null;
+  look: (typeof LOOK)[keyof typeof LOOK];
+  icon: ReactNode;
+}
+
+function FigTile({ t, i }: { t: Fig; i: number }) {
+  const { ref, seen } = useSeen<HTMLDivElement>(0.2);
+  return (
+    <div ref={ref} className={`relative min-w-0 overflow-hidden rounded-[22px] bg-linear-to-br p-3.5 ring-1 ${t.look.bg} ${t.look.ring}`} style={{ opacity: seen ? 1 : 0, transform: seen ? 'none' : 'translateY(10px) scale(0.98)', transition: `opacity 500ms ease ${i * 70}ms, transform 500ms cubic-bezier(0.22,0.8,0.24,1) ${i * 70}ms` }}>
+      <span aria-hidden="true" className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-white/40" />
+      <span className="relative flex items-center justify-between gap-2">
+        <span className={`grid h-10 w-10 place-items-center rounded-2xl shadow-sm ${t.look.icon}`}>{t.icon}</span>
+        {t.delta !== null && Number.isFinite(t.delta) && (
+          <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[11px] font-bold ${t.delta >= 0 ? 'bg-white text-good-ink' : 'bg-white text-[#b42318]'}`}>
+            {t.delta >= 0 ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
+            {Math.abs(t.delta).toFixed(1)}%
+          </span>
+        )}
+      </span>
+      <p className="relative mt-3 text-[12.5px] font-semibold text-ink-2">{t.label}</p>
+      <p className={`relative truncate text-[22px] font-bold leading-tight tracking-[-0.02em] ${t.look.ink}`}>
+        <CountUp value={t.value} seen={seen} format={(n) => (t.money ? naira(n, true) : formatCount(Math.round(n)))} />
+      </p>
+      <p className="relative mt-0.5 line-clamp-2 text-[11.5px] leading-snug text-muted">{t.sub}</p>
+    </div>
+  );
+}
+
+function Section({ icon, tint, title, note, children, flush }: { icon: ReactNode; tint: string; title: string; note?: string; children: ReactNode; flush?: boolean }) {
+  return (
+    <section className="mt-4 overflow-hidden rounded-[24px] bg-white shadow-[0_8px_24px_rgba(30,74,160,0.07)] ring-1 ring-line/70">
+      <div className={`flex items-center gap-3 px-4 pt-4 ${flush ? 'pb-1' : 'pb-3'}`}>
+        <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${tint}`}>{icon}</span>
+        <span className="min-w-0">
+          <span className="block text-[16px] font-bold text-ink">{title}</span>
+          {note && <span className="block truncate text-[12px] text-muted">{note}</span>}
+        </span>
+      </div>
+      <div className={flush ? '' : 'px-4 pb-4'}>{children}</div>
+    </section>
+  );
+}
+
 /* ─────────────── report cards ─────────────── */
 
 const STICKER: Record<string, 'chart' | 'stethoscope' | 'hospital' | 'testTube' | 'moneyBag' | 'womanHealthWorker'> = { revenue: 'chart', agents: 'stethoscope', hospitals: 'hospital', services: 'testTube', payments: 'moneyBag', staff: 'womanHealthWorker' };
+const CARD_THEME: Record<string, string> = {
+  revenue: 'from-[#1b5fd6] via-[#2b78e8] to-[#5ea6f7]',
+  agents: 'from-[#4b2fc4] via-[#6a4be0] to-[#9a83f7]',
+  hospitals: 'from-[#0c7f86] via-[#139aa0] to-[#4cc5bd]',
+  services: 'from-[#0f7a43] via-[#16a35a] to-[#4cc98a]',
+  payments: 'from-[#c2410c] via-[#e0601a] to-[#f59e0b]',
+  staff: 'from-[#3346c9] via-[#4f63e6] to-[#8796f7]',
+};
 
-function ReportCard({ spec, onCreate }: { spec: ReportSpec; onCreate: () => void }) {
-  const [open, setOpen] = useState(false);
+function ReportCard({ spec, onCreate, i }: { spec: ReportSpec; onCreate: () => void; i: number }) {
   return (
-    <article className="rounded-[22px] bg-white shadow-[0_6px_20px_rgba(30,74,160,0.06)] ring-1 ring-line/70">
-      <div className="flex items-start gap-3 p-3.5">
-        <span className="grid h-[52px] w-[52px] shrink-0 place-items-center rounded-[16px] bg-linear-to-br from-[#e8f1ff] to-[#cfe2ff]">
-          <Sticker name={STICKER[spec.id] ?? 'chart'} size={36} />
+    <button
+      type="button"
+      onClick={onCreate}
+      className={`press relative flex min-h-[176px] flex-col overflow-hidden rounded-[24px] bg-linear-to-br p-3.5 text-left text-white shadow-[0_12px_26px_rgba(20,40,90,0.18)] ${CARD_THEME[spec.id] ?? CARD_THEME.revenue}`}
+      style={{ animation: `pick-in 520ms cubic-bezier(0.22,0.8,0.24,1) ${i * 70}ms both` }}
+    >
+      <span aria-hidden="true" className="absolute -right-10 -top-12 h-32 w-32 rounded-full bg-white/12" />
+      <Sticker name={STICKER[spec.id] ?? 'chart'} size={52} className="relative drop-shadow-[0_6px_12px_rgba(0,0,0,0.2)]" />
+      <span className="relative mt-2 block text-[15.5px] font-bold leading-tight">{spec.title}</span>
+      <span className="relative mt-0.5 line-clamp-2 block text-[12px] leading-snug text-white/85">{spec.tagline}</span>
+      <span className="relative mt-auto flex items-center justify-between pt-3">
+        <span className="rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-semibold ring-1 ring-white/25">
+          {spec.variants.length} type{spec.variants.length === 1 ? '' : 's'}
         </span>
-        <span className="min-w-0 flex-1">
-          <span className="block text-[16px] font-bold text-ink">{spec.title}</span>
-          <span className="block text-[12.5px] text-muted">{spec.tagline}</span>
+        <span className="grid h-8 w-8 place-items-center rounded-full bg-white text-ink shadow">
+          <ChevronRight size={17} />
         </span>
-      </div>
-      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="press flex w-full items-center justify-between border-t border-line px-3.5 py-2.5 text-[13px] font-semibold text-ink-2">
-        {spec.variants.length} report type{spec.variants.length === 1 ? '' : 's'}
-        <ChevronDown size={16} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
-      </button>
-      {open && (
-        <ul className="drop-down mx-3.5 mb-2 space-y-1.5">
-          {spec.variants.map((v) => (
-            <li key={v.id} className="rounded-2xl bg-page px-3 py-2">
-              <b className="block text-[13.5px] text-ink">{v.label}</b>
-              <span className="block text-[12px] leading-snug text-muted">{v.description}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-      <div className="px-3.5 pb-3.5">
-        <button type="button" onClick={onCreate} className="press flex min-h-11 w-full items-center justify-center gap-1.5 rounded-2xl bg-brand-600 text-[14.5px] font-semibold text-white">
-          Create report <ChevronRight size={17} />
-        </button>
-      </div>
-    </article>
+      </span>
+    </button>
   );
 }
 

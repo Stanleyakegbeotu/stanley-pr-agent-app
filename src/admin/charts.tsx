@@ -267,3 +267,38 @@ export function LineChart({ labels, series, format, height = 170, note }: { labe
     </div>
   );
 }
+
+/** A small line that draws itself (inside hero cards); white on colour by default. */
+export function Spark({ values, color = '#ffffff', height = 46, fill = true }: { values: number[]; color?: string; height?: number; fill?: boolean }) {
+  const { ref, seen } = useSeen<HTMLDivElement>(0.2);
+  const [w, setW] = useState(160);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([e]) => setW(Math.max(60, e!.contentRect.width)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref]);
+  const n = values.length;
+  const max = Math.max(1, ...values);
+  const pts: [number, number][] = values.map((v, i) => [n <= 1 ? w / 2 : (i * w) / (n - 1), height - 3 - (Math.max(0, v) / max) * (height - 8)]);
+  const d = smooth(pts);
+  const gid = useMemo(() => `s${Math.random().toString(36).slice(2, 8)}`, []);
+  return (
+    <div ref={ref} style={{ height }} aria-hidden="true">
+      {n > 1 && (
+        <svg width={w} height={height} className="block overflow-visible">
+          <defs>
+            <linearGradient id={gid} x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stopColor={color} stopOpacity="0.35" />
+              <stop offset="100%" stopColor={color} stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          {fill && <path d={`${d} L${w},${height} L0,${height} Z`} fill={`url(#${gid})`} style={{ opacity: seen ? 1 : 0, transition: 'opacity 800ms ease 600ms' }} />}
+          <path d={d} fill="none" stroke={color} strokeWidth={2.4} strokeLinecap="round" pathLength={1} strokeDasharray={1} strokeDashoffset={seen ? 0 : 1} style={{ transition: 'stroke-dashoffset 1400ms cubic-bezier(0.22,0.8,0.24,1) 150ms' }} />
+          <circle cx={pts[n - 1]![0]} cy={pts[n - 1]![1]} r={3.5} fill={color} style={{ opacity: seen ? 1 : 0, transition: 'opacity 300ms ease 1400ms' }} />
+        </svg>
+      )}
+    </div>
+  );
+}
