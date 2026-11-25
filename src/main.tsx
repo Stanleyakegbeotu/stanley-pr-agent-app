@@ -2,8 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import '@fontsource-variable/inter';
 import './index.css';
-import { App } from './app/App';
-import { AppStoreProvider } from './app/store';
+import { Root } from './app/Root';
 import { Gate } from './app/Gate';
 import { watchSafeArea } from './app/safeArea';
 import { initSecureStore } from './domain/secureStore';
@@ -20,9 +19,7 @@ void (async () => {
   ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
       <Gate>
-        <AppStoreProvider>
-          <App />
-        </AppStoreProvider>
+        <Root />
       </Gate>
     </React.StrictMode>,
   );

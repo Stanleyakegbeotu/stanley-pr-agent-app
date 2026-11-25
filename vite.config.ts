@@ -29,6 +29,7 @@ react(),
     ],
     resolve: {
       alias: {
+        '@company': path.resolve(__dirname, './src/company'),
         '@': path.resolve(__dirname, './src'),
       },
     },

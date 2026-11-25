@@ -9,6 +9,7 @@ import { useApp } from '@/app/store';
 import { useInbox } from '@/domain/chat';
 import { useProfile } from '@/domain/profile';
 import { NAV_GROUPS, isActive } from './nav';
+import { ROLES, setRole } from '@/domain/role';
 
 export function Drawer({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { unread } = useInbox();
@@ -40,6 +41,17 @@ export function Drawer({ open, onClose }: { open: boolean; onClose: () => void }
           </button>
         </div>
 
+        {/* Developer switch until login exists (domain/role). */}
+        <div className="mx-3 mb-1 rounded-2xl bg-page p-2">
+          <p className="px-2 pb-1 text-[10.5px] font-semibold tracking-[0.14em] text-faint">VIEWING AS (UNTIL LOGIN)</p>
+          <div className="grid grid-cols-2 gap-1">
+            {ROLES.map((r) => (
+              <button key={r.id} type="button" onClick={() => r.id !== 'clinician' && setRole(r.id)} className={`press rounded-xl px-2 py-2 text-[12.5px] font-semibold ${r.id === 'clinician' ? 'bg-brand-600 text-white' : 'bg-white text-ink-2 ring-1 ring-line'}`}>
+                {r.label}
+              </button>
+            ))}
+          </div>
+        </div>
         <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-3">
           {NAV_GROUPS.map((g) => (
             <div key={g.label}>
