@@ -32,6 +32,7 @@ import { saveAgentBank, useAgentBanks } from './agentBanks';
 import { Sheet, useSheetPeriod } from './ui';
 import { FocusSheet, Rows, norm, useRowCtx, visitRow, type Focus } from './details';
 import { agentConvId } from './chat';
+import { LongText } from './fields';
 import { AddAgentSheet, AgentEditSheet, TrashSheet } from './prManage';
 import { hasPhone, hospitalKey } from '@company/data/legacy';
 import { BASELINE_AGENTS } from '@company/data/userRecords';
@@ -616,11 +617,9 @@ export function ComposeSheet({ audience, branchId, preset, draft, onClose }: { a
           <span className="mb-1.5 block text-[14px] font-semibold text-ink">Title</span>
           <input value={title} onChange={(e) => setTitle(e.target.value.slice(0, 60))} placeholder="e.g. New ultrasound hours" className="min-h-12 w-full rounded-2xl border-[1.5px] border-brand-500 bg-white px-4 text-[15px] text-ink outline-none ring-4 ring-brand-100" />
         </label>
-        <label className="mb-1 block">
-          <span className="mb-1.5 block text-[14px] font-semibold text-ink">Message</span>
-          <textarea value={text} onChange={(e) => setText(e.target.value.slice(0, 280))} rows={4} placeholder={kind === 'message' ? 'Write your message. They can reply in chat.' : 'What should they know?'} className="w-full resize-none rounded-2xl border-[1.5px] border-brand-500 bg-white px-4 py-3 text-[15px] leading-relaxed text-ink outline-none ring-4 ring-brand-100" />
-        </label>
-        <p className="mb-3 text-right text-[11.5px] text-muted">{text.length}/280</p>
+        <div className="mb-3">
+          <LongText label="Message" value={text} onChange={setText} max={280} minRows={4} placeholder={kind === 'message' ? 'Write your message. They can reply in chat.' : 'What should they know?'} hint="Press Enter for a new line." />
+        </div>
 
         {personal && (
           <button type="button" onClick={() => setInChat((v) => !v)} aria-pressed={inChat} className="press mb-3 flex w-full items-center gap-3 rounded-2xl bg-page p-3 text-left">

@@ -27,6 +27,7 @@ import { updateBranchContact } from '@company/services/receiptProfile';
 import { updateBranchProfile } from '@company/services/settingsStore';
 import { Sticker } from '@/ui/kit';
 import { Sheet } from './ui';
+import { LongText } from './fields';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const PHONE_RE = /^\+?[\d\s()-]{7,20}$/;
@@ -239,7 +240,7 @@ export function AddBranchSheet({ onClose }: { onClose: () => void }) {
             {show('city')}
           </Label>
           <Label text="Full address" required>
-            <textarea value={address} onChange={(e) => setAddress(e.target.value)} rows={3} placeholder="Street, building, area and landmarks" className={`${inputCls} resize-none py-3 leading-relaxed`} />
+            <LongText value={address} onChange={setAddress} max={240} placeholder={"For example:\n12 Admiralty Way, Lekki Phase 1\nOpposite the filling station"} hint="Street, building, area and a landmark. Press Enter for a new line. Printed on receipts." />
             {show('address')}
           </Label>
         </Section>

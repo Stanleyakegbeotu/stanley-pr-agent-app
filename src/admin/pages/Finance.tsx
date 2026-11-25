@@ -28,6 +28,7 @@ import { rateSummary, useCommission } from '@company/services/commission';
 import { approveExpense, rejectExpense, useExpenses, type ExpenseRecord } from '@company/services/expenses';
 import { formatCount, formatMoney } from '@company/shared/format';
 import { Sticker } from '@/ui/kit';
+import { LongText } from '../fields';
 import { BarList, Sheet, TrendChart, periodText, useSheetPeriod } from '../ui';
 import { DetailSheet, ExpenseRow, FocusSheet, Rows, norm, useRowCtx, visitRow, type DetailKind, type Focus, type Row } from '../details';
 import { AdminTopBar, PageGlow, SectionTitle } from '../kit';
@@ -711,11 +712,7 @@ function RejectSheet({ e, onClose }: { e: ExpenseRecord; onClose: () => void }) 
         </button>
       }
     >
-      <label className="block text-[14px] font-semibold text-ink" htmlFor="reject-why">
-        Reason (required)
-      </label>
-      <p className="mb-2 text-[12.5px] text-muted">{`${e.recordedBy.name} will see this reason and can correct and resubmit it.`}</p>
-      <textarea id="reject-why" value={why} onChange={(x) => setWhy(x.target.value)} rows={4} maxLength={300} className="w-full rounded-2xl border-[1.5px] border-brand-500 bg-white p-3 text-[15px] outline-none ring-4 ring-brand-100" placeholder="For example: no receipt attached" />
+      <LongText label="Reason" required value={why} onChange={setWhy} max={300} minRows={4} placeholder={"For example: no receipt attached.\nPlease add a photo of the receipt and send it again."} hint={`${e.recordedBy.name} will see this reason and can correct and resubmit it.`} />
     </Sheet>
   );
 }

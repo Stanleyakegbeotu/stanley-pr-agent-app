@@ -21,6 +21,7 @@ import { formatMoney } from '@company/shared/format';
 import { useNav } from '@/app/store';
 import { Sticker } from '@/ui/kit';
 import { Sheet } from './ui';
+import { LongText } from './fields';
 
 const NO_HOSPITAL = 'No hospital assigned';
 export const inputCls = (err?: string | null) => `min-h-12 w-full rounded-2xl border-[1.5px] bg-white px-4 text-[15px] text-ink outline-none ring-4 ${err ? 'border-[#e5484d] ring-[#fde3e3]' : 'border-brand-500 ring-brand-100'}`;
@@ -322,10 +323,7 @@ export function TrashSheet({ name, what, onConfirm, onClose }: { name: string; w
     >
       <div className="px-1 pb-2">
         <p className="mb-3 text-[14px] text-ink-2">{`The ${what} is kept in Trash for ${TRASH_RETENTION_DAYS} days and can be restored until then.`}</p>
-        <label className="block">
-          <FieldLabel label="Reason" optional />
-          <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="For example: added by mistake" className={inputCls()} />
-        </label>
+        <LongText label="Reason" optional value={reason} onChange={setReason} max={300} placeholder="For example: added by mistake, the same agent is already on the list." hint="Recorded in Trash and the Audit Log." />
       </div>
     </Sheet>
   );

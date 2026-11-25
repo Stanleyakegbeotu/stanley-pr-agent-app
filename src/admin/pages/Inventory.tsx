@@ -27,6 +27,7 @@ import { formatCount, formatMoney } from '@company/shared/format';
 import { useNav } from '@/app/store';
 import type { StickerKey } from '@/assets';
 import { Sticker } from '@/ui/kit';
+import { LongText } from '../fields';
 import { ScopeBar, Sheet } from '../ui';
 import { FocusSheet, type Focus } from '../details';
 import { AdminTopBar, EmptyCard, PageGlow, SectionTitle } from '../kit';
@@ -828,10 +829,7 @@ function AddServiceSheet({ category: initial, onClose, onAdded }: { category: st
           <FieldLabel label="Sample" optional />
           <input value={sample} onChange={(e) => setSample(e.target.value)} placeholder="For example blood (serum)" className={inputCls()} />
         </label>
-        <label className="block">
-          <FieldLabel label="Notes" optional />
-          <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Preparation or handling notes" className={inputCls()} />
-        </label>
+        <LongText label="Notes" optional value={notes} onChange={setNotes} max={400} placeholder={"For example: patient should fast for 8 hours.\nKeep the sample cold."} hint="Preparation or handling notes for staff." />
         <p className="text-[12px] text-muted">New services are kept for this session until the database is connected.</p>
       </div>
     </Sheet>

@@ -35,6 +35,7 @@ import { AddBranchSheet } from './addBranch';
 import { AddStaffSheet } from './pages/Staff';
 import { Approvals } from './pages/Finance';
 import { photoOf } from './people';
+import { LongText } from './fields';
 
 export type Go = (section: string) => void;
 
@@ -225,10 +226,7 @@ export function ProfileSection() {
           <FieldLabel label="Phone number" />
           <input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" className={inputCls()} />
         </label>
-        <label className="block">
-          <FieldLabel label="Address" optional />
-          <input value={address} onChange={(e) => setAddress(e.target.value)} className={inputCls()} />
-        </label>
+        <LongText label="Address" optional value={address} onChange={setAddress} max={240} minRows={2} placeholder={"House number and street\nArea, city"} hint="Press Enter for a new line." />
         <button
           type="button"
           onClick={() => {
@@ -325,8 +323,15 @@ export function CompanySection() {
           {COMPANY_FIELDS.map((f) => (
             <label key={f.k} className="block">
               <FieldLabel label={f.label} optional={f.optional} />
-              {f.k === 'description' ? (
-                <textarea value={form[f.k]} onChange={(e) => setForm((x) => ({ ...x, [f.k]: e.target.value }))} rows={3} className={`${inputCls()} py-3`} />
+              {f.k === 'description' || f.k === 'address' ? (
+                <LongText
+                  value={form[f.k]}
+                  onChange={(v) => setForm((x) => ({ ...x, [f.k]: v }))}
+                  max={f.k === 'address' ? 240 : 600}
+                  minRows={f.k === 'address' ? 3 : 4}
+                  placeholder={f.k === 'address' ? 'Plot, street and area\nCity, state' : 'What the company does, in a few sentences.'}
+                  hint={f.k === 'address' ? 'The registered office address, printed on documents. Press Enter for a new line.' : 'Shown on the company profile.'}
+                />
               ) : (
                 <input value={form[f.k]} type={f.type ?? 'text'} onChange={(e) => setForm((x) => ({ ...x, [f.k]: e.target.value }))} className={inputCls(f.k === 'name' && !form.name.trim() ? 'x' : null)} />
               )}
@@ -345,10 +350,7 @@ export function CompanySection() {
             <FieldLabel label="Motto" optional />
             <input value={rec.motto} onChange={(e) => setRec((x) => ({ ...x, motto: e.target.value }))} className={inputCls()} />
           </label>
-          <label className="block">
-            <FieldLabel label="Thank you line" optional />
-            <input value={rec.thankYou} onChange={(e) => setRec((x) => ({ ...x, thankYou: e.target.value }))} className={inputCls()} />
-          </label>
+          <LongText label="Thank you line" optional value={rec.thankYou} onChange={(v) => setRec((x) => ({ ...x, thankYou: v }))} max={200} minRows={2} placeholder="For example: Thank you for choosing us. Get well soon." hint="Printed at the bottom of every receipt." />
         </div>
       </Panel>
       <div className="sticky bottom-0 mt-4 bg-white/90 pb-1 pt-2 backdrop-blur">
@@ -457,10 +459,7 @@ function BranchSettingsSheet({ branchId, onClose }: { branchId: string; onClose:
       </Panel>
       <Panel title="Contact and hours" note="Printed on this branch's receipts and quotes.">
         <div className="space-y-3">
-          <label className="block">
-            <FieldLabel label="Address" />
-            <input value={address} onChange={(e) => setAddress(e.target.value)} className={inputCls()} />
-          </label>
+          <LongText label="Address" value={address} onChange={setAddress} max={240} placeholder={"Street, building and area\nLandmark, city"} hint="Printed on this branch's receipts. Press Enter for a new line." />
           <label className="block">
             <FieldLabel label="Phone" />
             <input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" className={inputCls()} />
@@ -546,10 +545,9 @@ function BranchSettingsSheet({ branchId, onClose }: { branchId: string; onClose:
             </button>
           }
         >
-          <label className="block px-1 pb-2">
-            <FieldLabel label="Reason" required />
-            <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Recorded in the status history and the Audit Log" className={inputCls()} />
-          </label>
+          <div className="px-1 pb-2">
+            <LongText label="Reason" required value={reason} onChange={setReason} max={300} minRows={3} placeholder="For example: renovation of the scan room until the end of the month." hint="Recorded in the status history and the Audit Log." />
+          </div>
         </Sheet>
       )}
     </Sheet>
@@ -715,10 +713,9 @@ export function ManagersSection() {
             </button>
           }
         >
-          <label className="block px-1 pb-2">
-            <FieldLabel label="Reason" required />
-            <input value={reason} onChange={(e) => setReason(e.target.value)} className={inputCls()} />
-          </label>
+          <div className="px-1 pb-2">
+            <LongText label="Reason" required value={reason} onChange={setReason} max={300} minRows={3} placeholder="For example: moving to another branch from Monday." hint="Recorded on their staff record and in the Audit Log." />
+          </div>
         </Sheet>
       )}
       {adding && <AddStaffSheet branchId={adding} presetRole={MANAGER_ROLE} onClose={() => setAdding(null)} />}

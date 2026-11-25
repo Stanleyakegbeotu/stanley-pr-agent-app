@@ -21,6 +21,7 @@ import { readImage, updateProfile, useSettings } from '@company/services/setting
 import { formatCount } from '@company/shared/format';
 import { useNav } from '@/app/store';
 import { InitialsAvatar, Sticker } from '@/ui/kit';
+import { LongText } from '../fields';
 import { Sheet } from '../ui';
 import { AdminTopBar, EmptyCard, PageGlow, SectionTitle } from '../kit';
 import { DutyRota } from '../duty';
@@ -580,10 +581,7 @@ function StaffEditSheet({ member, onClose }: { member: StaffRecord; onClose: () 
           <input type="email" value={email} onChange={(x) => setEmail(x.target.value)} placeholder="name@example.com" className={inputCls(e('contact'))} />
           <FieldErr msg={e('contact')} />
         </label>
-        <label className="block">
-          <FieldLabel label="Home address" optional />
-          <input value={address} onChange={(x) => setAddress(x.target.value)} className={inputCls()} />
-        </label>
+        <LongText label="Home address" optional value={address} onChange={setAddress} max={240} minRows={2} placeholder={"House number and street\nArea, city"} hint="Press Enter for a new line." />
         <div>
           <FieldLabel label="Role" />
           <RolePick value={role} onChange={setRole} blockedBy={otherManager} />
@@ -603,10 +601,7 @@ function StaffEditSheet({ member, onClose }: { member: StaffRecord; onClose: () 
           <Pills label="Status" value={status} options={STAFF_STATUSES} onChange={setStatus} />
           <span className="mt-1 block text-[12px] text-muted">“Left” keeps the record for history but removes them from the active team.</span>
         </div>
-        <label className="block">
-          <FieldLabel label="Notes" optional />
-          <input value={notes} onChange={(x) => setNotes(x.target.value)} placeholder="For example: covers weekends" className={inputCls()} />
-        </label>
+        <LongText label="Notes" optional value={notes} onChange={setNotes} max={400} placeholder="For example: covers weekends; trained on the new POS." hint="Anything the team should know about this person." />
       </div>
     </Sheet>
   );
