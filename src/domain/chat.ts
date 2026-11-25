@@ -272,8 +272,11 @@ export interface InboxRow {
   unread: number;
 }
 
-/** Every conversation for the inbox: the branch inboxes plus direct chats already started, newest first. */
-export function useInbox() {
+/**
+ * Every conversation for the inbox: the branch inboxes plus direct chats already started, newest first.
+ * The admin workspace passes its own fixed inboxes and the prefix of its direct chats.
+ */
+export function useInbox(fixedIds: string[] = INBOXES.map((c) => c.id), directPrefix = 'dm-') {
   const [stored, setStored] = useState<ChatMsg[]>([]);
   const [tick, setTick] = useState(0);
   useEffect(() => {
@@ -295,17 +298,17 @@ export function useInbox() {
   }, []);
   return useMemo(() => {
     const read = readAll();
-    const ids = [...INBOXES.map((c) => c.id), ...new Set(stored.map((m) => m.convId).filter((id) => id.startsWith('dm-') && conversationById(id)))];
+    const ids = [...fixedIds, ...new Set(stored.map((m) => m.convId).filter((id) => id.startsWith(directPrefix) && !fixedIds.includes(id) && conversationById(id)))];
     const rows: InboxRow[] = ids.map((id) => {
       const all = [...seedMessages(id), ...stored.filter((m) => m.convId === id)].sort((a, b) => a.at.localeCompare(b.at));
       const lastMine = [...all].reverse().find((m) => m.from === 'me')?.at ?? '';
       const since = [read[id] ?? '', lastMine].sort().pop()!; // replying counts as reading
       return { id, last: all[all.length - 1], unread: all.filter((m) => m.from === 'them' && !m.deleted && m.at > since).length };
     });
-    const fixed = rows.slice(0, INBOXES.length);
-    const direct = rows.slice(INBOXES.length).sort((a, b) => (b.last?.at ?? '').localeCompare(a.last?.at ?? ''));
+    const fixed = rows.slice(0, fixedIds.length);
+    const direct = rows.slice(fixedIds.length).sort((a, b) => (b.last?.at ?? '').localeCompare(a.last?.at ?? ''));
     return { inboxes: fixed, direct, unread: rows.reduce((s, r) => s + r.unread, 0) };
-  }, [stored, tick]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [stored, tick, fixedIds.join(','), directPrefix]); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
 export const previewOf = (m: Pick<ChatMsg, 'kind' | 'text' | 'fileName' | 'duration'>) =>

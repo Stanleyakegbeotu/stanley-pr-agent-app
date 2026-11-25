@@ -9,12 +9,12 @@
  * the branch scope being viewed (admin/details.tsx).
  */
 import { useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent as RPointerEvent } from 'react';
-import { ArrowRight, Bell, ChevronRight, Clock3, CreditCard, FileText, Menu, Percent, ShieldCheck, TrendingUp, Users } from 'lucide-react';
+import { ArrowRight, Bell, Clock3, MessageCircle, CreditCard, FileText, Menu, Percent, ShieldCheck, TrendingUp, Users } from 'lucide-react';
 import { useApp as useCompany } from '@company/app/AppState';
 import { BRANCHES, getBranch } from '@company/data/company';
-import type { Currency } from '@company/data/types';
+import type { Currency, PaymentMethod } from '@company/data/types';
 import { agentRanking, branchPerformance, compareCount, compareMoney, expenseMix, hospitalRanking, paymentMix, periodLabel, resolveBranchIds, serviceRanking } from '@company/services/analytics';
-import { isRead, markRead, useNotifications, type Note, type NoteKind } from '@company/services/notifications';
+import { isRead, markRead, useNotifications, type Note } from '@company/services/notifications';
 import { formatCount, formatMoney, greeting } from '@company/shared/format';
 import { ADMIN } from '@/data/team';
 import { serviceByName } from '@/data/services';
@@ -22,21 +22,23 @@ import type { StickerKey } from '@/assets';
 import { InitialsAvatar, SearchField, FilterButton, ServiceThumb, Sticker } from '@/ui/kit';
 import { useDashboardData } from '../useDashboardData';
 import { useAdminShell } from '../shell';
-import { ScopeBar, Sheet } from '../ui';
-import { DetailSheet, type DetailKind } from '../details';
+import { ScopeBar } from '../ui';
+import { DetailSheet, FocusSheet, type DetailKind, type Focus } from '../details';
+import { NOTE_LOOK, NoteSheet } from '../notes';
 
 const firstPct = (p: Partial<Record<Currency, number | null>>) => Object.values(p)[0] ?? null;
 
 export function AdminDashboard() {
   const { context, period, user, navigate } = useCompany();
-  const { openMenu, unread } = useAdminShell();
+  const { openMenu, unread, inboxUnread } = useAdminShell();
   const branchIds = useMemo(() => resolveBranchIds(context), [context]);
   const { range, summary, prior } = useDashboardData(branchIds, period);
   const focus = context === 'all' ? null : getBranch(context);
   const scopeText = focus ? `${focus.name} branch` : 'All branches';
   const periodText = periodLabel(period);
   const c: Currency = summary.currencies[0] ?? 'NGN';
-  const [detail, setDetail] = useState<DetailKind | null>(null);
+  const [detail, setDetail] = useState<{ kind: DetailKind; method?: PaymentMethod } | null>(null);
+  const [pick, setPick] = useState<Focus | null>(null);
   const [q, setQ] = useState('');
 
   // Frosted top bar once content scrolls under it (as on the clinician Home).
@@ -67,7 +69,7 @@ export function AdminDashboard() {
   const rev = summary.revenue[c] ?? 0;
   const paid = summary.payments[c] ?? 0;
   const collected = rev > 0 ? Math.min(100, (paid / rev) * 100) : 0;
-  const open = (k: DetailKind) => setDetail(k);
+  const open = (kind: DetailKind, method?: PaymentMethod) => setDetail({ kind, method });
 
   const search = (e: FormEvent) => {
     e.preventDefault();
@@ -82,10 +84,16 @@ export function AdminDashboard() {
         <button type="button" onClick={openMenu} aria-label="Menu" className="press -ml-2 grid h-11 w-11 place-items-center rounded-full text-ink md:invisible">
           <Menu size={26} strokeWidth={2} />
         </button>
-        <button type="button" onClick={() => navigate('/notifications')} aria-label={unread ? `Notifications, ${unread} unread` : 'Notifications'} className="press relative -mr-2 grid h-11 w-11 place-items-center rounded-full text-ink">
+        <span className="-mr-2 flex items-center gap-1">
+        <button type="button" onClick={() => navigate('/messages')} aria-label={inboxUnread ? `Inbox, ${inboxUnread} unread` : 'Inbox'} className="press relative grid h-11 w-11 place-items-center rounded-full text-ink">
+          <MessageCircle size={25} strokeWidth={1.9} />
+          {inboxUnread > 0 && <span className="absolute right-0.5 top-1 grid h-[19px] min-w-[19px] place-items-center rounded-full bg-brand-600 px-1 text-[11px] font-bold leading-none text-white ring-2 ring-[#e9f1ff]">{inboxUnread > 9 ? '9+' : inboxUnread}</span>}
+        </button>
+        <button type="button" onClick={() => navigate('/notifications')} aria-label={unread ? `Notifications, ${unread} unread` : 'Notifications'} className="press relative grid h-11 w-11 place-items-center rounded-full text-ink">
           <Bell size={26} strokeWidth={1.9} />
           {unread > 0 && <span className="absolute right-0.5 top-1 grid h-[19px] min-w-[19px] place-items-center rounded-full bg-[#ef4444] px-1 text-[11px] font-bold text-white ring-2 ring-[#e9f1ff]">{unread > 9 ? '9+' : unread}</span>}
         </button>
+        </span>
       </header>
 
       <div className="relative">
@@ -147,7 +155,7 @@ export function AdminDashboard() {
         />
 
         {/* Payments received */}
-        <button type="button" onClick={() => open('payments')} className="press relative mt-5 block w-full overflow-hidden rounded-[24px] bg-linear-to-br from-[#0f8a4b] via-[#16a35a] to-[#4cc98a] p-5 text-left text-white shadow-[0_14px_30px_rgba(22,163,74,0.28)]">
+        <div role="button" tabIndex={0} onClick={() => open('payments')} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), open('payments'))} aria-label="Payments received, see every payment" className="press relative mt-5 block w-full cursor-pointer overflow-hidden rounded-[24px] bg-linear-to-br from-[#0f8a4b] via-[#16a35a] to-[#4cc98a] p-5 text-left text-white shadow-[0_14px_30px_rgba(22,163,74,0.28)]">
           <span aria-hidden="true" className="absolute -right-16 -top-20 h-64 w-64 rounded-full bg-white/10" />
           <span className="relative block max-w-[64%]">
             <span className="text-[13px] font-medium text-white/90">{period.key === 'today' ? 'Payments received today' : `Payments received · ${periodText}`}</span>
@@ -159,14 +167,16 @@ export function AdminDashboard() {
           </span>
           <span className="relative z-10 mt-3.5 grid grid-cols-3 gap-2">
             {data.pay.map((p) => (
-              <span key={p.label} className="min-w-0 rounded-xl bg-white/15 px-2.5 py-1.5 text-[12px] backdrop-blur-sm">
-                <span className="block text-white/80">{p.label}</span>
+              <button key={p.label} type="button" onClick={(e) => (e.stopPropagation(), open('payments', p.label as PaymentMethod))} aria-label={`Patients who paid by ${p.label}`} className="press min-w-0 rounded-xl bg-white/15 px-2.5 py-1.5 text-left text-[12px] ring-1 ring-white/20 backdrop-blur-sm hover:bg-white/25">
+                <span className="flex items-center justify-between text-white/85">
+                  {p.label} <ArrowRight size={12} />
+                </span>
                 <b className="block truncate text-[13.5px]">{m(p.value)}</b>
-              </span>
+              </button>
             ))}
           </span>
           <Sticker name="moneyBag" size={96} className="absolute right-2 top-3" />
-        </button>
+        </div>
 
         {/* Quick actions */}
         <SectionTitle title="Quick Actions" />
@@ -224,7 +234,7 @@ export function AdminDashboard() {
           <ul className="space-y-2.5">
             {data.agents.slice(0, 3).map((a, i) => (
               <li key={a.id}>
-                <button type="button" onClick={() => open('referrals')} className="press flex w-full items-start gap-3.5 rounded-[20px] bg-white p-3 text-left shadow-[0_6px_20px_rgba(30,74,160,0.07)] ring-1 ring-line/70">
+                <button type="button" onClick={() => setPick({ kind: 'agent', id: a.id })} className="press flex w-full items-start gap-3.5 rounded-[20px] bg-white p-3 text-left shadow-[0_6px_20px_rgba(30,74,160,0.07)] ring-1 ring-line/70">
                   <span className="relative">
                     <InitialsAvatar name={a.name} size={56} />
                     <span className="absolute -bottom-1 -right-1 grid h-6 w-6 place-items-center rounded-full bg-white text-[11px] font-bold text-brand-700 shadow-sm">#{i + 1}</span>
@@ -253,7 +263,7 @@ export function AdminDashboard() {
         ) : (
           <div className="-mx-5 flex gap-2.5 overflow-x-auto px-5 pb-1 md:-mx-8 md:px-8">
             {data.hospitals.slice(0, 8).map((h) => (
-              <button key={h.key} type="button" onClick={() => open('hospitals')} className="press relative w-[150px] shrink-0 overflow-hidden rounded-[20px] bg-linear-to-br from-[#eef9ff] to-[#d7efff] p-3.5 text-left ring-1 ring-[#cfe8fb]">
+              <button key={h.key} type="button" onClick={() => setPick({ kind: 'hospital', key: h.key, name: h.name })} className="press relative w-[150px] shrink-0 overflow-hidden rounded-[20px] bg-linear-to-br from-[#eef9ff] to-[#d7efff] p-3.5 text-left ring-1 ring-[#cfe8fb]">
                 <span className="block truncate text-[15px] font-bold text-ink">{h.name}</span>
                 <span className="block text-[12px] text-ink-2">
                   {h.activeAgents} of {h.agentCount} agents
@@ -276,7 +286,7 @@ export function AdminDashboard() {
               const svc = serviceByName(s.name);
               return (
                 <li key={s.id}>
-                  <button type="button" onClick={() => open('services')} className="press flex w-full items-start gap-3.5 rounded-[20px] bg-white p-3 text-left shadow-[0_6px_20px_rgba(30,74,160,0.07)] ring-1 ring-line/70">
+                  <button type="button" onClick={() => setPick({ kind: 'service', id: s.id, name: s.name })} className="press flex w-full items-start gap-3.5 rounded-[20px] bg-white p-3 text-left shadow-[0_6px_20px_rgba(30,74,160,0.07)] ring-1 ring-line/70">
                     {svc ? (
                       <ServiceThumb service={svc} className="h-[64px] w-[64px] shrink-0 rounded-[16px]" />
                     ) : (
@@ -322,7 +332,8 @@ export function AdminDashboard() {
         </button>
       </div>
 
-      {detail && <DetailSheet kind={detail} branchIds={branchIds} range={range} periodText={periodText} scopeText={scopeText} onClose={() => setDetail(null)} />}
+      {detail && <DetailSheet kind={detail.kind} method={detail.method} branchIds={branchIds} period={period} scopeText={scopeText} onClose={() => setDetail(null)} />}
+      {pick && <FocusSheet focus={pick} branchIds={branchIds} period={period} onClose={() => setPick(null)} />}
     </div>
   );
 }
@@ -401,14 +412,6 @@ function Ticker({ items }: { items: { label: string; value: string; pct?: number
 
 /* ─────────────── quick notifications carousel ─────────────── */
 
-const NOTE_LOOK: Record<NoteKind, { theme: string; sticker: StickerKey; label: string }> = {
-  summary: { theme: 'from-[#1b5fd6] via-[#2b78e8] to-[#5ea6f7]', sticker: 'chart', label: 'Daily summary' },
-  bill: { theme: 'from-[#0c7f86] via-[#139aa0] to-[#4cc5bd]', sticker: 'moneyBag', label: 'High-value bill' },
-  unpaid: { theme: 'from-[#c2410c] via-[#e0601a] to-[#f59e0b]', sticker: 'clipboard', label: 'Unpaid balance' },
-  overdue: { theme: 'from-[#b42318] via-[#d93036] to-[#f0646a]', sticker: 'calendar', label: 'Overdue balances' },
-  payout: { theme: 'from-[#4b2fc4] via-[#6a4be0] to-[#9a83f7]', sticker: 'coin', label: 'PR payout' },
-  data: { theme: 'from-[#3346c9] via-[#4f63e6] to-[#8796f7]', sticker: 'bell', label: 'Data notice' },
-};
 const AUTOPLAY_MS = 5000;
 
 function NoteCarousel() {
@@ -500,31 +503,7 @@ function NoteCarousel() {
           ))}
         </div>
       )}
-      {openNote && (
-        <Sheet
-          title={openNote.title}
-          subtitle={`${NOTE_LOOK[openNote.kind].label} · ${openNote.at.toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`}
-          onClose={() => setOpenNote(null)}
-          footer={
-            <button type="button" onClick={() => (setOpenNote(null), navigate(openNote.route))} className="press flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-brand-600 text-[15px] font-semibold text-white">
-              Go to {openNote.target.split(' · ')[0]} <ChevronRight size={18} />
-            </button>
-          }
-        >
-          <div className="px-2 pb-2">
-            <p className="mb-3 text-[14.5px] leading-relaxed text-ink-2">{openNote.summary}</p>
-            <div className="divide-y divide-line rounded-2xl bg-page">
-              {openNote.details.map((d) => (
-                <div key={d.label} className="flex items-start justify-between gap-4 px-4 py-3 text-[14px]">
-                  <span className="shrink-0 text-muted">{d.label}</span>
-                  <span className="text-right font-medium text-ink">{d.value}</span>
-                </div>
-              ))}
-            </div>
-            {openNote.note && <p className="mt-3 rounded-2xl bg-brand-50 px-4 py-3 text-[13px] leading-relaxed text-brand-800">{openNote.note}</p>}
-          </div>
-        </Sheet>
-      )}
+      {openNote && <NoteSheet note={openNote} onClose={() => setOpenNote(null)} />}
     </section>
   );
 }

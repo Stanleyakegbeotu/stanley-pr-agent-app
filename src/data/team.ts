@@ -24,7 +24,7 @@ export interface Person {
   employment?: string;
 }
 
-export type InboxKind = 'admin' | 'manager' | 'frontdesk';
+export type InboxKind = 'admin' | 'manager' | 'frontdesk' | 'agent';
 
 export interface SeedMessage {
   from: 'them' | 'me';
@@ -120,4 +120,9 @@ export const INBOXES: Conversation[] = [
   },
 ];
 
-export const conversationById = (id: string): Conversation | undefined => INBOXES.find((c) => c.id === id);
+/** Conversations of the admin workspace (branch teams and PR agents), registered by src/admin/chat.ts. */
+const EXTRA = new Map<string, Conversation>();
+export function registerConversations(list: Conversation[]) {
+  for (const c of list) EXTRA.set(c.id, c);
+}
+export const conversationById = (id: string): Conversation | undefined => INBOXES.find((c) => c.id === id) ?? EXTRA.get(id);

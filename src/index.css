@@ -148,3 +148,9 @@
   .sheet-up, .fade-in { animation: none; }
   .ticker-track { animation: none; }
 }
+@keyframes drop-down {
+  from { opacity: 0; transform: translateY(-6px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+.drop-down { animation: drop-down 180ms ease-out both; transform-origin: top; }
+@media (prefers-reduced-motion: reduce) { .drop-down { animation: none; } }

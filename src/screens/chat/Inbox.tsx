@@ -30,7 +30,7 @@ function lastLine(c: Conversation, m?: ChatMsg) {
   return who + previewOf(m).replace(/\s+/g, ' ');
 }
 
-const TAG: Record<Conversation['kind'], string> = { frontdesk: 'Shared', manager: 'Manager', admin: 'Admin' };
+const TAG: Record<Conversation['kind'], string> = { frontdesk: 'Shared', manager: 'Manager', admin: 'Admin', agent: 'PR agent' };
 
 export function Inbox() {
   const { navigate } = useApp();
@@ -60,11 +60,11 @@ export function Inbox() {
         <SearchField value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search chats and people..." aria-label="Search chats" />
       </div>
 
-      <Section title="Branch inboxes">
+      <InboxSection title="Branch inboxes">
         {fixed.map((r) => (
-          <Row key={r.id} row={r} onOpen={() => navigate(`/messages/${r.id}`)} />
+          <ConversationRow key={r.id} row={r} onOpen={() => navigate(`/messages/${r.id}`)} />
         ))}
-      </Section>
+      </InboxSection>
 
       {t && fixed.length === 0 && <p className="py-8 text-center text-[14px] text-muted">No chats match “{q}”.</p>}
 
@@ -85,7 +85,7 @@ export function Inbox() {
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+export function InboxSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="mb-5">
       <h2 className="mb-2 px-1 text-[13px] font-semibold uppercase tracking-[0.06em] text-muted">{title}</h2>
@@ -94,7 +94,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function Row({ row, onOpen }: { row: InboxRow; onOpen: () => void }) {
+export function ConversationRow({ row, onOpen }: { row: InboxRow; onOpen: () => void }) {
   const c = conversationById(row.id)!;
   return (
     <button type="button" onClick={onOpen} className="press flex w-full items-center gap-3.5 px-4 py-3.5 text-left">
@@ -123,6 +123,7 @@ function PeoplePicker({ onClose, onPick }: { onClose: () => void; onPick: (convI
     frontdesk: 'Front desk, on duty now. Patients arriving, payments, results',
     manager: 'Branch manager. Approvals, problems, anything urgent',
     admin: 'Company admin. Your account, verification and the app',
+    agent: 'PR agent',
   };
   return (
     <div className="fixed inset-0 z-[70] flex items-end justify-center bg-[#0b1730]/40 md:items-center" onClick={onClose}>

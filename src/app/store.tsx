@@ -153,6 +153,25 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
+/**
+ * Navigation used by screens shared with the admin workspace (chat, headers).
+ * The clinician app provides it through its store; the admin workspace
+ * provides NavCtx itself.
+ */
+export interface Nav {
+  navigate: (to: string) => void;
+  back: () => void;
+  showToast: (t: string) => void;
+}
+export const NavCtx = createContext<Nav | null>(null);
+export function useNav(): Nav {
+  const n = useContext(NavCtx);
+  const s = useContext(Ctx);
+  const v = n ?? s;
+  if (!v) throw new Error('useNav must be used inside AppStoreProvider or NavCtx');
+  return v as Nav;
+}
+
 export function useApp(): Store {
   const s = useContext(Ctx);
   if (!s) throw new Error('useApp must be used inside AppStoreProvider');

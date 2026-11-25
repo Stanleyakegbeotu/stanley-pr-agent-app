@@ -10,12 +10,18 @@
  * is in the menu. Routes: "#/admin/<desktop path>".
  */
 import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
-import { Building2, ChartLine, Handshake, LayoutGrid, Menu as MenuIcon, Package, ScrollText, Settings, Trash2, UserRound, Users, Wallet, X, type LucideIcon } from 'lucide-react';
+import { CheckCircle2, Building2, ChartLine, Handshake, LayoutGrid, Menu as MenuIcon, Package, ScrollText, Settings, Trash2, UserRound, Users, Wallet, X, type LucideIcon } from 'lucide-react';
 import { AppStateProvider, useApp as useCompany } from '@company/app/AppState';
 import { isRead, useNotifications } from '@company/services/notifications';
 import { COMPANY as CO } from '@company/data/company';
 import { ROLES, setRole, useRole } from '@/domain/role';
+import { NavCtx } from '@/app/store';
+import { useInbox } from '@/domain/chat';
+import { ChatThread } from '@/screens/chat/ChatThread';
 import { AdminShellCtx } from './shell';
+import { AGENT_PREFIX, useAdminConversations } from './chat';
+import { AdminInbox } from './pages/Inbox';
+import { AdminNotifications } from './pages/Notifications';
 import { AdminDashboard } from './pages/Dashboard';
 import { ComingNext } from './pages/ComingNext';
 import { BranchesPage } from './pages/Branches';
@@ -41,7 +47,10 @@ export const ADMIN_PAGES: AdminPage[] = [
   { id: 'audit', label: 'Audit Log', icon: ScrollText, screen: () => <ComingNext title="Audit Log" /> },
   { id: 'trash', label: 'Trash', icon: Trash2, screen: () => <ComingNext title="Trash" /> },
 ];
-const EXTRA: AdminPage[] = [{ id: 'notifications', label: 'Notifications', icon: LayoutGrid, screen: () => <ComingNext title="Notifications" /> }];
+const EXTRA: AdminPage[] = [
+  { id: 'notifications', label: 'Notifications', icon: LayoutGrid, screen: AdminNotifications },
+  { id: 'messages', label: 'Inbox', icon: LayoutGrid, screen: ({ sub }) => (sub ? <ChatThread id={sub} /> : <AdminInbox />) },
+];
 /** Bottom bar: the most used pages, then the menu. */
 const TABS = ['dashboard', 'branches', 'patients', 'finance'];
 
@@ -61,6 +70,23 @@ function AdminFrame() {
   const unread = useMemo(() => notes.filter((n) => !isRead(n)).length, [notes]);
   const [pageId, sub] = route.segments;
   const page = [...ADMIN_PAGES, ...EXTRA].find((p) => p.id === pageId) ?? ADMIN_PAGES[0]!;
+  // Admin chats are registered before any screen renders (chat threads look them up).
+  const { fixed } = useAdminConversations();
+  const fixedIds = useMemo(() => fixed.map((c) => c.id), [fixed]);
+  const inboxUnread = useInbox(fixedIds, AGENT_PREFIX).unread;
+  const chat = page.id === 'messages' && !!sub;
+  const [toast, setToast] = useState<string | null>(null);
+  const nav = useMemo(
+    () => ({
+      navigate: (to: string) => navigate(to),
+      back: () => (window.history.length > 1 ? window.history.back() : navigate('/dashboard')),
+      showToast: (t: string) => {
+        setToast(t);
+        window.setTimeout(() => setToast((c) => (c === t ? null : c)), 3500);
+      },
+    }),
+    [navigate],
+  );
 
   // Admin addresses live under #/admin: send anything else to the dashboard.
   useEffect(() => {
@@ -73,17 +99,25 @@ function AdminFrame() {
 
   const Screen = page.screen;
   return (
-    <AdminShellCtx.Provider value={{ openMenu: () => setMenu((m) => !m), unread }}>
+    <NavCtx.Provider value={nav}>
+    <AdminShellCtx.Provider value={{ openMenu: () => setMenu((m) => !m), unread, inboxUnread }}>
       <div className="h-dvh overflow-hidden bg-page">
         <AdminMenu open={menu} current={page.id} onClose={() => setMenu(false)} />
         <div ref={scroller} className="h-dvh overflow-y-auto md:ml-[264px]">
-          <main className="mx-auto w-full max-w-[860px] px-5 pb-32 md:px-8 md:pb-12">
+          <main className={`mx-auto w-full max-w-[860px] px-5 md:px-8 ${chat ? 'pb-10' : 'pb-32 md:pb-12'}`}>
             <Screen sub={sub} />
           </main>
         </div>
-        <AdminTabs current={page.id} onMore={() => setMenu((m) => !m)} moreOpen={menu} />
+        {!chat && <AdminTabs current={page.id} onMore={() => setMenu((m) => !m)} moreOpen={menu} />}
+        {toast && (
+          <div role="status" className="fixed left-1/2 z-[90] flex w-[calc(100%-40px)] max-w-md -translate-x-1/2 items-center gap-3 rounded-2xl bg-ink px-4 py-3.5 text-[14px] font-medium text-white shadow-2xl" style={{ bottom: 'calc(96px + var(--safe-bottom))' }}>
+            <CheckCircle2 size={19} className="shrink-0 text-[#4ade80]" />
+            {toast}
+          </div>
+        )}
       </div>
     </AdminShellCtx.Provider>
+    </NavCtx.Provider>
   );
 }
 

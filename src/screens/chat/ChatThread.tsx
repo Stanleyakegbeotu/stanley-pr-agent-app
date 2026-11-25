@@ -15,7 +15,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEven
 import { ArrowLeft, BellOff, Users, Camera, Check, ChevronDown, Copy, FileText, Image as ImageIcon, Info, Mic, MoreVertical, Pause, Play, Paperclip, Reply, Send, Smile, Trash2, X } from 'lucide-react';
 import { conversationById, type Conversation } from '@/data/team';
 import { chatSettings, fmtDuration, fmtSize, markRead, previewOf, saveChatSettings, useChat, type ChatMsg, type MsgKind, type ReplyRef } from '@/domain/chat';
-import { useApp } from '@/app/store';
+import { useNav } from '@/app/store';
 import { EmptyState, ScreenHeader } from '@/ui/kit';
 import { ConvAvatar, PersonAvatar } from '@/ui/avatars';
 import { useVoiceRecorder } from './useVoiceRecorder';
@@ -61,7 +61,7 @@ const EMOJI: { label: string; list: string[] }[] = [
 /* ─────────────── screen ─────────────── */
 
 export function ChatThread({ id }: { id: string }) {
-  const { back, showToast } = useApp();
+  const { back, showToast } = useNav();
   const conv = conversationById(id);
   const { messages, send, remove, clear } = useChat(id);
   const [reply, setReply] = useState<ReplyRef | null>(null);
@@ -116,7 +116,7 @@ export function ChatThread({ id }: { id: string }) {
       {/* Messages */}
       <div className="min-h-[calc(100dvh-4rem)] bg-[radial-gradient(circle_at_1px_1px,#dfe7f3_1px,transparent_0)] bg-[length:22px_22px] px-3 pt-3" style={{ paddingBottom: barH + 16 }}>
         <p className="mx-auto mb-3 max-w-xs rounded-xl bg-[#fff6dc] px-3 py-2 text-center text-[12px] leading-snug text-[#7a5b12] shadow-sm">🔒 Encrypted on this phone. For logistics only.</p>
-        <p className="mx-auto mb-3 max-w-sm rounded-xl bg-[#fdecec] px-3 py-2 text-center text-[12px] font-medium leading-snug text-[#7a271a] shadow-sm">Don’t send patient results, request forms or ID photos here. Use the request and Results sections.</p>
+        <p className="mx-auto mb-3 max-w-sm rounded-xl bg-[#fdecec] px-3 py-2 text-center text-[12px] font-medium leading-snug text-[#7a271a] shadow-sm">{id.startsWith('adm-') ? 'Don’t send patient results or ID photos here. Patient records stay in STANLEY.' : 'Don’t send patient results, request forms or ID photos here. Use the request and Results sections.'}</p>
         {messages.length === 0 && (
           <div className="mx-auto mt-10 flex max-w-xs flex-col items-center rounded-3xl bg-white/90 px-5 py-6 text-center shadow-sm">
             <ConvAvatar conv={conv} size={64} />

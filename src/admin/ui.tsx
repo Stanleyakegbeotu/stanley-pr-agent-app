@@ -4,13 +4,13 @@
  * section headings, money display (currencies are never combined, as on the
  * desktop), ranked bar lists, a trend chart and bottom sheets.
  */
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, Bell, Building2, CalendarDays, Check, ChevronDown, ChevronRight, Menu, X } from 'lucide-react';
+import { ArrowLeft, Bell, Building2, CalendarDays, Check, ChevronDown, ChevronRight, Menu, Search, X } from 'lucide-react';
 import { useApp as useCompany } from '@company/app/AppState';
 import { ACTIVE_BRANCHES, getBranch } from '@company/data/company';
-import type { Currency, Money } from '@company/data/types';
-import { PERIOD_OPTIONS, periodLabel } from '@company/services/analytics';
+import type { Currency, Money, PeriodSelection } from '@company/data/types';
+import { PERIOD_OPTIONS, periodLabel, resolveRange } from '@company/services/analytics';
 import { formatMoney, moneyEntries } from '@company/shared/format';
 import { useAdminShell } from './shell';
 
@@ -118,36 +118,165 @@ function Option({ on, title, sub, onClick }: { on: boolean; title: string; sub?:
  * inside. Rendered on <body> through a portal, so a blurred sticky header can
  * never trap it (that made the period picker overflow off the top).
  */
-export function Sheet({ title, subtitle, onClose, children, tall, footer }: { title: string; subtitle?: string; onClose: () => void; children: ReactNode; tall?: boolean; footer?: ReactNode }) {
+const stack: symbol[] = [];
+
+export interface SheetSearch {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+}
+export interface SheetFilter {
+  /** Shown in the header when the filter differs from the page's own. */
+  active: boolean;
+  label: string;
+  /** The drop-down content; call close() after a choice. */
+  render: (close: () => void) => ReactNode;
+}
+
+/*
+ * Cards stack: a card opened from a card slides up over it (a little lower, so
+ * the one underneath shows), and Escape or the back arrow closes only the top one.
+ * Search and filter live IN the header bar (owner, 2026-11-25): only their icons
+ * show. Search turns the same bar into a search box; the filter icon drops its
+ * options down from the bar. No extra sticky bars.
+ */
+export function Sheet({ title, subtitle, onClose, children, tall, footer, search, filter, back }: { title: string; subtitle?: string; onClose: () => void; children: ReactNode; tall?: boolean; footer?: ReactNode; search?: SheetSearch; filter?: SheetFilter; back?: boolean }) {
+  const [me] = useState(() => Symbol('sheet'));
+  const [level] = useState(() => stack.length);
+  const [searching, setSearching] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
   useEffect(() => {
-    const k = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    stack.push(me);
+    return () => void stack.splice(stack.indexOf(me), 1);
+  }, [me]);
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || stack[stack.length - 1] !== me) return;
+      e.stopImmediatePropagation();
+      onClose();
+    };
     window.addEventListener('keydown', k);
     return () => window.removeEventListener('keydown', k);
-  }, [onClose]);
+  }, [onClose, me]);
+  useEffect(() => {
+    if (searching) input.current?.focus();
+  }, [searching]);
+  const top = `calc(var(--safe-top) + ${48 + Math.min(level, 3) * 18}px)`;
+  const closeSearch = () => {
+    setSearching(false);
+    search?.onChange('');
+  };
+  const iconBtn = 'press relative grid h-9 w-9 shrink-0 place-items-center rounded-full';
   return createPortal(
-    <div className="fade-in fixed inset-0 z-[80] flex items-end justify-center bg-[#0b1730]/45 md:items-center" onClick={onClose}>
-      <div
-        role="dialog"
-        aria-label={title}
-        className={cx('sheet-up flex w-full max-w-lg flex-col overflow-hidden rounded-t-[28px] bg-white shadow-[0_-12px_40px_rgba(11,23,48,0.18)] md:rounded-[28px]', tall ? 'h-[calc(100dvh-var(--safe-top)-48px)]' : 'max-h-[calc(100dvh-var(--safe-top)-48px)]')}
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className={cx('fade-in fixed inset-0 flex items-end justify-center md:items-center', level ? 'bg-[#0b1730]/25' : 'bg-[#0b1730]/45')} style={{ zIndex: 80 + level }} onClick={onClose}>
+      <div role="dialog" aria-label={title} className="sheet-up flex w-full max-w-lg flex-col overflow-hidden rounded-t-[28px] bg-white shadow-[0_-12px_40px_rgba(11,23,48,0.18)] md:rounded-[28px]" style={tall ? { height: `calc(100dvh - ${top})` } : { maxHeight: `calc(100dvh - ${top})` }} onClick={(e) => e.stopPropagation()}>
         <span className="mx-auto mt-2.5 block h-1.5 w-11 shrink-0 rounded-full bg-[#d6dde8] md:hidden" />
-        <div className="flex shrink-0 items-start justify-between gap-3 px-5 pb-3 pt-3">
-          <div className="min-w-0">
-            <p className="text-[19px] font-bold leading-tight text-ink">{title}</p>
-            {subtitle && <p className="mt-0.5 text-[13px] leading-snug text-muted">{subtitle}</p>}
-          </div>
-          <button type="button" onClick={onClose} aria-label="Close" className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-page text-ink-2">
-            <X size={19} />
-          </button>
+        <div className="relative shrink-0">
+          {searching && search ? (
+            <div className="flex items-center gap-2 px-3 pb-3 pt-2.5">
+              <button type="button" onClick={closeSearch} aria-label="Close search" className={cx(iconBtn, 'text-ink')}>
+                <ArrowLeft size={20} />
+              </button>
+              <label className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-full border-[1.5px] border-brand-500 bg-white px-3.5 ring-4 ring-brand-100">
+                <Search size={17} className="shrink-0 text-brand-600" />
+                <input ref={input} value={search.value} onChange={(e) => search.onChange(e.target.value)} placeholder={search.placeholder} aria-label={search.placeholder} className="min-w-0 flex-1 bg-transparent text-[15px] text-ink outline-none" />
+                {search.value && (
+                  <button type="button" onClick={() => search.onChange('')} aria-label="Clear search" className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-page text-muted">
+                    <X size={14} />
+                  </button>
+                )}
+              </label>
+            </div>
+          ) : (
+            <div className="flex items-start gap-1.5 px-3 pb-3 pt-2.5">
+              {back && (
+                <button type="button" onClick={onClose} aria-label="Back" className={cx(iconBtn, 'mt-0.5 text-ink')}>
+                  <ArrowLeft size={21} />
+                </button>
+              )}
+              <div className={cx('min-w-0 flex-1 pt-0.5', !back && 'pl-2')}>
+                <p className="line-clamp-2 text-[19px] font-bold leading-tight text-ink">{title}</p>
+                {(subtitle || filter) && (
+                  <p className="mt-0.5 truncate text-[13px] leading-snug text-muted">
+                    {subtitle}
+                    {subtitle && filter ? ' · ' : ''}
+                    {filter && <span className={filter.active ? 'font-semibold text-brand-600' : ''}>{filter.label}</span>}
+                  </p>
+                )}
+              </div>
+              {search && (
+                <button type="button" onClick={() => (setSearching(true), setFilterOpen(false))} aria-label="Search" className={cx(iconBtn, 'bg-page text-ink-2')}>
+                  <Search size={18} />
+                  {search.value && <span className="absolute right-0.5 top-0.5 h-2.5 w-2.5 rounded-full bg-brand-600 ring-2 ring-white" />}
+                </button>
+              )}
+              {filter && (
+                <button type="button" onClick={() => setFilterOpen((o) => !o)} aria-label="Filter by date" aria-expanded={filterOpen} className={cx(iconBtn, filterOpen ? 'bg-brand-600 text-white' : 'bg-page text-ink-2')}>
+                  <CalendarDays size={17} />
+                  {filter.active && !filterOpen && <span className="absolute right-0.5 top-0.5 h-2.5 w-2.5 rounded-full bg-brand-600 ring-2 ring-white" />}
+                </button>
+              )}
+              {!back && (
+                <button type="button" onClick={onClose} aria-label="Close" className={cx(iconBtn, 'bg-page text-ink-2')}>
+                  <X size={19} />
+                </button>
+              )}
+            </div>
+          )}
+          {filterOpen && filter && <div className="drop-down absolute inset-x-3 top-full z-10 max-h-[60vh] overflow-y-auto rounded-[22px] bg-white p-2 shadow-[0_18px_44px_rgba(11,23,48,0.2)] ring-1 ring-line">{filter.render(() => setFilterOpen(false))}</div>}
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-[max(16px,var(--safe-bottom))]">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-[max(16px,var(--safe-bottom))]" onPointerDown={() => filterOpen && setFilterOpen(false)}>
+          {children}
+        </div>
         {footer && <div className="shrink-0 border-t border-line px-4 pb-[max(14px,var(--safe-bottom))] pt-3">{footer}</div>}
       </div>
     </div>,
     document.body,
   );
+}
+
+/** Date choices inside a slide-up's filter drop-down (never changes the dashboard's period). */
+export function PeriodChoices({ value, onChange }: { value: PeriodSelection; onChange: (p: PeriodSelection) => void }) {
+  const [from, setFrom] = useState(value.from ?? '');
+  const [to, setTo] = useState(value.to ?? '');
+  return (
+    <div>
+      <p className="px-3 pb-1 pt-1.5 text-[12px] font-semibold uppercase tracking-[0.06em] text-muted">Show records for</p>
+      {PERIOD_OPTIONS.filter((o) => o.key !== 'custom').map((o) => (
+        <Option key={o.key} on={value.key === o.key} title={o.label} onClick={() => onChange({ key: o.key })} />
+      ))}
+      <div className="mt-1 rounded-2xl bg-page p-3">
+        <p className="mb-2 text-[13.5px] font-semibold text-ink">Custom date range</p>
+        <div className="grid grid-cols-2 gap-2">
+          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} aria-label="From" className="min-h-11 min-w-0 rounded-xl border-[1.5px] border-brand-500 bg-white px-2 text-[14px] ring-4 ring-brand-100" />
+          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} aria-label="To" className="min-h-11 min-w-0 rounded-xl border-[1.5px] border-brand-500 bg-white px-2 text-[14px] ring-4 ring-brand-100" />
+        </div>
+        <button type="button" disabled={!from || !to || from > to} onClick={() => onChange({ key: 'custom', from, to })} className="press mt-2 min-h-11 w-full rounded-xl bg-brand-600 text-[14.5px] font-semibold text-white disabled:opacity-40">
+          Apply range
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** "Today", "This Month", or "3 Nov to 20 Nov" for a custom range. */
+export function periodText(p: PeriodSelection) {
+  if (p.key !== 'custom' || !p.from || !p.to) return periodLabel(p);
+  const f = (s: string) => new Date(`${s}T00:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  return p.from === p.to ? f(p.from) : `${f(p.from)} to ${f(p.to)}`;
+}
+
+/** A slide-up's own date filter: starts from the page's period and never changes it. */
+export function useSheetPeriod(initial: PeriodSelection) {
+  const [period, setPeriod] = useState<PeriodSelection>(initial);
+  const range = useMemo(() => resolveRange(period), [period]);
+  const filter: SheetFilter = {
+    active: period.key !== initial.key || period.from !== initial.from || period.to !== initial.to,
+    label: periodText(period),
+    render: (close) => <PeriodChoices value={period} onChange={(p) => (setPeriod(p), close())} />,
+  };
+  return { period, range, text: periodText(period), filter };
 }
 
 /* ─────────────── money and numbers ─────────────── */
