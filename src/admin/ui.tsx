@@ -13,6 +13,7 @@ import type { Currency, Money, PeriodSelection } from '@company/data/types';
 import { PERIOD_OPTIONS, periodLabel, resolveRange } from '@company/services/analytics';
 import { formatMoney, moneyEntries } from '@company/shared/format';
 import { useAdminShell } from './shell';
+import { useSeen } from './charts';
 
 const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(' ');
 
@@ -345,8 +346,9 @@ export function Card({ children, className = '' }: { children: ReactNode; classN
 /** Ranked bars: label, value text and a bar scaled to the largest value. */
 export function BarList({ rows, color = 'bg-brand-500', onRow }: { rows: { key: string; label: string; sub?: string; value: number; text: string }[]; color?: string; onRow?: (key: string) => void }) {
   const max = Math.max(1, ...rows.map((r) => r.value));
+  const { ref, seen } = useSeen<HTMLUListElement>();
   return (
-    <ul className="divide-y divide-line">
+    <ul ref={ref} className="divide-y divide-line">
       {rows.map((r, i) => (
         <li key={r.key}>
           <button type="button" disabled={!onRow} onClick={() => onRow?.(r.key)} className="press block w-full px-4 py-3 text-left disabled:cursor-default">
@@ -359,7 +361,7 @@ export function BarList({ rows, color = 'bg-brand-500', onRow }: { rows: { key: 
             </span>
             {r.sub && <span className="block truncate text-[12px] text-muted">{r.sub}</span>}
             <span className="mt-1.5 block h-1.5 overflow-hidden rounded-full bg-[#eef2f8]">
-              <span className={cx('block h-full rounded-full', color)} style={{ width: `${Math.max(2, (r.value / max) * 100)}%` }} />
+              <span className={cx('block h-full rounded-full', color)} style={{ width: seen ? `${Math.max(2, (r.value / max) * 100)}%` : '0%', transition: `width 900ms cubic-bezier(0.22,0.8,0.24,1) ${i * 90}ms` }} />
             </span>
           </button>
         </li>
@@ -369,19 +371,22 @@ export function BarList({ rows, color = 'bg-brand-500', onRow }: { rows: { key: 
 }
 
 /** Revenue / payments / expenses over time (simple grouped bars). */
-export function TrendChart({ labels, series }: { labels: string[]; series: { name: string; color: string; values: number[] }[] }) {
+export function TrendChart({ labels, series, format }: { labels: string[]; series: { name: string; color: string; values: number[] }[]; format?: (n: number) => string }) {
   const max = Math.max(1, ...series.flatMap((s) => s.values));
   const n = labels.length;
   const show = (i: number) => n <= 7 || i % Math.ceil(n / 6) === 0 || i === n - 1;
+  const { ref, seen } = useSeen<HTMLDivElement>();
+  const [pick, setPick] = useState<number | null>(null);
+  const fmt = format ?? ((v: number) => formatMoney(v, 'NGN', true));
   return (
     <div>
-      <div className="flex h-36 items-end gap-[3px]">
+      <div ref={ref} className="flex h-36 items-end gap-[3px]">
         {labels.map((l, i) => (
-          <div key={l + i} className="flex h-full min-w-0 flex-1 items-end justify-center gap-[1px]" title={l}>
+          <button type="button" key={l + i} onClick={() => setPick(pick === i ? null : i)} aria-label={l} className="flex h-full min-w-0 flex-1 items-end justify-center gap-[1px]" title={l}>
             {series.map((s) => (
-              <span key={s.name} className="w-full max-w-[9px] rounded-t-[3px]" style={{ height: `${Math.max(1.5, (s.values[i]! / max) * 100)}%`, background: s.color }} />
+              <span key={s.name} className="w-full max-w-[9px] rounded-t-[3px]" style={{ height: seen ? `${Math.max(1.5, (s.values[i]! / max) * 100)}%` : '0%', background: s.color, opacity: pick != null && pick !== i ? 0.3 : 1, transition: `height 700ms cubic-bezier(0.22,0.8,0.24,1) ${Math.min(900, i * 22)}ms, opacity 200ms` }} />
             ))}
-          </div>
+          </button>
         ))}
       </div>
       <div className="mt-1 flex gap-[3px]">
@@ -391,6 +396,17 @@ export function TrendChart({ labels, series }: { labels: string[]; series: { nam
           </span>
         ))}
       </div>
+      {pick != null && (
+        <div className="drop-down mt-2 rounded-2xl bg-page px-3 py-2 text-[12.5px]">
+          <b className="text-ink">{labels[pick]}</b>
+          {series.map((s) => (
+            <span key={s.name} className="ml-3 inline-flex items-center gap-1 text-ink-2">
+              <span className="h-2 w-2 rounded-full" style={{ background: s.color }} />
+              {s.name} <b className="text-ink">{fmt(s.values[pick] ?? 0)}</b>
+            </span>
+          ))}
+        </div>
+      )}
       <div className="mt-2 flex flex-wrap gap-3">
         {series.map((s) => (
           <span key={s.name} className="flex items-center gap-1.5 text-[12px] text-ink-2">
@@ -405,10 +421,11 @@ export function TrendChart({ labels, series }: { labels: string[]; series: { nam
 /** Share bar: one row of coloured segments with a legend (payment methods, expense categories). */
 export function ShareBar({ parts, format }: { parts: { label: string; value: number; color: string }[]; format: (v: number) => string }) {
   const total = parts.reduce((s, p) => s + p.value, 0);
+  const { ref, seen } = useSeen<HTMLDivElement>();
   return (
-    <div>
+    <div ref={ref}>
       <div className="flex h-3 overflow-hidden rounded-full bg-[#eef2f8]">
-        {total > 0 && parts.map((p) => <span key={p.label} style={{ width: `${(p.value / total) * 100}%`, background: p.color }} />)}
+        {total > 0 && parts.map((p, i) => <span key={p.label} style={{ width: seen ? `${(p.value / total) * 100}%` : '0%', background: p.color, transition: `width 900ms cubic-bezier(0.22,0.8,0.24,1) ${i * 120}ms` }} />)}
       </div>
       <ul className="mt-3 space-y-2">
         {parts.map((p) => (

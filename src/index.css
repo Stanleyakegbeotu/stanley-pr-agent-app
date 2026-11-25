@@ -157,7 +157,7 @@
 
 /* Closing (owner, 2026-11-25): slide-ups slide back down and the backdrop fades (ui/motion.ts). */
 @keyframes sheet-down {
-  from { transform: translateY(0); }
+  from { transform: translateY(var(--drag-y, 0px)); }
   to { transform: translateY(100%); }
 }
 @keyframes fade-out {

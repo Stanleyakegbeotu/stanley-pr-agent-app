@@ -31,6 +31,7 @@ import { Sticker } from '@/ui/kit';
 import { BarList, Sheet, TrendChart, periodText, useSheetPeriod } from '../ui';
 import { DetailSheet, ExpenseRow, FocusSheet, Rows, norm, useRowCtx, visitRow, type DetailKind, type Focus, type Row } from '../details';
 import { AdminTopBar, PageGlow, SectionTitle } from '../kit';
+import { Donut, LineChart, useSeen } from '../charts';
 import { BranchCrumb, BranchPick, Chips, Facts, PageTitle, Panel, PeriodChip, useBranchFirst } from '../branchFirst';
 
 const BASE: PeriodSelection = { key: 'month' };
@@ -169,14 +170,29 @@ function Workspace({ branchId, crumb }: { branchId: string; crumb: boolean }) {
       </div>
 
       <Panel title="Income vs expenses" note={`${tr.note} · expenses include PR commission`}>
-        <TrendChart
+        <LineChart
           labels={tr.labels}
+          format={(n) => m(n, true)}
           series={[
             { name: 'Income', color: '#1f6fe8', values: tr.income },
             { name: 'Expenses', color: '#f27a1a', values: tr.costs },
-            { name: 'Billed', color: '#9cc3ff', values: tr.billed },
+            { name: 'Billed', color: '#8fb8ff', values: tr.billed, dashed: true },
           ]}
         />
+      </Panel>
+
+      <Panel title="Money in and costs" note="How the money received was used: expenses, PR commission and what was left as profit">
+        <Donut
+          label="Money in"
+          total={m(t.income, true)}
+          format={(n) => m(n, true)}
+          parts={[
+            { label: 'Expenses', value: t.expenses, color: '#f27a1a', sub: `${formatCount(entries.filter((e) => e.kind === 'expense').length)} entries`, onOpen: () => setLog({ type: 'expenses' }) },
+            { label: 'PR commission', value: t.commission, color: '#8b5cf6', sub: 'accrued', onOpen: () => setLog({ type: 'commission' }) },
+            ...(t.net > 0 ? [{ label: 'Kept as profit', value: t.net, color: '#16a34a', sub: t.margin !== null ? `${t.margin.toFixed(1)}% margin` : undefined }] : []),
+          ]}
+        />
+        {t.net < 0 && <p className="mt-2 rounded-2xl bg-[#fdecec] px-3 py-2 text-[12.5px] font-medium text-[#b42318]">Costs were {m(-t.net, true)} more than the money received in this period.</p>}
       </Panel>
 
       <Panel title="Net profit trend" note={`${tr.note} · money in minus costs. Bars below the line are losses, often a salary day. Tap a bar.`}>
@@ -215,24 +231,22 @@ function Workspace({ branchId, crumb }: { branchId: string; crumb: boolean }) {
         />
       </Panel>
 
-      <Panel title="Where the money went" note="Approved expenses by category, and PR commission. Tap one for the entries.">
+      <Panel title="Where the money went" note="Approved expenses by category, and PR commission. Tap a part, then Open for its entries.">
         {spent.length ? (
-          <BarList
-            color="bg-orange"
-            rows={spent.map((x) => ({
-              key: x.label,
+          <Donut
+            legend="below"
+            size={190}
+            thickness={24}
+            label="Costs"
+            total={m(t.costs, true)}
+            format={(n) => m(n, true)}
+            parts={spent.map((x, i) => ({
               label: x.label,
               value: x.value,
-              text: m(x.value, true),
-              sub: [
-                t.costs ? `${((x.value / t.costs) * 100).toFixed(1)}% of costs` : '',
-                x.label === 'PR commission' ? `${formatCount(stats.catCount.get(x.label) ?? 0)} days accrued` : `${formatCount(stats.catCount.get(x.label) ?? 0)} entries`,
-                x.label === 'PR commission' ? rateSummary() : EXPENSE_ITEMS[x.label]?.slice(0, 3).join(', ') ?? '',
-              ]
-                .filter(Boolean)
-                .join(' · '),
+              color: ['#f27a1a', '#8b5cf6', '#ef4444', '#f59e0b', '#0ea5e9', '#ec4899', '#64748b', '#16a34a'][i % 8]!,
+              sub: x.label === 'PR commission' ? `${formatCount(stats.catCount.get(x.label) ?? 0)} days accrued` : `${formatCount(stats.catCount.get(x.label) ?? 0)} ${(stats.catCount.get(x.label) ?? 0) === 1 ? 'entry' : 'entries'}`,
+              onOpen: () => setLog(x.label === 'PR commission' ? { type: 'commission' } : { type: 'expenses', category: x.label }),
             }))}
-            onRow={(k) => setLog(k === 'PR commission' ? { type: 'commission' } : { type: 'expenses', category: k })}
           />
         ) : (
           <p className="py-4 text-center text-[13.5px] text-muted">No costs in this period.</p>
@@ -266,20 +280,12 @@ function Workspace({ branchId, crumb }: { branchId: string; crumb: boolean }) {
             </span>
           ))}
         </div>
-        <div className="flex h-3 overflow-hidden rounded-full bg-[#eef2f8]">{totalOwed > 0 && ages.map((a) => <span key={a.label} style={{ width: `${(a.value / totalOwed) * 100}%`, background: a.color }} />)}</div>
-        <ul className="mt-2">
-          {ages.map((a) => (
-            <li key={a.label}>
-              <button type="button" disabled={!a.count} onClick={() => setOwed(a.i)} className="press flex w-full items-center justify-between gap-3 rounded-xl px-1 py-2 text-left text-[13.5px] disabled:opacity-60">
-                <span className="flex min-w-0 items-center gap-2 text-ink-2">
-                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: a.color }} />
-                  {a.label} <span className="text-muted">· {formatCount(a.count)} bills</span>
-                </span>
-                <b className="shrink-0 text-ink">{m(a.value, true)}</b>
-              </button>
-            </li>
-          ))}
-        </ul>
+        <Donut
+          label="Still owed"
+          total={m(totalOwed, true)}
+          format={(n) => m(n, true)}
+          parts={ages.map((a) => ({ label: a.label, value: a.value, color: a.color, sub: `${formatCount(a.count)} bills`, onOpen: a.count ? () => setOwed(a.i) : undefined }))}
+        />
       </Panel>
 
       <SectionTitle title="Finance log" action="See all" onAction={() => setLog({ type: 'all' })} />
@@ -378,36 +384,15 @@ function Money({ tint, ink, icon, label, value, sub, onClick }: { tint: string; 
 
 function Total({ label, value, tone }: { label: string; value: string; tone: string }) {
   return (
-    <span className="min-w-0 rounded-2xl bg-white px-3 py-2 ring-1 ring-line/70">
+    <span className="block min-w-0 rounded-2xl bg-white px-3 py-2 ring-1 ring-line/70">
       <span className="block text-[11.5px] text-muted">{label}</span>
       <b className={`block truncate text-[15px] ${tone}`}>{value}</b>
     </span>
   );
 }
 
-function Parts({ parts, total, m }: { parts: { label: string; value: number; color: string; sub: string; onClick: () => void }[]; total: number; m: (n: number, compact?: boolean) => string }) {
-  return (
-    <>
-      <div className="flex h-3 overflow-hidden rounded-full bg-[#eef2f8]">{total > 0 && parts.map((p) => <span key={p.label} style={{ width: `${(p.value / total) * 100}%`, background: p.color }} />)}</div>
-      <ul className="mt-2">
-        {parts.map((p) => (
-          <li key={p.label}>
-            <button type="button" onClick={p.onClick} className="press flex w-full items-center gap-3 rounded-xl px-1 py-2 text-left">
-              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: p.color }} />
-              <span className="min-w-0 flex-1">
-                <span className="block text-[14px] font-semibold text-ink">{p.label}</span>
-                <span className="block truncate text-[12px] text-muted">{p.sub}</span>
-              </span>
-              <span className="shrink-0 text-right">
-                <b className="block text-[14px] text-ink">{m(p.value, true)}</b>
-                <span className="block text-[11.5px] text-muted">{total ? `${Math.round((p.value / total) * 100)}%` : '0%'}</span>
-              </span>
-            </button>
-          </li>
-        ))}
-      </ul>
-    </>
-  );
+function Parts({ parts, total, m, label = 'Money in' }: { parts: { label: string; value: number; color: string; sub: string; onClick: () => void }[]; total: number; m: (n: number, compact?: boolean) => string; label?: string }) {
+  return <Donut label={label} total={m(total, true)} format={(n) => m(n, true)} parts={parts.map((p) => ({ label: p.label, value: p.value, color: p.color, sub: p.sub, onOpen: p.onClick }))} />;
 }
 
 /** Net profit by period: bars above the zero line are profit, below it a loss. Tap a bar for its figures. */
@@ -418,15 +403,16 @@ function ProfitBars({ labels, values, sel, onSel }: { labels: string[]; values: 
   const zero = (max / span) * 100;
   const n = labels.length;
   const show = (i: number) => n <= 7 || i % Math.ceil(n / 6) === 0 || i === n - 1;
+  const { ref, seen } = useSeen<HTMLDivElement>();
   return (
     <div>
-      <div className="relative flex h-36 gap-[3px]">
+      <div ref={ref} className="relative flex h-36 gap-[3px]">
         <span className="absolute inset-x-0 h-px bg-[#cfd8e6]" style={{ top: `${zero}%` }} />
         {values.map((v, i) => (
           <button key={i} type="button" aria-label={`${labels[i]}: ${v < 0 ? 'loss' : 'profit'}`} onClick={() => onSel(sel === i ? null : i)} className="relative h-full min-w-0 flex-1">
             <span
               className={`absolute inset-x-0 mx-auto max-w-[10px] rounded-[3px] ${v < 0 ? 'bg-[#ef4444]' : 'bg-brand-500'} ${sel != null && sel !== i ? 'opacity-35' : ''}`}
-              style={v >= 0 ? { bottom: `${100 - zero}%`, height: `${Math.max(1, (v / span) * 100)}%` } : { top: `${zero}%`, height: `${Math.max(1, (-v / span) * 100)}%` }}
+              style={{ ...(v >= 0 ? { bottom: `${100 - zero}%`, height: seen ? `${Math.max(1, (v / span) * 100)}%` : '0%' } : { top: `${zero}%`, height: seen ? `${Math.max(1, (-v / span) * 100)}%` : '0%' }), transition: `height 750ms cubic-bezier(0.22,0.8,0.24,1) ${Math.min(900, i * 24)}ms, opacity 200ms` }}
             />
           </button>
         ))}

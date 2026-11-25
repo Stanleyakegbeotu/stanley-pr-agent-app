@@ -31,9 +31,10 @@ import { AllPages, PageView, usePagination, type Page } from '@company/features/
 import { REPORT_CSS, REPORT_FONT_URL } from '@company/features/reports/reportCss';
 import { useNav } from '@/app/store';
 import { Sticker } from '@/ui/kit';
-import { BarList, ScopeBar, Sheet, ShareBar, TrendChart } from '../ui';
+import { BarList, ScopeBar, Sheet } from '../ui';
 import { FocusSheet, type Focus } from '../details';
 import { AdminTopBar, PageGlow, SectionTitle } from '../kit';
+import { Donut, LineChart } from '../charts';
 import { useAgentBanks } from '../agentBanks';
 import { Chips, PageTitle } from '../branchFirst';
 
@@ -147,18 +148,34 @@ function Analysis({ ids }: { ids: string[] }) {
       <section className="mt-4 rounded-[22px] bg-white p-4 ring-1 ring-line/70">
         <h2 className="text-[16px] font-bold text-ink">Billed and money in</h2>
         <p className="mb-3 text-[12px] text-muted">{data.tr.note}</p>
-        <TrendChart
+        <LineChart
           labels={data.tr.labels}
+          format={(n) => naira(n, true)}
           series={[
-            { name: 'Billed', color: '#9cc3ff', values: data.tr.revenue },
             { name: 'Money in', color: BRAND, values: data.tr.payments },
+            { name: 'Billed', color: '#8fb8ff', values: data.tr.revenue, dashed: true },
+            { name: 'Expenses', color: '#f27a1a', values: data.tr.expenses },
           ]}
         />
+      </section>
+      <section className="mt-4 rounded-[22px] bg-white p-4 ring-1 ring-line/70">
+        <h2 className="text-[16px] font-bold text-ink">Money in and costs</h2>
+        <p className="mb-3 text-[12px] text-muted">What the money received paid for, and what was left as profit</p>
+        <Donut
+          label="Money in"
+          total={naira(fin.income, true)}
+          format={(n) => naira(n, true)}
+          parts={[
+            { label: 'Costs', value: fin.costs, color: '#f27a1a', sub: 'expenses and PR commission' },
+            ...(fin.net > 0 ? [{ label: 'Net profit', value: fin.net, color: '#16a34a', sub: 'admin only' }] : []),
+          ]}
+        />
+        {fin.net < 0 && <p className="mt-2 rounded-2xl bg-[#fdecec] px-3 py-2 text-[12.5px] font-medium text-[#b42318]">Costs were {naira(-fin.net, true)} more than the money received.</p>}
       </section>
       {methodTotal > 0 && (
         <section className="mt-4 rounded-[22px] bg-white p-4 ring-1 ring-line/70">
           <h2 className="mb-3 text-[16px] font-bold text-ink">Payment methods</h2>
-          <ShareBar parts={data.methods.map((m, i) => ({ label: m.label, value: m.value, color: ['#1f6fe8', '#16a34a', '#f59e0b'][i] ?? '#64748b' }))} format={(v) => naira(v, true)} />
+          <Donut label="Received" total={naira(methodTotal, true)} format={(v) => naira(v, true)} parts={data.methods.map((m, i) => ({ label: m.label, value: m.value, color: ['#1f6fe8', '#16a34a', '#f59e0b'][i] ?? '#64748b' }))} />
         </section>
       )}
       {data.services.length > 0 && (
