@@ -688,7 +688,7 @@ export function Approvals({ branchId, title = 'Waiting for your approval' }: { b
   );
 }
 
-function RejectSheet({ e, onClose }: { e: ExpenseRecord; onClose: () => void }) {
+export function RejectSheet({ e, onClose }: { e: ExpenseRecord; onClose: () => void }) {
   const { user, showToast } = useCompany();
   const [why, setWhy] = useState('');
   const ok = why.trim().length >= 3;

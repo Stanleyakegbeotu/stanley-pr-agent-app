@@ -30,6 +30,7 @@ import { StaffChromeCtx } from './chrome';
 import { StaffHome, canOpenPage } from './pages/Home';
 import { BillingPage } from './pages/Billing';
 import { DraftsPage } from './pages/Drafts';
+import { ExpensesPage } from './pages/Expenses';
 
 interface StaffPage {
   id: string;
@@ -46,7 +47,7 @@ const PAGES: StaffPage[] = [
   { id: 'inventory', label: 'Inventory', icon: Package, screen: () => <ComingNext title="Inventory" /> },
   { id: 'pr', label: 'PR Management', icon: Handshake, screen: () => <ComingNext title="PR Management" /> },
   { id: 'analysis', label: 'Analysis', icon: ChartColumn, screen: () => <ComingNext title="Analysis" /> },
-  { id: 'expenses', label: 'Expenses', icon: Banknote, screen: () => <ComingNext title="Expenses" /> },
+  { id: 'expenses', label: 'Expenses', icon: Banknote, screen: ExpensesPage },
   { id: 'staff', label: 'Staff Management', icon: Users, screen: () => <ComingNext title="Staff Management" /> },
   { id: 'settings', label: 'Settings', icon: Settings, screen: () => <ComingNext title="Settings" /> },
   { id: 'audit', label: 'Audit', icon: ScrollText, screen: () => <ComingNext title="Audit" /> },
