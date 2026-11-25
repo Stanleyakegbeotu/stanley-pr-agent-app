@@ -4,7 +4,8 @@
  * section headings, money display (currencies are never combined, as on the
  * desktop), ranked bar lists, a trend chart and bottom sheets.
  */
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { ArrowLeft, Bell, Building2, CalendarDays, Check, ChevronDown, ChevronRight, Menu, X } from 'lucide-react';
 import { useApp as useCompany } from '@company/app/AppState';
 import { ACTIVE_BRANCHES, getBranch } from '@company/data/company';
@@ -111,19 +112,41 @@ function Option({ on, title, sub, onClick }: { on: boolean; title: string; sub?:
 
 /* ─────────────── sheets ─────────────── */
 
-export function Sheet({ title, onClose, children, tall }: { title: string; onClose: () => void; children: ReactNode; tall?: boolean }) {
-  return (
-    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-[#0b1730]/40 md:items-center" onClick={onClose}>
-      <div className={cx('flex w-full max-w-lg flex-col rounded-t-[26px] bg-white shadow-2xl md:rounded-[26px]', tall ? 'h-[88dvh]' : 'max-h-[88dvh]')} onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-5 pb-2 pt-4">
-          <p className="text-[19px] font-bold text-ink">{title}</p>
-          <button type="button" onClick={onClose} aria-label="Close" className="grid h-9 w-9 place-items-center rounded-full text-muted hover:bg-page">
-            <X size={20} />
+/**
+ * Slide-up card (owner, 2026-11-25): rises from the bottom of the screen,
+ * sizes itself to its content (up to just below the status bar) and scrolls
+ * inside. Rendered on <body> through a portal, so a blurred sticky header can
+ * never trap it (that made the period picker overflow off the top).
+ */
+export function Sheet({ title, subtitle, onClose, children, tall, footer }: { title: string; subtitle?: string; onClose: () => void; children: ReactNode; tall?: boolean; footer?: ReactNode }) {
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', k);
+    return () => window.removeEventListener('keydown', k);
+  }, [onClose]);
+  return createPortal(
+    <div className="fade-in fixed inset-0 z-[80] flex items-end justify-center bg-[#0b1730]/45 md:items-center" onClick={onClose}>
+      <div
+        role="dialog"
+        aria-label={title}
+        className={cx('sheet-up flex w-full max-w-lg flex-col overflow-hidden rounded-t-[28px] bg-white shadow-[0_-12px_40px_rgba(11,23,48,0.18)] md:rounded-[28px]', tall ? 'h-[calc(100dvh-var(--safe-top)-48px)]' : 'max-h-[calc(100dvh-var(--safe-top)-48px)]')}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <span className="mx-auto mt-2.5 block h-1.5 w-11 shrink-0 rounded-full bg-[#d6dde8] md:hidden" />
+        <div className="flex shrink-0 items-start justify-between gap-3 px-5 pb-3 pt-3">
+          <div className="min-w-0">
+            <p className="text-[19px] font-bold leading-tight text-ink">{title}</p>
+            {subtitle && <p className="mt-0.5 text-[13px] leading-snug text-muted">{subtitle}</p>}
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close" className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-page text-ink-2">
+            <X size={19} />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto px-3 pb-[max(16px,var(--safe-bottom))]">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-[max(16px,var(--safe-bottom))]">{children}</div>
+        {footer && <div className="shrink-0 border-t border-line px-4 pb-[max(14px,var(--safe-bottom))] pt-3">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
