@@ -431,7 +431,7 @@ function BankSheet({ id, name, onClose }: { id: number; name: string; onClose: (
   const errs = { bank: bank ? '' : 'Choose the bank.', num: isNuban(num) ? '' : 'Enter the 10-digit account number.', acct: acct.trim().length >= 3 ? '' : 'Enter the name on the account.' };
   const ok = !errs.bank && !errs.num && !errs.acct;
   const banks = NIGERIAN_BANKS.filter((b) => !q || b.toLowerCase().includes(q.trim().toLowerCase()));
-  const inputCls = 'min-h-12 w-full rounded-2xl border-[1.5px] border-brand-500 bg-white px-4 text-[15px] text-ink outline-none ring-4 ring-brand-100';
+  const inputCls = 'min-h-12 w-full rounded-2xl border-[1.5px] px-4 text-[15px] text-ink outline-none transition-[background-color,border-color,box-shadow] duration-150 border-[#dfe6f1] bg-[#f8fafd] hover:border-[#c9d5e6] focus:border-brand-500 focus:bg-white focus:ring-4 focus:ring-brand-100';
   const save = () => {
     setTried(true);
     if (!ok) return;

@@ -105,7 +105,7 @@ const NG_CITIES: Record<string, string[]> = {
   Zamfara: ['Gusau', 'Kaura Namoda'],
 };
 
-const inputCls = 'min-h-12 w-full rounded-2xl border-[1.5px] border-brand-500 bg-white px-4 text-[15px] text-ink outline-none ring-4 ring-brand-100 placeholder:text-faint';
+const inputCls = 'min-h-12 w-full rounded-2xl border-[1.5px] px-4 text-[15px] text-ink outline-none transition-[background-color,border-color,box-shadow] duration-150 placeholder:text-faint border-[#dfe6f1] bg-[#f8fafd] hover:border-[#c9d5e6] focus:border-brand-500 focus:bg-white focus:ring-4 focus:ring-brand-100';
 
 export function AddBranchSheet({ onClose }: { onClose: () => void }) {
   const { user, showToast, navigate } = useCompany();

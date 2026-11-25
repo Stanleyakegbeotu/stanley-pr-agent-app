@@ -73,7 +73,10 @@ export function ago(d: Date, now = new Date()) {
 }
 
 /** The branch's incoming referrals, newest first, with their live status. */
-export function useIncoming(branchId: string): Incoming[] {
+export const useIncoming = (branchId: string): Incoming[] => useIncomingMany(useMemo(() => [branchId], [branchId]));
+
+/** Incoming referrals for several branches (the Company Admin's view), newest first. */
+export function useIncomingMany(branchIds: string[]): Incoming[] {
   const { agents, inventory } = useCompany();
   const billing = useBilling();
   const [now, setNow] = useState(() => new Date());
@@ -82,76 +85,89 @@ export function useIncoming(branchId: string): Incoming[] {
     return () => window.clearInterval(t);
   }, []);
   const minute = Math.floor(now.getTime() / 60_000);
+  const key = branchIds.join(',');
   const items = useMemo(() => buildItems(inventory), [inventory]);
   const labels = useMemo(() => new Map(groupCategories(items, inventory.categoryNames).map((g) => [g.key, g.label])), [items, inventory.categoryNames]);
-  const pool = useMemo(() => {
+  const pools = useMemo(() => {
     const byId = new Map(items.map((i) => [i.id, i]));
-    const ranked = serviceRanking([branchId], resolveRange({ key: 'custom', from: isoDate(addDays(new Date(), -59)), to: isoDate(new Date()) }))
-      .map((r) => byId.get(r.id))
-      .filter((i): i is Item => !!i && i.price !== null)
-      .slice(0, 60);
-    return ranked.length ? ranked : items.filter((i) => i.price !== null).slice(0, 60);
-  }, [branchId, items]);
+    const range = resolveRange({ key: 'custom', from: isoDate(addDays(new Date(), -59)), to: isoDate(new Date()) });
+    return new Map(
+      branchIds.map((id) => {
+        const ranked = serviceRanking([id], range)
+          .map((r) => byId.get(r.id))
+          .filter((i): i is Item => !!i && i.price !== null)
+          .slice(0, 60);
+        return [id, ranked.length ? ranked : items.filter((i) => i.price !== null).slice(0, 60)] as const;
+      }),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, items]);
 
   const base = useMemo(() => {
     const out: Omit<Incoming, 'status' | 'attended' | 'draftId'>[] = [];
-    if (!agents.length || !pool.length) return out;
+    if (!agents.length) return out;
     const nowD = new Date(minute * 60_000);
-    const prefix = branchPrefix(branchId);
     const today0 = new Date(nowD.getFullYear(), nowD.getMonth(), nowD.getDate()).getTime();
-    for (let d = 2; d >= 0; d--) {
-      const dayStart = today0 - d * DAY;
-      const dayNo = Math.floor(dayStart / DAY);
-      const n = 4 + (hash(dayNo + branchId.length * 7) % 4);
-      for (let k = 0; k < n; k++) {
-        const seed = dayNo * 16 + k;
-        const h = hash(seed);
-        // Sent between 07:30 and 18:30, spread through the day.
-        const sentAt = new Date(dayStart + (7.5 * 60 + Math.floor((k + (h % 100) / 100) * (660 / n))) * 60_000);
-        if (sentAt.getTime() > nowD.getTime()) continue;
-        const a = agents[h % agents.length]!;
-        const count = 1 + (h % 3 === 0 ? 1 : 0) + (h % 7 === 0 ? 1 : 0);
-        const services: SelectedService[] = [];
-        for (let j = 0; j < count; j++) {
-          const it = pool[hash(seed * 3 + j) % pool.length]!;
-          if (!services.some((x) => x.id === it.id)) services.push({ id: it.id, name: it.name, category: labels.get(it.category) ?? it.category, price: it.price!, overridePrice: null });
+    for (const branchId of branchIds) {
+      const pool = pools.get(branchId) ?? [];
+      if (!pool.length) continue;
+      const prefix = branchPrefix(branchId);
+      const salt = [...branchId].reduce((x, c) => (x * 31 + c.charCodeAt(0)) >>> 0, 7) % 9973;
+      for (let d = 2; d >= 0; d--) {
+        const dayStart = today0 - d * DAY;
+        const dayNo = Math.floor(dayStart / DAY);
+        const n = 4 + (hash(dayNo + salt) % 4);
+        for (let k = 0; k < n; k++) {
+          const seed = dayNo * 16 + k;
+          const h = hash(seed + salt * 1_000_003);
+          // Sent between 07:30 and 18:30, spread through the day.
+          const sentAt = new Date(dayStart + (7.5 * 60 + Math.floor((k + (h % 100) / 100) * (660 / n))) * 60_000);
+          if (sentAt.getTime() > nowD.getTime()) continue;
+          const ag = agents[h % agents.length]!;
+          const count = 1 + (h % 3 === 0 ? 1 : 0) + (h % 7 === 0 ? 1 : 0);
+          const services: SelectedService[] = [];
+          for (let j = 0; j < count; j++) {
+            const it = pool[hash(h + j * 7919) % pool.length]!;
+            if (!services.some((x) => x.id === it.id)) services.push({ id: it.id, name: it.name, category: labels.get(it.category) ?? it.category, price: it.price!, overridePrice: null });
+          }
+          const name = patientNameOf(700_000 + (h % 900_000));
+          const imaging = services.some((x) => !/lab/i.test(x.category));
+          out.push({
+            id: `${prefix}-R${String(400_000 + (seed % 500_000)).padStart(6, '0')}`,
+            branchId,
+            sentAt,
+            patient: { name, phone: `080${String(hash(h * 5) % 100_000_000).padStart(8, '0')}`, gender: FEMALE.has(name.split(' ')[0]!) ? 'Female' : 'Male', age: 18 + (h % 58) },
+            agentId: ag.id,
+            agentName: ag.name,
+            hospital: hospitalKey(ag.hospital) || ag.hospital,
+            services,
+            urgency: h % 23 === 0 ? 'Emergency' : h % 6 === 0 ? 'Urgent' : 'Routine',
+            indication: imaging || h % 4 === 0 ? INDICATIONS[h % INDICATIONS.length] : undefined,
+            note: h % 5 === 0 ? NOTES[h % NOTES.length] : undefined,
+          });
         }
-        const name = patientNameOf(700_000 + seed);
-        const imaging = services.some((x) => !/lab/i.test(x.category));
-        out.push({
-          id: `${prefix}-R${String(400_000 + (seed % 500_000)).padStart(6, '0')}`,
-          branchId,
-          sentAt,
-          patient: { name, phone: `080${String(hash(seed * 5) % 100_000_000).padStart(8, '0')}`, gender: FEMALE.has(name.split(' ')[0]!) ? 'Female' : 'Male', age: 18 + (h % 58) },
-          agentId: a.id,
-          agentName: a.name,
-          hospital: hospitalKey(a.hospital) || a.hospital,
-          services,
-          urgency: h % 23 === 0 ? 'Emergency' : h % 6 === 0 ? 'Urgent' : 'Routine',
-          indication: imaging || h % 4 === 0 ? INDICATIONS[h % INDICATIONS.length] : undefined,
-          note: h % 5 === 0 ? NOTES[h % NOTES.length] : undefined,
-        });
       }
     }
     return out;
-  }, [agents, pool, labels, branchId, minute]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agents, pools, labels, key, minute]);
 
   return useMemo(() => {
     const nowT = minute * 60_000;
     return base
       .map((r): Incoming => {
-        const order = billing.orders.find((o) => o.referral.referralId === r.id);
+        const order = billing.orders.find((o) => o.branchId === r.branchId && o.referral.referralId === r.id);
         if (order) return { ...r, status: 'attended', attended: { at: new Date(order.createdAt), invoiceNo: order.invoiceNo, by: order.createdBy.name } };
-        const draft = billing.drafts.find((x) => x.referralId === r.id);
+        const draft = billing.drafts.find((x) => x.branchId === r.branchId && x.referralId === r.id);
         if (draft) return { ...r, status: 'billing', draftId: draft.id };
         // Demo: most patients arrive within a few hours of the referral (the older ones are already attended).
-        const h = hash(Number(r.id.replace(/\D/g, '')));
+        const h = hash(Number(r.id.replace(/\D/g, '')) + r.branchId.length);
         const arrive = r.sentAt.getTime() + (40 + (h % 200)) * 60_000;
-        const ages = nowT - r.sentAt.getTime();
-        if (ages > 150 * 60_000 && h % 4 !== 0 && arrive <= nowT) return { ...r, status: 'attended', attended: { at: new Date(arrive) } };
+        const age = nowT - r.sentAt.getTime();
+        if (age > 150 * 60_000 && h % 4 !== 0 && arrive <= nowT) return { ...r, status: 'attended', attended: { at: new Date(arrive) } };
         return { ...r, status: 'waiting' };
       })
-      .sort((a, b) => b.sentAt.getTime() - a.sentAt.getTime());
+      .sort((x, y) => y.sentAt.getTime() - x.sentAt.getTime());
   }, [base, billing.orders, billing.drafts, minute]);
 }
 
@@ -314,7 +330,7 @@ export function IncomingSheet({ branchId, onClose, onStart, onResume, onNewBill,
   );
 }
 
-function Slip({ r, onOpen }: { r: Incoming; onOpen: () => void }) {
+export function Slip({ r, onOpen, showBranch }: { r: Incoming; onOpen: () => void; showBranch?: boolean }) {
   const done = r.status === 'attended';
   return (
     <button type="button" onClick={onOpen} className={`press relative flex w-full gap-3 overflow-hidden rounded-[20px] bg-white p-3.5 pl-4 text-left ring-1 ${done ? 'ring-line/70' : 'ring-[#f3dfb6] shadow-[0_6px_16px_rgba(214,128,8,0.1)]'}`}>
@@ -326,7 +342,7 @@ function Slip({ r, onOpen }: { r: Incoming; onOpen: () => void }) {
           <span className="shrink-0 text-[12px] text-muted">{ago(r.sentAt)}</span>
         </span>
         <span className="block truncate text-[12.5px] text-muted">
-          {r.patient.gender}, {r.patient.age} · {r.id}
+          {r.patient.gender}, {r.patient.age} · {r.id}{showBranch ? ` · ${getBranch(r.branchId)?.name ?? ''}` : ''}
         </span>
         <span className="mt-1.5 flex flex-wrap gap-1">
           {r.services.slice(0, 2).map((s) => (
@@ -339,7 +355,7 @@ function Slip({ r, onOpen }: { r: Incoming; onOpen: () => void }) {
         <span className="mt-1.5 flex items-center gap-1.5 text-[12px] text-ink-2">
           <AgentAvatar id={r.agentId} name={r.agentName} size={20} />
           <span className="truncate">
-            {r.agentName} · {r.hospital}
+            {[r.agentName, r.hospital].filter(Boolean).join(' · ')}
           </span>
         </span>
         <span className="mt-1.5 flex flex-wrap gap-1.5">
@@ -353,7 +369,7 @@ function Slip({ r, onOpen }: { r: Incoming; onOpen: () => void }) {
   );
 }
 
-function IncomingDetail({ r, onClose, onStart, onResume }: { r: Incoming; onClose: () => void; onStart: () => void; onResume: () => void }) {
+export function IncomingDetail({ r, onClose, onStart, onResume, onAsk }: { r: Incoming; onClose: () => void; onStart: () => void; onResume: () => void; /** Company Admin: ask the branch about this referral instead of billing it. */ onAsk?: () => void }) {
   const { navigate } = useCompany();
   const branch = getBranch(r.branchId)!;
   const money = (n: number) => formatMoney(n, branch.currency);
@@ -366,7 +382,13 @@ function IncomingDetail({ r, onClose, onStart, onResume }: { r: Incoming; onClos
       onClose={onClose}
       tall
       footer={
-        r.status === 'attended' ? undefined : r.status === 'billing' ? (
+        onAsk ? (
+          r.status === 'attended' ? undefined : (
+            <button type="button" onClick={onAsk} className="press flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-brand-600 text-[15px] font-semibold text-white">
+              <MessageCircle size={18} /> Ask the front desk about this referral
+            </button>
+          )
+        ) : r.status === 'attended' ? undefined : r.status === 'billing' ? (
           <button type="button" onClick={onResume} className="press flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-brand-600 text-[15px] font-semibold text-white">
             Continue the bill <ArrowRight size={18} />
           </button>
@@ -402,9 +424,9 @@ function IncomingDetail({ r, onClose, onStart, onResume }: { r: Incoming; onClos
           <AgentAvatar id={r.agentId} name={r.agentName} size={46} />
           <span className="min-w-0 flex-1">
             <b className="block truncate text-[15px] text-ink">{r.agentName}</b>
-            <span className="block truncate text-[12.5px] text-muted">PR agent · {r.hospital}</span>
+            <span className="block truncate text-[12.5px] text-muted">{['PR agent', r.hospital].filter(Boolean).join(' · ')}</span>
           </span>
-          <button type="button" onClick={() => navigate(`/branch/${r.branchId}/messages/${staffAgentId(r.agentId)}`)} aria-label={`Message ${r.agentName}`} className="press grid h-10 w-10 place-items-center rounded-full bg-brand-50 text-brand-600">
+          <button type="button" onClick={() => navigate(onAsk ? `/messages/adm-pr-${r.agentId}` : `/branch/${r.branchId}/messages/${staffAgentId(r.agentId)}`)} aria-label={`Message ${r.agentName}`} className="press grid h-10 w-10 place-items-center rounded-full bg-brand-50 text-brand-600">
             <MessageCircle size={18} />
           </button>
         </div>

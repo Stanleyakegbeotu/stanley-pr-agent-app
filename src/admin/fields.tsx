@@ -8,7 +8,7 @@
  */
 import { useEffect, useId, useRef, useState, type InputHTMLAttributes, type TextareaHTMLAttributes } from 'react';
 import { emailProblem, nameProblem, onlyEmail, onlyName, onlyPhone, phoneProblem, websiteProblem } from '@/ui/fieldRules';
-import { FieldErr, FieldLabel } from './prManage';
+import { FIELD_ERR, FIELD_REST, FieldErr, FieldLabel } from './prManage';
 
 const LINE = 24; // px per line at the field's font size and line height
 
@@ -69,7 +69,7 @@ export function LongText({
         rows={minRows}
         enterKeyHint="enter"
         autoCapitalize="sentences"
-        className={`block w-full resize-none rounded-2xl border-[1.5px] bg-white px-4 py-3 text-[15px] leading-6 text-ink outline-none ring-4 transition-[box-shadow,border-color] placeholder:text-faint ${error ? 'border-[#e5484d] ring-[#fde3e3]' : 'border-brand-500 ring-brand-100'}`}
+        className={`block w-full resize-none rounded-2xl border-[1.5px] px-4 py-3 text-[15px] leading-6 text-ink outline-none transition-[background-color,box-shadow,border-color] duration-150 placeholder:text-faint ${error ? FIELD_ERR : FIELD_REST}`}
         {...rest}
       />
       {(hint || max != null) && !error && (
@@ -118,7 +118,7 @@ export function RuleInput({ kind, label, value, onChange, required, optional, hi
         onBlur={() => setTouched(true)}
         placeholder={placeholder ?? r.placeholder}
         aria-invalid={!!problem}
-        className={`min-h-12 w-full rounded-2xl border-[1.5px] bg-white px-4 text-[15px] text-ink outline-none ring-4 placeholder:text-faint ${problem ? 'border-[#e5484d] ring-[#fde3e3]' : 'border-brand-500 ring-brand-100'}`}
+        className={`min-h-12 w-full rounded-2xl border-[1.5px] px-4 text-[15px] text-ink outline-none transition-[background-color,box-shadow,border-color] duration-150 placeholder:text-faint read-only:bg-page read-only:text-ink-2 ${problem ? FIELD_ERR : FIELD_REST}`}
         {...rest}
       />
       {problem ? <FieldErr msg={problem} /> : (hint ?? r.hint) && <span className="mt-1 block text-[12px] text-muted">{hint ?? r.hint}</span>}

@@ -24,6 +24,7 @@ import { DetailSheet, FocusSheet, type DetailKind, type Focus } from '../details
 import { Action, ActivityTiles, AdminTopBar, PageGlow, PaymentsCard, SectionTitle, SlideCarousel, Tag, Ticker, firstPct } from '../kit';
 import { ExpensesCard, Hospitals, TopAgents, TopServices } from '../sections';
 import { useInsightSlides } from '../insights';
+import { AdminReferrals } from '../referrals';
 
 export function AdminDashboard() {
   const { context, period, user, navigate } = useCompany();
@@ -91,6 +92,9 @@ export function AdminDashboard() {
           <FilterButton onClick={() => navigate('/reports')} label="Reports" />
         </form>
         <ScopeBar />
+
+        {/* Incoming referrals across the branches (owner, 2026-11-25): how fast each branch attends to them. */}
+        <AdminReferrals />
 
         {/* Smart announcement bar */}
         <SlideCarousel slides={insights.slides} label="What needs you" />

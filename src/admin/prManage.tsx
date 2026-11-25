@@ -26,7 +26,10 @@ import { RuleInput } from './fields';
 import { nameProblem, phoneProblem } from '@/ui/fieldRules';
 
 const NO_HOSPITAL = 'No hospital assigned';
-export const inputCls = (err?: string | null) => `min-h-12 w-full rounded-2xl border-[1.5px] bg-white px-4 text-[15px] text-ink outline-none ring-4 ${err ? 'border-[#e5484d] ring-[#fde3e3]' : 'border-brand-500 ring-brand-100'}`;
+/** Form field look (owner, 2026-11-25, premium): calm at rest, bright only while typing, red on a problem. */
+export const FIELD_REST = 'border-[#dfe6f1] bg-[#f8fafd] hover:border-[#c9d5e6] focus:border-brand-500 focus:bg-white focus:ring-4 focus:ring-brand-100';
+export const FIELD_ERR = 'border-[#e5484d] bg-white ring-4 ring-[#fde3e3]';
+export const inputCls = (err?: string | null) => `min-h-12 w-full rounded-2xl border-[1.5px] px-4 text-[15px] text-ink outline-none transition-[background-color,border-color,box-shadow] duration-150 placeholder:text-faint ${err ? FIELD_ERR : FIELD_REST}`;
 /** Capitalise each word as it is typed (desktop nameCase rule). */
 export const nameCase = (v: string) => v.replace(/(^|[\s'-])([a-z])/g, (_m, a: string, b: string) => a + b.toUpperCase());
 
