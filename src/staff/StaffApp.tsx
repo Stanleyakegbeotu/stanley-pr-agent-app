@@ -30,6 +30,11 @@ import { StaffChromeCtx } from './chrome';
 import { StaffHome, canOpenPage } from './pages/Home';
 import { BillingPage } from './pages/Billing';
 import { DraftsPage } from './pages/Drafts';
+import { StaffInbox } from './pages/Inbox';
+import { CalculatorButton } from './calculator';
+import { STAFF_AGENT_PREFIX, useStaffConversations } from './chat';
+import { useInbox } from '@/domain/chat';
+import { ChatThread } from '@/screens/chat/ChatThread';
 import { ExpensesPage } from './pages/Expenses';
 
 interface StaffPage {
@@ -53,7 +58,17 @@ const PAGES: StaffPage[] = [
   { id: 'audit', label: 'Audit', icon: ScrollText, screen: () => <ComingNext title="Audit" /> },
   { id: 'trash', label: 'Trash', icon: Trash2, screen: () => <ComingNext title="Trash" /> },
 ];
-const EXTRA: StaffPage[] = [{ id: 'notifications', label: 'Notifications', icon: LayoutGrid, screen: AdminNotifications }];
+const EXTRA: StaffPage[] = [
+  { id: 'notifications', label: 'Notifications', icon: LayoutGrid, screen: AdminNotifications },
+  { id: 'messages', label: 'Inbox', icon: LayoutGrid, screen: Messages },
+];
+
+/** Inbox, or one chat (/branch/<id>/messages/<conversation>). */
+function Messages() {
+  const { route } = useCompany();
+  const sub = route.segments[3];
+  return sub ? <ChatThread id={sub} /> : <StaffInbox />;
+}
 const TAB_ORDER = ['dashboard', 'records', 'expenses', 'drafts', 'analysis', 'billing'];
 
 export function StaffApp() {
@@ -77,6 +92,9 @@ function StaffFrame() {
   const [focus, setFocus] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
   const notes = useScopedNotes(branchId);
+  const { fixed } = useStaffConversations(branchId);
+  const fixedIds = useMemo(() => fixed.map((c) => c.id), [fixed]);
+  const inboxUnread = useInbox(fixedIds, STAFF_AGENT_PREFIX).unread;
   const unread = useMemo(() => notes.filter((n) => !isRead(n)).length, [notes]);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -125,22 +143,25 @@ function StaffFrame() {
   const tabs = TAB_ORDER.filter((id) => allowed.some((p) => p.id === id) && (!canBill || id !== 'billing')).slice(0, canBill ? 3 : 4);
   const branch = getBranch(branchId);
   const Screen = page.screen;
+  // A chat takes the whole screen (no tab bar), as in the admin and the PR agent app.
+  const chat = page.id === 'messages' && !!route.segments[3];
+  const bare = focus || chat;
   const chrome = useMemo(() => ({ branchId, setFocusMode: setFocus, go }), [branchId, go]);
 
   return (
     <NavCtx.Provider value={nav}>
       <StaffChromeCtx.Provider value={chrome}>
-        <AdminShellCtx.Provider value={{ openMenu: () => setMenu((m) => !m), unread, inboxUnread: 0, paths: { notifications: `/branch/${branchId}/notifications`, inbox: null } }}>
+        <AdminShellCtx.Provider value={{ openMenu: () => setMenu((m) => !m), unread, inboxUnread, paths: { notifications: `/branch/${branchId}/notifications`, inbox: `/branch/${branchId}/messages` }, tools: <CalculatorButton branchId={branchId} /> }}>
           <div className="h-dvh overflow-hidden bg-page">
             <StaffMenu open={menu} current={page.id} pages={allowed} branchName={branch?.name ?? ''} onClose={() => setMenu(false)} go={go} />
             <div ref={scroller} className="h-dvh overflow-y-auto md:ml-[264px]">
-              <main className={`mx-auto w-full max-w-[860px] px-5 md:px-8 ${focus ? 'pb-10' : 'pb-32 md:pb-12'}`}>
+              <main className={`mx-auto w-full max-w-[860px] px-5 md:px-8 ${bare ? 'pb-10' : 'pb-32 md:pb-12'}`}>
                 <div key={`${branchId}/${page.id}`} className="page-pop">
                   {blocked ? <NoAccess label={page.label} role={user.role} onHome={() => go('dashboard')} /> : <Screen />}
                 </div>
               </main>
             </div>
-            {!focus && (
+            {!bare && (
               <nav aria-label="Tabs" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-white px-1 pb-[max(8px,var(--safe-bottom))] pt-1.5 shadow-[0_-8px_28px_rgba(30,74,160,0.08)] md:hidden">
                 {tabs.map((id, i) => {
                   const t = PAGES.find((p) => p.id === id)!;

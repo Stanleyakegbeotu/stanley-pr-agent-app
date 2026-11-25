@@ -62,17 +62,19 @@ import {
 import { formatCount, formatMoney } from '@company/shared/format';
 import { useNav } from '@/app/store';
 import { InitialsAvatar, Sticker } from '@/ui/kit';
-import { phoneProblem } from '@/ui/fieldRules';
+import { onlyName, phoneProblem } from '@/ui/fieldRules';
 import { Sheet } from '@/admin/ui';
 import { AdminTopBar, PageGlow, SectionTitle } from '@/admin/kit';
 import { AgentAvatar } from '@/admin/agentPhotos';
-import { FieldErr, FieldLabel, inputCls } from '@/admin/prManage';
+import { FieldErr, FieldLabel, inputCls, nameCase } from '@/admin/prManage';
 import { LongText, RuleInput } from '@/admin/fields';
 import { Toggle } from '@/admin/settingsSections';
 import { buildItems, groupCategories, meta, type Item } from '@/admin/pages/Inventory';
 import { PageTitle } from '@/admin/branchFirst';
 import { useStaffChrome } from '../chrome';
 import { ReceiptPanel, methodLabel } from '../receipt';
+import { IncomingEntry, findIncoming, useIncoming, type Incoming } from '../incoming';
+import { QUOTE_KEY, type QuoteHandOver } from '../calculator';
 
 type Step = 1 | 2 | 3;
 const STEPS = ['Patient', 'Services', 'Payment', 'Preview'] as const;
@@ -131,15 +133,69 @@ export function BillingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftParam]);
 
-  /* The + in the tab bar: start a new bill straight away (an open bill is kept as it is). */
+  /* The + in the tab bar: start a new bill straight away (an open bill is kept as it is). ?name= fills the name typed in a search. */
   const newParam = route.query.get('new');
+  const nameParam = route.query.get('name') ?? '';
   useEffect(() => {
     if (!newParam) return;
     const cur = latest.current;
-    if (!cur || cur.step === 5) start(newSession(branchId, 'new', me));
+    if (!cur || cur.step === 5) {
+      const s0 = newSession(branchId, 'new', me);
+      start(nameParam ? { ...s0, patient: { ...s0.patient, name: nameCase(onlyName(nameParam)) } } : s0);
+    }
     navigate(`/branch/${branchId}/billing`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [newParam]);
+
+  /* Incoming referrals: ?incoming=<referral ID> starts the bill with the patient, referrer and requested tests. */
+  const incoming = useIncoming(branchId);
+  const startIncoming = (r: Incoming) => {
+    const cur = latest.current;
+    if (cur && cur.step < 5 && hasContent(cur)) saveDraft(cur);
+    const open = store.drafts.find((d) => d.referralId === r.id && d.branchId === branchId);
+    if (open) return start(open);
+    start({ ...newSession(branchId, 'referral', me), patient: { uuid: null, existingId: null, existingType: null, name: r.patient.name, phone: r.patient.phone }, walkIn: false, agentId: r.agentId, hospital: null, referralId: r.id, services: r.services, step: 1 });
+    setNotice(`Referral ${r.id} from ${r.agentName}: check the patient's details, then continue.`);
+  };
+  const incParam = route.query.get('incoming');
+  useEffect(() => {
+    if (!incParam) return;
+    const r = findIncoming(incoming, incParam);
+    if (r) startIncoming(r);
+    else showToast('That referral is no longer in the folder');
+    navigate(`/branch/${branchId}/billing`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [incParam]);
+
+  /* Price calculator: ?quote=1 starts a bill with the quoted tests and the enquirer's name. */
+  const quoteParam = route.query.get('quote');
+  useEffect(() => {
+    if (!quoteParam) return;
+    try {
+      const q = JSON.parse(sessionStorage.getItem(QUOTE_KEY) ?? 'null') as QuoteHandOver | null;
+      sessionStorage.removeItem(QUOTE_KEY);
+      if (q?.services.length) {
+        const cur = latest.current;
+        if (cur && cur.step < 5 && hasContent(cur)) saveDraft(cur);
+        const s0 = newSession(branchId, 'new', me);
+        start({ ...s0, patient: { ...s0.patient, name: q.name }, services: q.services });
+        setNotice(`${q.services.length} test${q.services.length === 1 ? '' : 's'} from the price quote added. Fill in the patient's details.`);
+      }
+    } catch {
+      /* nothing to carry over */
+    }
+    navigate(`/branch/${branchId}/billing`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quoteParam]);
+
+  /* "The patient has a referral ID" from the folder. */
+  const refParam = route.query.get('refid');
+  useEffect(() => {
+    if (!refParam) return;
+    setRefOpen(true);
+    navigate(`/branch/${branchId}/billing`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refParam]);
 
   /* Auto-save while working. */
   useEffect(() => {
@@ -284,6 +340,10 @@ export function BillingPage() {
             </div>
           </div>
 
+          <div className="mt-4">
+            <IncomingEntry branchId={branchId} />
+          </div>
+
           {drafts.length > 0 && (
             <>
               <SectionTitle title={`Unfinished bills · ${drafts.length}`} action="All drafts" onAction={() => navigate(`/branch/${branchId}/drafts`)} />
@@ -329,7 +389,7 @@ export function BillingPage() {
             </div>
           )}
         </div>
-        {refOpen && <ReferralSheet branchId={branchId} onClose={() => setRefOpen(false)} onFound={(m, ref) => (setRefOpen(false), start({ ...newSession(branchId, 'referral', me), patient: { uuid: m.patient.uuid, existingId: m.patient.patientId, existingType: m.patient.type, name: m.patient.name, phone: m.patient.phone }, walkIn: false, agentId: m.agentId, hospital: m.hospital, referralId: ref, services: m.services, step: 2 }))} />}
+        {refOpen && <ReferralSheet branchId={branchId} incoming={incoming} onIncoming={(r) => (setRefOpen(false), startIncoming(r))} onClose={() => setRefOpen(false)} onFound={(m, ref) => (setRefOpen(false), start({ ...newSession(branchId, 'referral', me), patient: { uuid: m.patient.uuid, existingId: m.patient.patientId, existingType: m.patient.type, name: m.patient.name, phone: m.patient.phone }, walkIn: false, agentId: m.agentId, hospital: m.hospital, referralId: ref, services: m.services, step: 2 }))} />}
         {draftPrompt && (
           <Sheet title="Continue a saved bill?" subtitle={`${drafts.length} unfinished bill${drafts.length === 1 ? '' : 's'} at this branch`} onClose={() => setDraftPrompt(false)} footer={<button type="button" onClick={() => start(newSession(branchId, 'new', me))} className="press min-h-12 w-full rounded-2xl bg-brand-600 text-[15px] font-semibold text-white">Start a new bill anyway</button>}>
             <ul className="space-y-2 px-1 pb-2">
@@ -1119,12 +1179,15 @@ function PreviewStep({ s, branchId, onEdit }: { s: BillingSession; branchId: str
 
 /* ─────────────── referral ID ─────────────── */
 
-function ReferralSheet({ branchId, onClose, onFound }: { branchId: string; onClose: () => void; onFound: (m: NonNullable<ReturnType<typeof lookupReferral>>, referralId: string) => void }) {
+function ReferralSheet({ branchId, incoming, onIncoming, onClose, onFound }: { branchId: string; incoming: Incoming[]; onIncoming: (r: Incoming) => void; onClose: () => void; onFound: (m: NonNullable<ReturnType<typeof lookupReferral>>, referralId: string) => void }) {
   const prefix = `${branchPrefix(branchId)}-R`;
   const [num, setNum] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const find = () => {
     const full = `${prefix}${num.padStart(6, '0')}`;
+    // A referral sent by a PR agent (the incoming folder) first, then a referred patient already on record.
+    const inc = findIncoming(incoming, full);
+    if (inc) return onIncoming(inc);
     const m = lookupReferral(branchId, full);
     if (!m) return setErr(`No referred patient with the ID ${full} at this branch. Check the number, or start a new patient bill.`);
     onFound(m, full);
@@ -1138,7 +1201,7 @@ function ReferralSheet({ branchId, onClose, onFound }: { branchId: string; onClo
           <input inputMode="numeric" value={num} onChange={(e) => (setNum(e.target.value.replace(/\D/g, '').slice(0, 6)), setErr(null))} placeholder="000123" autoFocus className={`${inputCls(err)} font-mono text-[17px] font-bold tracking-wider`} />
         </div>
         <FieldErr msg={err} />
-        <p className="mt-2 text-[12.5px] text-muted">The number on the patient's referral slip. Referrals sent from the Referrer Portal arrive here once the cloud connection exists.</p>
+        <p className="mt-2 text-[12.5px] text-muted">The number on the patient's referral slip or message from the PR agent. It finds referrals in the incoming folder and referred patients already on record.</p>
       </div>
     </Sheet>
   );

@@ -34,6 +34,7 @@ import { photoOf, useTeam } from '@/admin/people';
 import { AgentAvatar } from '@/admin/agentPhotos';
 import { meta } from '@/admin/pages/Inventory';
 import { useStaffChrome } from '../chrome';
+import { IncomingEntry } from '../incoming';
 
 export const canOpenPage = (role: string, page: string) => {
   const perm = PAGE_PERMISSION[page.split('?')[0] || 'dashboard'];
@@ -154,6 +155,9 @@ export function StaffHome() {
           </div>
         </div>
         <ScopeBar periodOnly />
+
+        {/* Incoming referrals from PR agents (owner, 2026-11-25): always first, with the waiting count. */}
+        {canOpen('billing') && <IncomingEntry branchId={branchId} />}
 
         {/* Quick actions */}
         {canOpen('billing') && (

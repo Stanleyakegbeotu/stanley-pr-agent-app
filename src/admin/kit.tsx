@@ -22,7 +22,7 @@ export const firstPct = (p: Partial<Record<Currency, number | null>>) => Object.
 
 /** Transparent top bar that turns frosted when content scrolls under it; inbox and notifications on the right. */
 export function AdminTopBar({ title, back, right }: { title?: string; back?: boolean; right?: ReactNode }) {
-  const { openMenu, unread, inboxUnread, paths } = useAdminShell();
+  const { openMenu, unread, inboxUnread, paths, tools } = useAdminShell();
   const { navigate } = useCompany();
   const sentinel = useRef<HTMLDivElement>(null);
   const [scrolled, setScrolled] = useState(false);
@@ -48,7 +48,8 @@ export function AdminTopBar({ title, back, right }: { title?: string; back?: boo
         )}
         <h1 className={`min-w-0 flex-1 truncate text-[21px] font-bold tracking-[-0.02em] text-ink transition-opacity ${title ? '' : 'opacity-0'}`}>{title}</h1>
         {right}
-        <span className="-mr-2 flex items-center gap-1">
+        <span className="-mr-2 flex items-center gap-0.5">
+          {tools}
           {paths?.inbox !== null && (
           <button type="button" onClick={() => navigate(paths?.inbox ?? '/messages')} aria-label={inboxUnread ? `Inbox, ${inboxUnread} unread` : 'Inbox'} className="press relative grid h-11 w-11 place-items-center rounded-full text-ink">
             <MessageCircle size={25} strokeWidth={1.9} />
