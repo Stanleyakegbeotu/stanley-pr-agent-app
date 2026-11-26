@@ -18,6 +18,7 @@ import { useInbox } from '@/domain/chat';
 import { useProfile } from '@/domain/profile';
 import { BranchUpdates, TodayPatients } from '@/screens/home/HomeSections';
 import { AnnouncementCarousel } from './AnnouncementCarousel';
+import { CalculatorButton } from '@/screens/PriceCalculator';
 
 export function Dashboard() {
   const { referrals, navigate } = useApp();
@@ -57,6 +58,7 @@ export function Dashboard() {
           <Menu size={26} strokeWidth={2} />
         </button>
         <span className="-mr-2 flex items-center gap-1">
+          <CalculatorButton />
           <button type="button" onClick={() => navigate('/messages')} aria-label={inbox.unread ? `Inbox, ${inbox.unread} unread` : 'Inbox'} className="press relative grid h-11 w-11 place-items-center rounded-full text-ink">
             <MessageCircle size={25} strokeWidth={1.9} />
             {inbox.unread > 0 && <span className="absolute right-0.5 top-1 grid h-[19px] min-w-[19px] place-items-center rounded-full bg-brand-600 px-1 text-[11px] font-bold leading-none text-white ring-2 ring-[#e9f1ff]">{inbox.unread > 9 ? '9+' : inbox.unread}</span>}

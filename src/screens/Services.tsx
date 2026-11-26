@@ -17,6 +17,7 @@ import { SEARCH_EXAMPLES, smartSearch } from '@/domain/testSearch';
 import { useApp } from '@/app/store';
 import { Button, Chip, EmptyState, ScreenHeader, SearchField, ServiceThumb, Sticker, Subtitle } from '@/ui/kit';
 import { useDetail } from '@/ui/detailSheet';
+import { CalculatorButton } from '@/screens/PriceCalculator';
 
 /** Price, or a clear note when the branch hasn't recorded one. */
 export const priceText = (p: number | null) => (p == null ? 'Price at branch' : naira(p));
@@ -77,7 +78,7 @@ export function ServiceCatalogue() {
 
   return (
     <>
-      <ScreenHeader title="Test Catalogue" />
+      <ScreenHeader title="Test Catalogue" right={<CalculatorButton tone="card" />} />
       <Subtitle>Explore all diagnostic tests and services offered at your branch.</Subtitle>
 
       <div className="sticky top-[calc(4rem+var(--safe-top))] z-20 -mx-5 mb-4 bg-page px-5 pb-3 pt-1 md:-mx-8 md:px-8">

@@ -332,6 +332,11 @@ export function ReferralDetails({ id }: { id: string }) {
           <span className="text-ink">Quoted price</span>
           <span className="font-bold text-ink">{naira(quoteOf(r))}</span>
         </div>
+        {r.priceAsk && (
+          <p className="mt-2.5 rounded-xl bg-[#faf7ff] px-3 py-2 text-[13px] text-violet ring-1 ring-[#e4dbff]">
+            You asked for <b>{naira(r.priceAsk.amount)} off</b>: {r.priceAsk.reason}. The branch manager decides at billing.
+          </p>
+        )}
         <p className="mt-1 text-[12.5px] text-muted">What the patient was told to expect. The final price is confirmed at the branch.</p>
       </Card>
 

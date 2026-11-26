@@ -61,6 +61,8 @@ export interface Incoming {
   /** The PR agent's note for the branch, and their voice note (Referrer Portal). */
   note?: string;
   voiceNote?: { duration: number };
+  /** A lower price the PR agent asked for (their price calculator); the branch manager approves it at billing. */
+  priceAsk?: { amount: number; reason: string };
   status: IncomingStatus;
   /** When the patient was attended (bill saved), and by whom / which invoice. */
   attended?: { at: Date; invoiceNo?: string; by?: string };
@@ -105,6 +107,7 @@ const hash = (n: number) => {
 const DAY = 86_400_000;
 const FEMALE = new Set(['Adaeze', 'Aisha', 'Amaka', 'Amina', 'Bola', 'Chiamaka', 'Chioma', 'Esther', 'Fatima', 'Funke', 'Grace', 'Halima', 'Ifeoma', 'Joy', 'Kemi', 'Ladi', 'Maryam', 'Nkechi', 'Ngozi', 'Nneka', 'Ronke', 'Yetunde', 'Zainab', 'Blessing', 'Hauwa', 'Rukayat', 'Hadiza']);
 const INDICATIONS = ['Persistent cough for three weeks', 'Abdominal pain, right upper side', 'Follow up after treatment', 'Fever and body weakness for five days', 'Antenatal check, second trimester', 'Routine screening before surgery', 'Headache and dizziness', 'Painful swelling of the right knee', 'Suspected urinary tract infection', 'High blood pressure review'];
+const ASK_REASONS = ['The patient is short of money for all the tests.', 'Pensioner, cannot pay the full price.', 'Student, the family is paying.'];
 const NOTES = ['Patient is fasting since last night.', 'Please call me when the results are ready.', 'Elderly patient, comes with a relative.', 'Patient has an HMO card.', 'Repeat test after two weeks of treatment.'];
 
 /** Age in words, "12 min ago". */
@@ -195,6 +198,7 @@ export function useIncomingMany(branchIds: string[]): Incoming[] {
             indication: imaging || h % 4 === 0 ? INDICATIONS[h % INDICATIONS.length] : undefined,
             note: h % 5 === 0 || h % 3 === 0 ? NOTES[h % NOTES.length] : undefined,
             voiceNote: h % 3 === 0 ? { duration: 7 + (h % 38) } : undefined,
+            priceAsk: h % 7 === 2 && services.reduce((n, x) => n + x.price, 0) > 8000 ? { amount: 1000 * (1 + (h % 3)), reason: ASK_REASONS[h % ASK_REASONS.length]! } : undefined,
           });
         }
       }
@@ -429,6 +433,7 @@ export function Slip({ r, onOpen, showBranch }: { r: Incoming; onOpen: () => voi
           </span>
         </span>
         <span className="mt-1.5 flex flex-wrap gap-1.5">
+          {r.priceAsk && <span className="rounded-full bg-[#efe9ff] px-2 py-0.5 text-[11.5px] font-bold text-violet">Asks ₦{r.priceAsk.amount.toLocaleString('en-NG')} off</span>}
           {r.voiceNote && <span className="flex items-center gap-1 rounded-full bg-[#fff4e0] px-2 py-0.5 text-[11.5px] font-bold text-[#9a5b00]"><Mic size={11} /> Voice note</span>}
           {r.urgency !== 'Routine' && <span className={`rounded-full px-2 py-0.5 text-[11.5px] font-bold ${URGENT_TONE[r.urgency]}`}>{r.urgency}</span>}
           {r.status !== 'waiting' && (
@@ -560,6 +565,14 @@ export function IncomingDetail({ r, onClose, onStart, onResume, onAsk }: { r: In
             <b className="text-[17px] text-ink">{money(total)}</b>
           </li>
         </ul>
+
+        {r.priceAsk && (
+          <div className="mt-4 rounded-2xl bg-[#faf7ff] p-3.5 ring-1 ring-[#e4dbff]">
+            <p className="text-[13px] font-bold text-violet">The PR agent asked for {money(r.priceAsk.amount)} off</p>
+            <p className="mt-0.5 text-[13px] text-ink-2">{r.priceAsk.reason}</p>
+            <p className="mt-1 text-[12px] text-muted">It is filled in as a discount when you start the bill. The branch manager approves it.</p>
+          </div>
+        )}
 
         {(r.indication || r.note || r.voiceNote) && (
           <>

@@ -166,8 +166,8 @@ export function BillingPage() {
     if (cur && cur.step < 5 && hasContent(cur)) saveDraft(cur);
     const open = store.drafts.find((d) => d.referralId === r.id && d.branchId === branchId);
     if (open) return start(open);
-    start({ ...newSession(branchId, 'referral', me), patient: { uuid: null, existingId: null, existingType: null, name: r.patient.name, phone: r.patient.phone }, walkIn: false, agentId: r.agentId, hospital: null, referralId: r.id, services: r.services, step: 1 });
-    setNotice(`Referral ${r.id} from ${r.agentName}: check the patient's details, then continue.`);
+    start({ ...newSession(branchId, 'referral', me), patient: { uuid: null, existingId: null, existingType: null, name: r.patient.name, phone: r.patient.phone }, walkIn: false, agentId: r.agentId, hospital: null, referralId: r.id, services: r.services, step: 1, ...(r.priceAsk ? { discount: { amount: r.priceAsk.amount, reason: `PR agent asked: ${r.priceAsk.reason}`, approvedBy: '' } } : {}) });
+    setNotice(`Referral ${r.id} from ${r.agentName}: check the patient's details, then continue.${r.priceAsk ? ` The agent asked for ${money(r.priceAsk.amount)} off: it is on the payment step, waiting for the branch manager's approval.` : ''}`);
   };
   const incParam = route.query.get('incoming');
   useEffect(() => {

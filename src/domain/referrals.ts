@@ -34,6 +34,8 @@ export interface Referral {
   /** Optional note and voice note for the branch. */
   note?: string;
   voiceNote?: { duration: number };
+  /** A lower price the PR agent suggested for this patient (price calculator); the branch manager approves it at billing. */
+  priceAsk?: { amount: number; reason: string };
   /** The clinician told the patient their details go to Silhouette (consent record). */
   patientNotice?: { version: string; at: string };
   /** Branch updates. */

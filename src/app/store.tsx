@@ -35,6 +35,8 @@ export interface Draft {
   /** Optional note and voice note for the branch. */
   note?: string;
   voiceNote?: { duration: number };
+  /** Suggested reduction from the price calculator (approved at the branch). */
+  priceAsk?: { amount: number; reason: string };
   /** The clinician has told the patient (required before sending). */
   patientInformed?: boolean;
   /** Last step (0 patient, 1 tests, 2 clinical details, 3 review) and when it was last saved. */
@@ -131,6 +133,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       indication: d.indication?.trim() || undefined,
       note: d.note?.trim() || undefined,
       voiceNote: d.voiceNote,
+      priceAsk: d.priceAsk && d.priceAsk.amount > 0 ? d.priceAsk : undefined,
       patientNotice: { version: VERSIONS.patientNotice, at },
       queued: true,
     };

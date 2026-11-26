@@ -429,7 +429,24 @@ function SummaryStep() {
           <span className="text-ink">Quoted total for the patient</span>
           <span className="font-bold text-ink">{naira(quoteOf(draft))}</span>
         </div>
-        <p className="mt-1 text-[12.5px] text-muted">The patient sees these prices. The final price is confirmed at the branch.</p>
+        {draft.priceAsk && draft.priceAsk.amount > 0 && (
+          <div className="mt-3 rounded-2xl bg-[#faf7ff] p-3 ring-1 ring-[#e4dbff]">
+            <div className="flex items-center justify-between gap-2 text-[14.5px]">
+              <span className="font-semibold text-violet">Reduction you asked for</span>
+              <b className="text-violet">minus {naira(draft.priceAsk.amount)}</b>
+            </div>
+            <p className="mt-0.5 text-[12.5px] text-ink-2">{draft.priceAsk.reason}</p>
+            <div className="mt-1.5 flex items-center justify-between gap-2">
+              <span className="text-[13px] text-ink">
+                Patient would pay <b>{naira(Math.max(0, quoteOf(draft) - draft.priceAsk.amount))}</b> if approved
+              </span>
+              <button type="button" onClick={() => setDraft((d) => ({ ...d, priceAsk: undefined }))} className="press text-[12.5px] font-semibold text-[#d93036]">
+                Remove
+              </button>
+            </div>
+          </div>
+        )}
+        <p className="mt-1 text-[12.5px] text-muted">The patient sees these prices. The final price is confirmed at the branch{draft.priceAsk?.amount ? ', and the branch manager decides on the reduction' : ''}.</p>
       </Card>
 
       <Card className="mb-3.5 p-5">
