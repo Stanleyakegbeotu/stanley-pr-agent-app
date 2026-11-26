@@ -10,6 +10,7 @@
  * opens the profile slide-up (figures, patients, account details, chat,
  * announcements, Edit profile with hospital transfer and own rate, restore,
  * move to trash). The commission rate is changed here, as on the desktop.
+ * Under the tiles: the PR agent monitor and monthly payouts (admin/prMonitor).
  * Never shown on the Referrer Portal (money stays on the company side).
  */
 import { useMemo, useState, type ReactNode } from 'react';
@@ -32,6 +33,7 @@ import { AddAgentSheet, RateSheet } from '../prManage';
 import { PICK_THEME, BranchCrumb, BranchPick, Chips, PageTitle, useBranchFirst } from '../branchFirst';
 import { StickyTools } from '@/admin/kit';
 import { useRight } from '../access';
+import { MonitorCard, PayoutsCard } from '../prMonitor';
 
 type Sort = 'agents' | 'referrals' | 'name';
 const PAGE = 12;
@@ -191,6 +193,10 @@ function Workspace({ branchId, crumb }: { branchId: string; crumb: boolean }) {
               <ChevronRight size={17} className="shrink-0 text-[#b45309]" />
             </button>
           )}
+
+          {/* PR agent monitor and monthly payouts (owner, 2026-11-26). */}
+          <MonitorCard branchId={branchId} />
+          <PayoutsCard branchId={branchId} />
 
           {ranked.length > 0 && <TopAgents money={seeMoney} title={`Top PR agents ${when}`} agents={ranked} onPick={setFocus} onAll={() => setList({})} action="View all" />}
 
