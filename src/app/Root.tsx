@@ -11,9 +11,13 @@ import { StaffApp } from '@/staff/StaffApp';
 import { App } from './App';
 import { AppStoreProvider } from './store';
 import { PrivacyGuard } from '@/ui/privacy';
+import { agentKey, useAccountAccess } from '@company/services/accountAccess';
+import { MY_AGENT_ID } from '@/domain/agentIdentity';
+import { AccountOff } from './AccountOff';
 
 export function Root() {
   const role = useRole();
+  const agentOff = !!useAccountAccess()[agentKey(MY_AGENT_ID)]?.off;
   // View only on the phone for the PR agent portal and the branch staff workspace (privacy rules in ui/privacy).
   return (
     <>
@@ -22,6 +26,8 @@ export function Root() {
         <AdminApp key="admin" />
       ) : role === 'manager' || role === 'frontdesk' ? (
         <StaffApp key="staff" />
+      ) : agentOff ? (
+        <AccountOff />
       ) : (
         <AppStoreProvider key="clinician">
           <App />

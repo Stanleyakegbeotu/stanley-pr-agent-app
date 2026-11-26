@@ -44,6 +44,7 @@ import { ExpensesPage } from './pages/Expenses';
 import { AnnouncementsPage } from '@/admin/announcementsPage';
 import { ReportsPageMobile } from '@/admin/reportsPage';
 import { NavCount, useNavCounts, type NavCounts } from './navCounts';
+import { staffKey, useAccountAccess } from '@company/services/accountAccess';
 
 interface StaffPage {
   id: string;
@@ -100,6 +101,7 @@ function StaffFrame() {
   const pageId = br?.page ?? 'dashboard';
   const [menu, setMenu] = useState(false);
   const [focus, setFocus] = useState(false);
+  const access = useAccountAccess();
   const counts = useNavCounts(branchId);
   const scroller = useRef<HTMLDivElement>(null);
   const notes = useScopedNotes(branchId);
@@ -120,11 +122,12 @@ function StaffFrame() {
   // Who is signed in: the manager, or a Front Desk person (today's on-seat one by default).
   const deskId = useMemo(() => {
     if (role !== 'frontdesk') return null;
-    const desk = team.frontDesk(branchId);
+    // A deactivated account can't be signed in to (Staff Management → Account).
+    const desk = team.frontDesk(branchId).filter((s) => !access[staffKey(s.id)]?.off);
     if (acting && desk.some((s) => s.id === acting)) return acting;
     const duty = team.onDuty(branchId);
-    return staff.find((s) => s.name === duty?.name)?.id ?? desk[0]?.id ?? null;
-  }, [role, acting, team, branchId, staff]);
+    return desk.find((s) => s.name === duty?.name)?.id ?? desk[0]?.id ?? null;
+  }, [role, acting, team, branchId, access]);
   // Switch only when the signed-in person differs (each switch is written to the Audit Log, as on the desktop).
   useEffect(() => {
     if (deskId ? user.staffId !== deskId : user.kind !== 'manager') switchAccount(branchId, deskId);
@@ -235,7 +238,8 @@ function StaffMenu({ open, current, counts, pages, branchName, onClose, go }: { 
   const team = useTeam();
   const me = staff.find((s) => s.id === user.staffId);
   const photo = me ? photoOf(me) : undefined;
-  const desk = team.frontDesk(user.branchId ?? '');
+  const access = useAccountAccess();
+  const desk = team.frontDesk(user.branchId ?? '').filter((s) => !access[staffKey(s.id)]?.off);
   return (
     <>
       <button aria-label="Close menu" aria-hidden={!open} tabIndex={open ? 0 : -1} className={`fixed inset-0 z-40 bg-[#0b1730]/30 backdrop-blur-[2px] transition-opacity duration-300 md:hidden ${open ? 'opacity-100' : 'pointer-events-none opacity-0'}`} onClick={onClose} />

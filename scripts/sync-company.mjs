@@ -21,6 +21,8 @@ const SRC = process.argv[2] ?? path.join(here, '..', '..', 'Stanley Admin Dashbo
 const ENTRIES = [
   'app/AppState.tsx',
   'services/analytics.ts',
+  'services/staffQueries.ts',
+  'services/accountAccess.ts',
   'services/finance.ts',
   'services/commission.ts',
   'services/org.ts',

@@ -39,6 +39,8 @@ import { BASELINE_AGENTS } from '@company/data/userRecords';
 import { onlyName } from '@/ui/fieldRules';
 import { copyText } from '@/ui/privacy';
 import { useChatLink, useRight } from './access';
+import { AccountCard } from './staffQueries';
+import { agentKey } from '@company/services/accountAccess';
 
 const ALL_TIME: DateRange = { from: DATA_START, to: TODAY, days: diffDays(DATA_START, TODAY) + 1 };
 /** PR agents belong to the branch their referrals go to (the legacy branch until agents carry a branch). */
@@ -188,7 +190,8 @@ export function AgentProfileSheet({ id, branchIds, period, onClose }: { id: numb
   const phone = rec?.phone && rec.phone !== 'N/A' ? rec.phone : null;
   const hospital = hospitalOf(rec?.hospital ?? rank?.hospital ?? '');
   const t = norm(q);
-  const rows = visits.map((v) => visitRow(v, ctx, { amountNote: `${formatMoney(commissionOn(v.billed, id), c)} commission` })).filter((r) => !t || r.text.includes(t));
+  const seesCommission = useRight()('referral.commission');
+  const rows = visits.map((v) => visitRow(v, ctx, seesCommission ? { amountNote: `${formatMoney(commissionOn(v.billed, id), c)} commission` } : {})).filter((r) => !t || r.text.includes(t));
   const mineSent = sent.filter((a) => (a.audience.kind === 'agent' && a.audience.agentId === id) || (a.audience.kind === 'agents' && a.audience.agents.some((x) => x.id === id))).slice(0, 3);
   const copy = (text: string, what: string) => copyText(text, what, showToast);
   const chatLink = useChatLink();
@@ -277,6 +280,7 @@ export function AgentProfileSheet({ id, branchIds, period, onClose }: { id: numb
         <InfoRow icon={<Building2 size={16} />} label="Branch" value={branch ? `${branch.name} · ${branch.code}` : 'Not assigned'} />
       </div>
 
+      {canManage && found && <AccountCard accountKey={agentKey(id)} name={name} what="a PR agent" branchId={branch?.id ?? null} />}
       {/* Account details (for monthly payouts): Commission and payouts right only. */}
       {seeMoney && (
       <div className="mb-3 overflow-hidden rounded-[20px] bg-white ring-1 ring-line/70">

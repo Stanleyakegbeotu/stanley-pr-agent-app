@@ -35,6 +35,9 @@ import { PICK_THEME, BranchCrumb, BranchPick, Chips, Facts, PageTitle, useBranch
 import { StickyTools } from '@/admin/kit';
 import { copyText } from '@/ui/privacy';
 import { useChatLink, useInBranch, useRight } from '../access';
+import { AccountCard, QueriesCard } from '../staffQueries';
+import { staffKey, useAccountAccess } from '@company/services/accountAccess';
+import { usesApp } from '@company/data/userRecords';
 
 const STATUS_TONE: Record<StaffStatus, string> = { Active: 'bg-tint-green text-good-ink', 'On leave': 'bg-[#fff1e0] text-[#b45309]', Suspended: 'bg-[#fdecec] text-[#b42318]', Left: 'bg-page text-muted' };
 const longDate = (iso: string) => (iso ? new Date(`${iso}T00:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Not on record');
@@ -303,6 +306,7 @@ export function StaffProfileSheet({ member, onClose }: { member: StaffRecord; on
   const right = useRight();
   const canManage = right('staff.manage');
   const rightNow = right;
+  const accountOff = !!useAccountAccess()[staffKey(member.id)]?.off;
   const chatPath = mgr ? chatLink.manager(member.branchId) : onSeatToday ? chatLink.frontDesk(member.branchId) : null;
   const chatId = chatPath;
   const copy = (text: string, what: string) => copyText(text, what, showToast);
@@ -363,6 +367,7 @@ export function StaffProfileSheet({ member, onClose }: { member: StaffRecord; on
               <span className={`rounded-full px-2 py-0.5 text-[11.5px] font-semibold ${STATUS_TONE[member.status]}`}>{member.status}</span>
               {onSeatToday && <span className="rounded-full bg-brand-600 px-2 py-0.5 text-[11.5px] font-semibold text-white">On seat today</span>}
               <SignInStatus userKey={member.id} />
+              {accountOff && <span className="rounded-full bg-[#ffe4e4] px-2 py-0.5 text-[11.5px] font-semibold text-[#b42318]">Account off</span>}
             </span>
           </div>
         </div>
@@ -443,6 +448,8 @@ export function StaffProfileSheet({ member, onClose }: { member: StaffRecord; on
         </>
       )}
 
+      {canManage && <QueriesCard staffId={member.id} staffName={member.name} branchId={member.branchId} />}
+
       <p className="mb-2 px-1 text-[13px] font-semibold text-ink-2">Access and permissions</p>
       <div className="mb-2 rounded-[20px] bg-white p-3 ring-1 ring-line/70">
         <ul className="space-y-2">
@@ -455,6 +462,7 @@ export function StaffProfileSheet({ member, onClose }: { member: StaffRecord; on
         <p className="mt-3 text-[12px] text-muted">Access follows the role. To change it, change the role under Edit profile.{mgr ? ' As branch manager they also manage the staff of this branch.' : ''}</p>
         {member.status !== 'Active' && <p className="mt-2 rounded-xl bg-[#fdecec] px-3 py-2 text-[12.5px] font-medium text-[#b42318]">While {member.status.toLowerCase()}, this person cannot sign in.</p>}
       </div>
+      {canManage && usesApp(member) && !mgr && <AccountCard accountKey={staffKey(member.id)} name={member.name} what={member.role} branchId={member.branchId} />}
       <p className="px-1 pb-2 text-[12px] text-muted">Patients, bills and payments this person records will show here once staff sign in is connected.</p>
 
       {editing && <StaffEditSheet member={member} onClose={() => setEditing(false)} />}

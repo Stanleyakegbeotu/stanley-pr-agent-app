@@ -20,6 +20,7 @@ import { resolvePhoto, useSettings } from "@company/services/settingsStore";
 import { putBackExpense, takeExpense, type ExpenseRecord } from "@company/services/expenses";
 import { restoreDraft, restoreOrder, takeDraft, takeOrder, type BillingSession, type Order } from "@company/services/billing";
 import type { PeriodSelection } from "@company/data/types";
+import { staffKey, useAccountAccess } from "@company/services/accountAccess";
 
 /* localStorage is a per-viewer convenience only; every read/write is guarded. */
 function readStore(key: string): string | null {
@@ -475,6 +476,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   // account" (demo stand-in until real sign-in exists).
   const branchId = route.segments[0] === "branch" ? route.segments[1] : null;
   const [actingAs, setActingAs] = useState<Record<string, string>>({});
+  const accountAccess = useAccountAccess();
   const { profiles } = useSettings();
   const user = useMemo<AppUser>(() => {
     const first = (n: string) => n.split(/\s+/)[0] || n;
@@ -497,14 +499,15 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       branchId,
       photo: resolvePhoto(profiles, s.id, s.photo),
     });
-    const picked = staff.find((s) => s.id === actingAs[branchId] && s.branchId === branchId && s.status !== "Left" && s.status !== "Suspended");
+    // A deactivated account (Staff Management → Access & account) can't be signed in to.
+    const picked = staff.find((s) => s.id === actingAs[branchId] && s.branchId === branchId && s.status !== "Left" && s.status !== "Suspended" && !accountAccess[staffKey(s.id)]?.off);
     if (picked) return fromStaff(picked, isManager(picked) ? "manager" : "staff");
     const m = managerOf(staff, branchId);
     if (m) return fromStaff(m, "manager");
     // No manager yet: the legacy branch keeps its named placeholder; a new branch shows a neutral one.
     const placeholder = branchId === LEGACY_BRANCH_ID ? BRANCH_MANAGER_PLACEHOLDER : { ...BRANCH_MANAGER_PLACEHOLDER, name: "Branch Manager (not assigned)", firstName: "Manager" };
     return withProfile({ ...placeholder, key: `placeholder-manager:${branchId}`, branchId });
-  }, [branchId, staff, actingAs, profiles]);
+  }, [branchId, staff, actingAs, profiles, accountAccess]);
   userRef.current = user;
   setAuditActor(user.name, user.role);
 
