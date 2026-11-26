@@ -22,6 +22,13 @@ import { AgentAvatar } from '@/admin/agentPhotos';
 import { ConversationRow, InboxSection } from '@/screens/chat/Inbox';
 import { first, initials, plural, stamp } from './data';
 import { WeekAnnouncements } from './insights';
+import { SixMonthsExplain } from './analysis';
+import { TargetGuideCard } from './targetGuide';
+import { MyReports } from './reports';
+import { useIssueReports } from '@company/services/issueReports';
+export { MarketerAnalysis } from './analysis';
+export { MarketerAlerts, useAlerts } from './notifications';
+export { MarketerSettings } from './settings';
 import { marketerAgentChat, marketerPrefix, useMarketerConversations } from './chat';
 import { AgentRow, Card, GOOD, GrowBar, GrowBars, GrowRing, NEEDS, STATUS_COLOR, useMk } from './ui';
 
@@ -60,7 +67,9 @@ function Delta({ now, before, money }: { now: number; before: number; money: (n:
 /* ─────────────── Home ─────────────── */
 
 export function MarketerHome() {
-  const { m, me, go, openLog, openRegister, openHospital } = useMk();
+  const { m, me, go, openLog, openRegister, openHospital, openFollow } = useMk();
+  const { user } = useCompany();
+  const [six, setSix] = useState(false);
   const p = m.my;
   const seen = useSeen<HTMLDivElement>(0.2);
   const due = m.myHealth.filter((a) => a.due);
@@ -73,11 +82,11 @@ export function MarketerHome() {
         <span aria-hidden="true" className="absolute -right-16 -top-24 h-72 w-72 rounded-full bg-white/10" />
         <span aria-hidden="true" className="absolute -bottom-20 -left-10 h-48 w-48 rounded-full bg-white/5" />
         <div className="relative flex items-center gap-3">
-          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-white/20 text-[16px] font-bold ring-[3px] ring-white/60">{initials(me.name)}</span>
+          {user.photo ? <img src={user.photo} alt="" className="h-12 w-12 shrink-0 rounded-full object-cover ring-[3px] ring-white/60" /> : <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-white/20 text-[16px] font-bold ring-[3px] ring-white/60">{initials(user.name)}</span>}
           <span className="min-w-0 flex-1">
             <span className="block text-[12.5px] text-white/80">Marketer · {plural(m.mine.length, 'hospital')} · {plural(m.myAgentIds.size, 'PR agent')}</span>
             <span className="block truncate text-[20px] font-bold leading-tight">
-              {greet()}, {first(me.name)}
+              {greet()}, {first(user.name)}
             </span>
             {pw && <span className={`mt-1 inline-block rounded-full px-2.5 py-0.5 text-[11.5px] font-bold ring-1 ring-white/25 ${PACE_PILL[pw.tone]}`}>{pw.text}</span>}
           </span>
@@ -142,7 +151,7 @@ export function MarketerHome() {
 
       {m.mine.length > 0 && (
         <>
-          <SectionTitle title="Follow up now" action="All agents" onAction={() => go('hospitals')} />
+          <SectionTitle title="Follow up now" action="See all" onAction={openFollow} />
           <Card className="!p-1.5">
             {!m.healthReady ? (
               <p className="px-3 py-3 text-[13px] text-muted">Working out who needs you…</p>
@@ -154,8 +163,8 @@ export function MarketerHome() {
               </p>
             )}
             {due.length > 5 && (
-              <button type="button" onClick={openLog} className="press mt-1 w-full rounded-xl py-2.5 text-[13.5px] font-semibold text-brand-600">
-                {due.length - 5} more to follow up
+              <button type="button" onClick={openFollow} className="press mt-1 w-full rounded-xl py-2.5 text-[13.5px] font-semibold text-brand-600">
+                See {due.length - 5} more, hospital by hospital
               </button>
             )}
           </Card>
@@ -178,9 +187,12 @@ export function MarketerHome() {
       {m.mine.length > 0 && (
         <>
           <SectionTitle title="Your last six months" action="Analysis" onAction={() => go('analysis')} />
-          <Card>
-            <GrowBars items={m.history.map((h) => ({ label: monthName(h.month).split(' ')[0]!, value: h.revenue, target: h.target }))} format={(n) => m.money(n)} note="Blue: amount generated. Grey: target. Green: target reached." />
-          </Card>
+          <div role="button" tabIndex={0} onClick={() => setSix(true)} onKeyDown={(e) => e.key === 'Enter' && setSix(true)} className="cursor-pointer transition-transform active:scale-[0.99]">
+            <Card>
+              <GrowBars items={m.history.map((h) => ({ label: monthName(h.month).split(' ')[0]!, value: h.revenue, target: h.target }))} format={(n) => m.money(n)} note="Blue: amount generated. Grey: target. Green: target reached. Tap for the full picture." />
+            </Card>
+          </div>
+          {six && <SixMonthsExplain onClose={() => setSix(false)} />}
         </>
       )}
     </Page>
@@ -280,140 +292,6 @@ function Ranking() {
   );
 }
 
-/* ─────────────── Analysis ─────────────── */
-
-const PIE = ['#1f6fe8', '#16a34a', '#f59e0b', '#8b5cf6', '#ef4444', '#0ea5e9', '#94a3b8'];
-
-export function MarketerAnalysis() {
-  const { m } = useMk();
-  const [which, setWhich] = useState<'this' | 'last'>('this');
-  const ym = which === 'this' ? m.ym : shiftMonth(m.ym, -1);
-  const p = which === 'this' ? m.my : m.history[m.history.length - 2];
-  const figs = which === 'this' ? m.figs : m.lastFigs;
-  const keys = m.mine.map((h) => h.key);
-  const byHosp = keys.map((k) => ({ k, revenue: figs.get(k)?.revenue ?? 0, patients: figs.get(k)?.patients ?? 0 })).sort((a, b) => b.revenue - a.revenue);
-  const top = byHosp.slice(0, 5);
-  const rest = byHosp.slice(5).reduce((s, x) => s + x.revenue, 0);
-  const statuses: AgentStatus[] = ['top', 'rising', 'steady', 'slipping', 'quiet', 'inactive', 'never'];
-  const days = useMemo(() => dailyFor(m.branchId, keys, monthRange(ym), m.agents), [m.branchId, keys.join(','), ym, m.agents]); // eslint-disable-line react-hooks/exhaustive-deps
-  const prevDays = useMemo(() => dailyFor(m.branchId, keys, monthRange(shiftMonth(ym, -1)), m.agents), [m.branchId, keys.join(','), ym, m.agents]); // eslint-disable-line react-hooks/exhaustive-deps
-  // Weeks of the month (Monday to Sunday), amount against the weekly target.
-  const weeks = useMemo(() => {
-    // A week cut by the start or end of the month gets that share of the weekly target.
-    const perDay = (p?.week.target ?? 0) / 7;
-    const out: { label: string; value: number; target: number }[] = [];
-    for (const d of days) {
-      const label = weekStartOf(new Date(`${d.date}T12:00:00`)).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-      const last = out[out.length - 1];
-      if (!last || last.label !== label) out.push({ label, value: d.revenue, target: perDay });
-      else (last.value += d.revenue), (last.target += perDay);
-    }
-    return out.map((w) => ({ ...w, target: Math.round(w.target) }));
-  }, [days, p?.week.target]);
-  const kpi = useSeen<HTMLDivElement>(0.2);
-  if (!p) return <Page title="Analysis"><EmptyMine /></Page>;
-  const avg = p.patients ? p.revenue / p.patients : 0;
-  return (
-    <Page>
-      <PageTitle title="Analysis" sub={`Your ${plural(m.mine.length, 'hospital')} · ${monthName(ym, true)}`} />
-      <div className="mb-3">
-        <Chips value={which} onChange={setWhich} label="Month" options={[{ value: 'this', label: 'This month' }, { value: 'last', label: 'Last month' }]} />
-      </div>
-      <div ref={kpi.ref} className="grid grid-cols-2 gap-2.5">
-        {[
-          { l: 'Amount generated', v: p.revenue, f: (n: number) => m.money(n), icon: <Wallet size={22} className="text-brand-500" />, tint: 'bg-tint-blue border-[#d6e7ff]', ink: 'text-brand-800', s: `${Math.round(p.pct * 100)}% of ${m.money(p.target)}` },
-          { l: 'Patients attended', v: p.patients, f: (n: number) => formatCount(Math.round(n)), icon: <Users size={22} className="text-violet" />, tint: 'bg-tint-purple border-[#e2d8ff]', ink: 'text-violet', s: `${formatCount(p.lastMonth)} the month before` },
-          { l: 'Average per patient', v: avg, f: (n: number) => m.money(n), icon: <TrendingUp size={22} className="text-good" />, tint: 'bg-tint-green border-[#cdeedb]', ink: 'text-[#14633a]', s: 'Amount ÷ patients' },
-          { l: 'Follow-ups', v: p.followUps, f: (n: number) => formatCount(Math.round(n)), icon: <ClipboardCheck size={22} className="text-orange" />, tint: 'bg-tint-orange border-[#ffe2c6]', ink: 'text-warn-ink', s: `${p.recruits} new agents · ${p.newHospitals} hospitals` },
-        ].map((t) => (
-          <div key={t.l} className={`min-h-[118px] rounded-[18px] border p-3 ${t.tint}`}>
-            {t.icon}
-            <p className="mt-1.5 text-[12.5px] text-ink-2">{t.l}</p>
-            <p className={`text-[21px] font-bold leading-tight tracking-[-0.02em] ${t.ink}`}>
-              <CountUp value={t.v} format={t.f} seen={kpi.seen} />
-            </p>
-            <p className="truncate text-[11px] text-muted">{t.s}</p>
-          </div>
-        ))}
-      </div>
-
-      <SectionTitle title="Amount by hospital" />
-      <Card>
-        <Donut
-          parts={[...top.map((x, i) => ({ label: x.k, value: x.revenue, color: PIE[i]!, sub: `${formatCount(x.patients)} patients` })), ...(rest > 0 ? [{ label: 'Other hospitals', value: rest, color: PIE[6]! }] : [])]}
-          total={m.money(p.revenue)}
-          label="Generated"
-          format={(n) => m.money(n)}
-          legend="below"
-        />
-      </Card>
-
-      <SectionTitle title="Amount by week" />
-      <Card>
-        <GrowBars items={weeks} format={(n) => m.money(n)} note={`Each week against the weekly target (${m.money(p.week.target)}; a part week gets its share). Weeks start on Monday.`} />
-      </Card>
-
-      <SectionTitle title="Your PR agents" />
-      <Card>
-        <Donut
-          parts={statuses.map((s) => ({ label: STATUS_LABEL[s], value: m.myHealth.filter((a) => a.status === s).length, color: STATUS_COLOR[s] })).filter((x) => x.value > 0)}
-          total={formatCount(m.myHealth.length)}
-          label="PR agents"
-          format={(n) => formatCount(n)}
-        />
-        <p className="mt-2 text-[12px] text-muted">
-          {formatCount(m.myHealth.filter((a) => GOOD.includes(a.status)).length)} doing well · {formatCount(m.myHealth.filter((a) => NEEDS.includes(a.status)).length)} need you
-        </p>
-      </Card>
-
-      <SectionTitle title="Day by day" />
-      <Card>
-        <LineChart labels={days.map((d) => String(Number(d.date.slice(8))))} series={[{ name: monthName(ym), color: '#1f6fe8', values: days.map((d) => d.revenue) }, { name: monthName(shiftMonth(ym, -1)), color: '#94a3b8', values: prevDays.slice(0, days.length).map((d) => d.revenue), dashed: true }]} format={(n) => m.money(n)} />
-      </Card>
-
-      <SectionTitle title="Patients by hospital" />
-      <Card>
-        <HBars rows={[...byHosp].sort((a, b) => b.patients - a.patients).slice(0, 8).map((x) => ({ label: x.k, value: x.patients }))} />
-      </Card>
-
-      <SectionTitle title="Six months against target" />
-      <Card>
-        <GrowBars items={m.history.map((h) => ({ label: monthName(h.month).split(' ')[0]!, value: h.revenue, target: h.target }))} format={(n) => m.money(n)} note="Blue: amount generated. Grey: target. Green: target reached." />
-      </Card>
-    </Page>
-  );
-}
-
-function HBars({ rows }: { rows: { label: string; value: number }[] }) {
-  const { ref, seen } = useSeen<HTMLDivElement>();
-  const max = Math.max(...rows.map((r) => r.value), 1);
-  return (
-    <div ref={ref} className="space-y-2.5">
-      {rows.map((r, i) => (
-        <div key={r.label}>
-          <div className="mb-1 flex justify-between text-[12.5px]">
-            <b className="truncate text-ink">{r.label}</b>
-            <span className="font-semibold text-ink-2">{formatCount(r.value)} patients</span>
-          </div>
-          <span className="block h-2.5 overflow-hidden rounded-full bg-page">
-            <i className="block h-full rounded-full bg-linear-to-r from-[#7c5cff] to-[#4f46e5] transition-[width] duration-[1000ms] ease-[cubic-bezier(0.22,0.8,0.24,1)]" style={{ width: seen ? `${(r.value / max) * 100}%` : '0%', transitionDelay: `${i * 80}ms` }} />
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function EmptyMine() {
-  return (
-    <Card className="mt-4 text-center">
-      <Sticker name="hospital" size={56} />
-      <p className="mt-3 text-[17px] font-bold text-ink">No hospitals yet</p>
-      <p className="mt-1 text-[13.5px] text-muted">Your Branch Manager gives you your hospitals. Every PR agent at them becomes yours.</p>
-    </Card>
-  );
-}
-
 /* ─────────────── My hospitals ─────────────── */
 
 type HFilter = 'all' | 'need' | 'up' | 'down';
@@ -445,6 +323,7 @@ export function MarketerHospitals() {
           </div>
         ))}
       </div>
+      <TargetGuideCard />
       <StickyTools>
         <div className="mb-2">
           <SearchField value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search a hospital or PR agent" aria-label="Search hospitals and PR agents" />
@@ -608,6 +487,8 @@ export function MarketerActivity() {
 export function MarketerCentre() {
   const { m, me, openRegister } = useMk();
   const [f, setF] = useState<'all' | 'proposed' | 'partnered' | 'declined'>('all');
+  const [tab, setTab] = useState<'hospitals' | 'reports'>('hospitals');
+  const reports = useIssueReports().filter((r) => r.from.name === me.name && r.from.role === 'Marketer');
   const seen = useSeen<HTMLDivElement>(0.2);
   const mine = m.st.partners.filter((p) => p.marketerId === me.id);
   const PILL = { proposed: 'bg-[#fff1de] text-[#b45309]', partnered: 'bg-[#e6f8ee] text-good-ink', declined: 'bg-page text-muted' } as const;
@@ -615,7 +496,20 @@ export function MarketerCentre() {
   const shown = mine.filter((p) => f === 'all' || p.status === f);
   return (
     <Page>
-      <PageTitle title="Report centre" sub="Register hospitals and health centres you bring in. Once your manager takes one on, it becomes yours." />
+      <PageTitle title="Report centre" sub="Register new hospitals, and report complaints or issues to your manager or the Company Admin." />
+      <div className="mb-3 grid grid-cols-2 gap-1.5 rounded-2xl bg-white p-1 shadow-sm ring-1 ring-line">
+        {(
+          [
+            ['hospitals', `New hospitals ${mine.length}`],
+            ['reports', `Reports ${reports.length}`],
+          ] as const
+        ).map(([k, l]) => (
+          <button key={k} type="button" aria-pressed={tab === k} onClick={() => setTab(k)} className={`press min-h-11 rounded-xl text-[14px] font-semibold ${tab === k ? 'bg-brand-600 text-white' : 'text-ink-2'}`}>
+            {l}
+          </button>
+        ))}
+      </div>
+      {tab === 'reports' ? <MyReports /> : <>
       <button type="button" onClick={openRegister} className="press relative mb-3 flex w-full items-center gap-3 overflow-hidden rounded-[24px] bg-linear-to-br from-[#0f6b4a] via-[#16a34a] to-[#4ade80] p-4 text-left text-white shadow-[0_14px_32px_rgba(22,163,74,0.3)]">
         <span aria-hidden="true" className="absolute -right-10 -top-14 h-40 w-40 rounded-full bg-white/10" />
         <Sticker name="hospital" size={48} />
@@ -687,6 +581,7 @@ export function MarketerCentre() {
           <Card className="text-center text-[13.5px] text-muted">{mine.length ? 'Nothing in this list.' : 'Nothing registered yet.'}</Card>
         )}
       </div>
+      </>}
     </Page>
   );
 }
@@ -803,110 +698,3 @@ function NewChat({ onClose, onPick }: { onClose: () => void; onPick: (agentId: n
   );
 }
 
-/* ─────────────── Alerts (the bell) ─────────────── */
-
-export interface Alert {
-  key: string;
-  tone: 'warn' | 'danger' | 'ok' | 'brand';
-  title: string;
-  text: string;
-  onOpen?: () => void;
-}
-const ALERT_TONE = { warn: 'bg-[#fff1de] text-[#b45309]', danger: 'bg-[#ffe4e4] text-[#b42318]', ok: 'bg-[#e6f8ee] text-good-ink', brand: 'bg-brand-50 text-brand-700' } as const;
-
-export function useAlerts(): Alert[] {
-  const { m, me, openAgent, go } = useMk();
-  return useMemo(() => {
-    const out: Alert[] = [];
-    const p = m.my;
-    if (p) {
-      const w = p.week;
-      if (w.revenue >= w.target) out.push({ key: `week-hit-${w.from}`, tone: 'ok', title: 'Weekly target reached', text: `${m.money(w.revenue)} this week against ${m.money(w.target)}. Well done.`, onOpen: () => go('analysis') });
-      else if (w.pace > 0.4 && w.pct < w.pace * 0.8) out.push({ key: `week-behind-${w.from}-${Math.round(w.pace * 7)}`, tone: 'danger', title: 'Behind on this week', text: `${m.money(w.revenue)} of ${m.money(w.target)} so far. Follow up the agents who have gone quiet.`, onOpen: () => go('analysis') });
-      if (p.pct >= 1) out.push({ key: `month-hit-${p.month}`, tone: 'ok', title: 'Monthly target reached', text: `${m.money(p.revenue)} against ${m.money(p.target)}.` });
-    }
-    for (const a of m.myHealth.filter((x) => x.due && x.status === 'quiet').slice(0, 8)) out.push({ key: `quiet-${a.agent.id}-${a.daysSince}`, tone: 'warn', title: `${a.agent.name} has gone quiet`, text: `${a.hospital} · no referral for ${a.daysSince} days`, onOpen: () => openAgent(a) });
-    for (const a of m.myHealth.filter((x) => x.due && x.status === 'slipping').slice(0, 5)) out.push({ key: `slip-${a.agent.id}-${a.last28}`, tone: 'warn', title: `${a.agent.name} is slipping`, text: `${a.hospital} · ${a.action}`, onOpen: () => openAgent(a) });
-    for (const pt of m.st.partners.filter((x) => x.marketerId === me.id && x.status !== 'proposed')) out.push({ key: `partner-${pt.id}-${pt.status}`, tone: pt.status === 'partnered' ? 'ok' : 'brand', title: pt.status === 'partnered' ? `${pt.name} is now your hospital` : `${pt.name} was not taken on`, text: `Decided by ${pt.decidedBy ?? 'your manager'}`, onOpen: () => go('centre') });
-    for (const h of m.st.ownerHistory.filter((x) => x.to === me.id && x.by !== 'STANLEY').slice(0, 5)) out.push({ key: `own-${h.hospital}-${h.at}`, tone: 'brand', title: `${h.hospital} is now yours`, text: h.reason });
-    return out;
-  }, [m, me, openAgent, go]);
-}
-const SEEN_KEY = (id: string) => `stanley.mk.alertsSeen.${id}`;
-export const seenAlerts = (id: string): string[] => {
-  try {
-    return JSON.parse(localStorage.getItem(SEEN_KEY(id)) ?? '[]') as string[];
-  } catch {
-    return [];
-  }
-};
-
-export function MarketerAlerts() {
-  const { me } = useMk();
-  const alerts = useAlerts();
-  const [seenBefore] = useState(() => new Set(seenAlerts(me.id)));
-  useEffect(() => {
-    localStorage.setItem(SEEN_KEY(me.id), JSON.stringify(alerts.map((a) => a.key)));
-    window.dispatchEvent(new Event('marketer:alerts'));
-  }, [alerts, me.id]);
-  return (
-    <Page>
-      <PageTitle title="Alerts" sub="Your targets, PR agents who need you, and decisions on your hospitals" />
-      {alerts.length ? (
-        <Card className="!p-1.5">
-          {alerts.map((a) => (
-            <button key={a.key} type="button" onClick={a.onOpen} disabled={!a.onOpen} className="press flex w-full items-start gap-3 rounded-2xl px-2 py-2.5 text-left">
-              <span className={`mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl ${ALERT_TONE[a.tone]}`}>{a.tone === 'ok' ? <Trophy size={17} /> : a.tone === 'danger' ? <Target size={17} /> : a.tone === 'warn' ? <CalendarCheck size={17} /> : <Hospital size={17} />}</span>
-              <span className="min-w-0 flex-1">
-                <b className="block text-[14px] text-ink">
-                  {!seenBefore.has(a.key) && <span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-brand-600 align-[2px]" />}
-                  {a.title}
-                </b>
-                <span className="block text-[12.5px] text-muted">{a.text}</span>
-              </span>
-              {a.onOpen && <ChevronRight size={16} className="mt-2 shrink-0 text-faint" />}
-            </button>
-          ))}
-        </Card>
-      ) : (
-        <Card className="text-center text-[13.5px] text-muted">Nothing new.</Card>
-      )}
-    </Page>
-  );
-}
-
-/* ─────────────── Settings ─────────────── */
-
-export function MarketerSettings() {
-  const { m, me } = useMk();
-  return (
-    <Page>
-      <PageTitle title="Settings" />
-      <Card className="mb-3 flex items-center gap-3">
-        <span className="grid h-14 w-14 place-items-center rounded-full bg-linear-to-br from-brand-500 to-brand-700 text-[18px] font-bold text-white">{initials(me.name)}</span>
-        <span className="min-w-0">
-          <b className="block text-[17px] text-ink">{me.name}</b>
-          <span className="block text-[13px] text-muted">
-            Marketer · {plural(m.mine.length, 'hospital')} · {plural(m.myAgentIds.size, 'PR agent')}
-          </span>
-          <span className="block text-[12.5px] text-muted">{me.email || 'No email on record'}</span>
-        </span>
-      </Card>
-      <Card className="mb-3">
-        <p className="mb-2 text-[14px] font-bold text-ink">What you see, and what you don't</p>
-        <ul className="space-y-1.5 text-[13.5px] text-ink-2">
-          <li>✓ Your hospitals: patients and the amount each one generated</li>
-          <li>✓ The PR agents at your hospitals, how often they refer, and how many of their patients came</li>
-          <li>✓ Your monthly and weekly targets, your progress and the branch ranking</li>
-          <li>✗ What a single PR agent generated, or their commission</li>
-          <li>✗ Patient names or details</li>
-          <li>✗ Billing, payments and the front desk</li>
-        </ul>
-      </Card>
-      <Card className="flex items-center gap-3">
-        <Sticker name="bell" size={36} />
-        <p className="text-[13px] text-muted">Sign-in, push notifications and syncing between phones arrive when the cloud database is connected. Your manager sets your hospitals and target.</p>
-      </Card>
-    </Page>
-  );
-}

@@ -6,7 +6,13 @@
  * Follow-ups are the PR monitor's check-ups, so the manager and admin see them.
  */
 import { useMemo, useState } from 'react';
-import { AlertTriangle, CalendarCheck, CheckCircle2, Clock3, Hospital, Plus, Stethoscope, UserPlus, XCircle } from 'lucide-react';
+import { AlertTriangle, CalendarCheck, CheckCircle2, ChevronRight, Clock3, Compass, Copy, Hospital, MessageCircle, MessagesSquare, Plus, Stethoscope, UserPlus, XCircle } from 'lucide-react';
+import { getBranch } from '@company/data/company';
+import { hasPhone } from '@company/data/legacy';
+import { postText } from '@/domain/chat';
+import { copyText } from '@/ui/privacy';
+import { approachFor, templatesFor } from './guide';
+import { marketerAgentChat } from './chat';
 import { useApp as useCompany } from '@company/app/AppState';
 import { logAudit } from '@company/services/audit';
 import { OUTCOMES, STATUS_HINT, addCheckUp, useCheckUps, type AgentHealth, type CheckKind, type Outcome } from '@company/services/agentMonitor';
@@ -20,7 +26,7 @@ import { Chips } from '@/admin/branchFirst';
 import { AgentAvatar } from '@/admin/agentPhotos';
 import { Sticker } from '@/ui/kit';
 import { useIncoming } from '@/staff/incoming';
-import { daysText, plural, stamp } from './data';
+import { daysText, plural, stamp, waLink } from './data';
 import { AgentActions, AgentRow, GOOD, NEEDS, StatusPill, useMk } from './ui';
 
 function Spark({ weeks }: { weeks: number[] }) {
@@ -127,6 +133,9 @@ export function AgentSheet({ a, onClose }: { a: AgentHealth; onClose: () => void
       </div>
       <p className="mb-3 px-1 text-[11.5px] text-muted">Counts only. Patient names, what this agent generated and commission are never shown to marketers.</p>
 
+      <Approach a={a} />
+      <Composer a={a} />
+
       {logging && (
         <div className="mb-3 space-y-3 rounded-[20px] bg-white p-3.5 ring-1 ring-line/70">
           {thisWeek && <p className="rounded-xl bg-[#fff6ec] px-3 py-2 text-[12.5px] font-medium text-[#8a4b00]">Already followed up this week. You can still add one.</p>}
@@ -183,6 +192,151 @@ export function AgentSheet({ a, onClose }: { a: AgentHealth; onClose: () => void
         </ol>
       ) : (
         <p className="mb-3 rounded-[20px] bg-white px-4 py-3 text-[13px] text-muted ring-1 ring-line/70">No follow-ups yet.</p>
+      )}
+    </Sheet>
+  );
+}
+
+/** How to approach this agent, written from how they have been referring. */
+function Approach({ a }: { a: AgentHealth }) {
+  const g = approachFor(a);
+  return (
+    <div className="mb-3 overflow-hidden rounded-[22px] bg-linear-to-br from-[#fff8ec] to-[#ffeccc] p-4 ring-1 ring-[#fde2b3]">
+      <p className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-[0.1em] text-[#a85a00]">
+        <Compass size={15} /> How to approach them
+      </p>
+      <p className="mt-1 text-[16px] font-bold leading-snug text-ink">{g.headline}</p>
+      <ol className="mt-2 space-y-1.5">
+        {g.steps.map((t, i) => (
+          <li key={i} className="flex gap-2.5 text-[13.5px] leading-snug text-ink-2">
+            <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-white text-[11px] font-bold text-[#a85a00]">{i + 1}</span>
+            {t}
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+/** A ready message to edit and send: WhatsApp, the in-app chat, or copy. */
+function Composer({ a }: { a: AgentHealth }) {
+  const { m, me, chat } = useMk();
+  const { showToast } = useNav();
+  const branch = getBranch(m.branchId)?.name ?? '';
+  const templates = useMemo(() => templatesFor(a, me.name, branch), [a, me.name, branch]);
+  const [pick, setPick] = useState(templates[0]!.id);
+  const [text, setText] = useState(templates[0]!.text);
+  const phone = hasPhone(a.agent.phone) ? a.agent.phone : null;
+  return (
+    <div className="mb-3 rounded-[22px] bg-white p-3.5 ring-1 ring-line/70">
+      <p className="mb-2 text-[13px] font-semibold text-ink-2">Send a message</p>
+      <div className="-mx-1 mb-2 flex gap-1.5 overflow-x-auto px-1 pb-1">
+        {templates.map((t) => (
+          <button key={t.id} type="button" aria-pressed={pick === t.id} onClick={() => (setPick(t.id), setText(t.text))} className={`press min-h-9 shrink-0 rounded-full px-3 text-[12.5px] font-semibold ${pick === t.id ? 'bg-brand-600 text-white' : 'bg-page text-ink-2 ring-1 ring-line'}`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+      <LongText value={text} onChange={setText} max={600} minRows={4} maxRows={9} />
+      <div className="mt-2 grid grid-cols-3 gap-2">
+        <a href={phone ? `${waLink(phone)}?text=${encodeURIComponent(text)}` : undefined} target="_blank" rel="noreferrer" aria-disabled={!phone} className={`press flex min-h-11 items-center justify-center gap-1.5 rounded-2xl bg-[#e7f8ee] text-[13px] font-semibold text-[#128c4b] ${phone ? '' : 'pointer-events-none opacity-40'}`}>
+          <MessageCircle size={16} /> WhatsApp
+        </a>
+        <button
+          type="button"
+          disabled={text.trim().length < 2}
+          onClick={async () => {
+            await postText(marketerAgentChat(me.id, a.agent.id), text.trim());
+            showToast('Sent in the app');
+            chat(a.agent.id);
+          }}
+          className="press flex min-h-11 items-center justify-center gap-1.5 rounded-2xl bg-[#f1edff] text-[13px] font-semibold text-violet disabled:opacity-40"
+        >
+          <MessagesSquare size={16} /> In app
+        </button>
+        <button type="button" onClick={() => copyText(text, 'Message', showToast)} className="press flex min-h-11 items-center justify-center gap-1.5 rounded-2xl bg-page text-[13px] font-semibold text-ink-2">
+          <Copy size={15} /> Copy
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────── follow up: hospitals, then the agents there ─────────────── */
+
+export function FollowHospitalsSheet({ onClose }: { onClose: () => void }) {
+  const { m } = useMk();
+  const [q, setQ] = useState('');
+  const [open, setOpen] = useState<string | null>(null);
+  const need = (k: string) => m.myHealth.filter((a) => a.hospital === k && (a.due || NEEDS.includes(a.status)));
+  const rows = m.mine
+    .map((h) => ({ h, n: need(h.key).length, quiet: m.myHealth.filter((a) => a.hospital === h.key && a.status === 'quiet').length }))
+    .filter((r) => !q.trim() || r.h.key.toLowerCase().includes(q.trim().toLowerCase()))
+    .sort((a, b) => b.n - a.n || a.h.key.localeCompare(b.h.key));
+  const total = rows.reduce((s, r) => s + r.n, 0);
+  return (
+    <Sheet back tall title="Follow up" subtitle={`${plural(total, 'PR agent')} across your hospitals`} onClose={onClose} search={{ value: q, onChange: setQ, placeholder: 'Find a hospital' }}>
+      <div className="mb-3 flex items-center gap-3 rounded-[22px] bg-linear-to-br from-[#eef4ff] to-[#dbe8ff] p-3.5">
+        <Sticker name="stethoscope" size={40} />
+        <p className="text-[13px] leading-snug text-ink-2">Pick a hospital to see the agents to call, message or visit, with how to approach each one.</p>
+      </div>
+      <div className="space-y-2">
+        {rows.map(({ h, n, quiet }) => (
+          <button key={h.key} type="button" onClick={() => setOpen(h.key)} className="press flex w-full items-center gap-3 rounded-[20px] bg-white p-3 text-left ring-1 ring-line/70">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-brand-50 text-brand-700">
+              <Hospital size={20} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <b className="block truncate text-[15px] text-ink">{h.key}</b>
+              <span className="block text-[12px] text-muted">
+                {plural(h.agentIds.length, 'agent')}
+                {quiet ? ` · ${quiet} gone quiet` : ''}
+              </span>
+            </span>
+            <span className={`grid h-9 min-w-9 place-items-center rounded-full px-2 text-[14px] font-bold ${n ? 'bg-[#fff1de] text-[#b45309]' : 'bg-tint-green text-good-ink'}`}>{n}</span>
+            <ChevronRight size={16} className="text-faint" />
+          </button>
+        ))}
+      </div>
+      {open && <FollowAgentsSheet hospital={open} onClose={() => setOpen(null)} />}
+    </Sheet>
+  );
+}
+
+function FollowAgentsSheet({ hospital, onClose }: { hospital: string; onClose: () => void }) {
+  const { m, openAgent } = useMk();
+  const [q, setQ] = useState('');
+  const list = m.myHealth.filter((a) => a.hospital === hospital && (a.due || NEEDS.includes(a.status)) && (!q.trim() || a.agent.name.toLowerCase().includes(q.trim().toLowerCase())));
+  return (
+    <Sheet back tall title={hospital} subtitle={`${plural(list.length, 'agent')} to follow up`} onClose={onClose} search={{ value: q, onChange: setQ, placeholder: 'Find a PR agent' }}>
+      {list.length ? (
+        <div className="space-y-2">
+          {list.map((a) => {
+            const g = approachFor(a);
+            return (
+              <button key={a.agent.id} type="button" onClick={() => openAgent(a)} className="press w-full rounded-[20px] bg-white p-3 text-left ring-1 ring-line/70">
+                <span className="flex items-center gap-3">
+                  <AgentAvatar id={a.agent.id} name={a.agent.name} phone={a.agent.phone} size={44} />
+                  <span className="min-w-0 flex-1">
+                    <b className="block truncate text-[14.5px] text-ink">{a.agent.name}</b>
+                    <span className="block text-[12px] text-muted">
+                      {daysText(a.daysSince)} · {a.last28} in 4 wks ({a.prev28} before)
+                    </span>
+                  </span>
+                  <StatusPill s={a.status} />
+                </span>
+                <span className="mt-2 flex items-start gap-2 rounded-xl bg-[#fff8ec] px-3 py-2 text-[12.5px] text-[#8a4b00]">
+                  <Compass size={14} className="mt-0.5 shrink-0" />
+                  <span>
+                    <b>{g.headline}.</b> {a.lastCheck ? `Last follow-up ${stamp(a.lastCheck.at)}: ${a.lastCheck.outcome}.` : 'Not followed up yet.'}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="rounded-[20px] bg-white p-4 text-center text-[13.5px] text-muted ring-1 ring-line/70">{m.healthReady ? 'Nobody here needs a follow-up right now.' : 'Working out the agents…'}</p>
       )}
     </Sheet>
   );
@@ -453,16 +607,12 @@ export function RegisterSheet({ onClose }: { onClose: () => void }) {
   const [contactPhone, setContactPhone] = useState('');
   const [note, setNote] = useState('');
   const [tried, setTried] = useState(false);
-  const auto = name
-    .replace(/[^A-Za-z ]/g, ' ')
-    .split(/\s+/)
-    .filter((w) => w && !/^(of|the|and)$/i.test(w))
-    .map((w) => w[0]!.toUpperCase())
-    .join('')
-    .slice(0, 6);
+  // Codes already in use: partner hospitals and hospitals registered but not declined.
+  const taken = useMemo(() => new Set([...m.hospitals.map((h) => h.key), ...m.st.partners.filter((p) => p.branchId === m.branchId && p.status !== 'declined').map((p) => p.code)]), [m.hospitals, m.st.partners, m.branchId]);
+  const auto = useMemo(() => uniqueCode(name, taken), [name, taken]);
   const finalCode = (codeTouched ? code : auto).trim().toUpperCase();
-  const dupes = useMemo(() => (name.trim().length >= 3 ? possibleDuplicates(m.st, m.branchId, name, finalCode, m.hospitals.map((h) => h.key)) : []), [m.st, m.branchId, name, finalCode, m.hospitals]);
-  const bad = { name: name.trim().length < 3 ? 'Enter the name' : '', code: finalCode.length < 2 ? 'Give a short code' : m.hospitals.some((h) => h.key === finalCode) ? `${finalCode} is already a partner` : '' };
+  const dupes = useMemo(() => (name.trim().length >= 3 ? possibleDuplicates(m.st, m.branchId, name, '', m.hospitals.map((h) => h.key)) : []), [m.st, m.branchId, name, m.hospitals]);
+  const bad = { name: name.trim().length < 3 ? 'Enter the name' : '', code: finalCode.length < 2 ? 'Give a short code' : taken.has(finalCode) ? `${finalCode} is already used by another hospital` : '' };
   return (
     <Sheet
       back
@@ -502,12 +652,29 @@ export function RegisterSheet({ onClose }: { onClose: () => void }) {
             <p className="mt-1 text-[12px]">If it is, it's already a partner: no need to register it again.</p>
           </div>
         )}
-        <label className="block">
-          <FieldLabel label="Short code" required />
-          <input value={codeTouched ? code : auto} onChange={(e) => (setCodeTouched(true), setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9 ]/g, '').slice(0, 12)))} placeholder="GGH" className={inputCls(tried ? bad.code : null)} />
-          <FieldErr msg={tried ? bad.code : ''} />
-          <span className="mt-1 block text-[12px] text-muted">Used on PR agent records, like FMC or UATH.</span>
-        </label>
+        <div>
+          <FieldLabel label="Short code" />
+          {codeTouched ? (
+            <>
+              <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10))} placeholder="GGH" className={inputCls(bad.code || null)} autoFocus />
+              <FieldErr msg={bad.code} />
+              <button type="button" onClick={() => (setCodeTouched(false), setCode(''))} className="mt-1 text-[12.5px] font-semibold text-brand-600">
+                Use the automatic code ({auto || '…'})
+              </button>
+            </>
+          ) : (
+            <div className="flex items-center gap-3 rounded-2xl bg-page px-3.5 py-2.5 ring-1 ring-line">
+              <b className="min-w-0 flex-1 truncate text-[18px] tracking-[0.06em] text-ink">{auto || '—'}</b>
+              <span className="rounded-full bg-tint-green px-2 py-0.5 text-[11.5px] font-bold text-good-ink">{auto ? 'Auto · unique' : 'Type the name'}</span>
+              {auto && (
+                <button type="button" onClick={() => (setCodeTouched(true), setCode(auto))} className="text-[12.5px] font-semibold text-brand-600">
+                  Change
+                </button>
+              )}
+            </div>
+          )}
+          <span className="mt-1 block text-[12px] text-muted">Made from the name and checked against every hospital's code, so it never clashes. Used on PR agent records, like FMC or UATH.</span>
+        </div>
         <div>
           <FieldLabel label="Type" />
           <div className="flex flex-wrap gap-1.5">
@@ -536,4 +703,17 @@ export function RegisterSheet({ onClose }: { onClose: () => void }) {
       </div>
     </Sheet>
   );
+}
+
+/** A short code from the name's initials that no other hospital uses (GGH, then GGHO, then GGH2 …). */
+export function uniqueCode(name: string, taken: Set<string>): string {
+  const words = name.toUpperCase().replace(/[^A-Z0-9 ]/g, ' ').split(/\s+/).filter((w) => w && !/^(OF|THE|AND|&)$/.test(w));
+  if (!words.length) return '';
+  let base = words.map((w) => w[0]).join('').slice(0, 5);
+  if (base.length < 2) base = words[0]!.slice(0, 4);
+  const tries = [base];
+  // Add letters from the first word, then numbers.
+  for (const ch of words[0]!.slice(1, 4)) tries.push(`${base}${ch}`);
+  for (let n = 2; n < 100; n++) tries.push(`${base}${n}`);
+  return tries.find((c) => c.length >= 2 && !taken.has(c)) ?? `${base}${Date.now() % 1000}`;
 }

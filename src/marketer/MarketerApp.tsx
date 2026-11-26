@@ -26,8 +26,9 @@ import { useInbox } from '@/domain/chat';
 import { ChatThread } from '@/screens/chat/ChatThread';
 import { useMine, initials } from './data';
 import { marketerAgentChat, marketerPrefix, useMarketerConversations } from './chat';
-import { MarketerActivity, MarketerAlerts, MarketerAnalysis, MarketerCentre, MarketerHome, MarketerHospitals, MarketerInbox, MarketerSettings, seenAlerts, useAlerts } from './pages';
-import { AgentSheet, HospitalSheet, LogSheet, RegisterSheet } from './sheets';
+import { MarketerActivity, MarketerAlerts, MarketerAnalysis, MarketerCentre, MarketerHome, MarketerHospitals, MarketerInbox, MarketerSettings, useAlerts } from './pages';
+import { useAlertsRead } from './notifications';
+import { AgentSheet, FollowHospitalsSheet, HospitalSheet, LogSheet, RegisterSheet } from './sheets';
 import { MarketerCtx, useMk, type MarketerCtxValue } from './ui';
 
 interface Page {
@@ -93,6 +94,7 @@ function Workspace({ me, branchId, marketers }: { me: StaffRecord; branchId: str
   const [hospital, setHospital] = useState<HospitalInfo | null>(null);
   const [register, setRegister] = useState(false);
   const [log, setLog] = useState(false);
+  const [follow, setFollow] = useState(false);
   useEffect(() => {
     scroller.current?.scrollTo({ top: 0 });
     setMenu(false);
@@ -119,6 +121,7 @@ function Workspace({ me, branchId, marketers }: { me: StaffRecord; branchId: str
       openHospital: (h) => setHospital(h),
       openRegister: () => setRegister(true),
       openLog: () => setLog(true),
+      openFollow: () => setFollow(true),
       chat: (agentId) => {
         setAgent(null);
         setHospital(null);
@@ -149,6 +152,7 @@ function Workspace({ me, branchId, marketers }: { me: StaffRecord; branchId: str
             {hospital && <HospitalSheet h={hospital} onClose={() => setHospital(null)} />}
             {register && <RegisterSheet onClose={() => setRegister(false)} />}
             {log && <LogSheet onClose={() => setLog(false)} />}
+            {follow && <FollowHospitalsSheet onClose={() => setFollow(false)} />}
             {toast && (
               <div role="status" className="fixed left-1/2 z-[90] flex w-[calc(100%-40px)] max-w-md -translate-x-1/2 items-center gap-3 rounded-2xl bg-ink px-4 py-3.5 text-[14px] font-medium text-white shadow-2xl" style={{ bottom: 'calc(96px + var(--safe-bottom))' }}>
                 <CheckCircle2 size={19} className="shrink-0 text-[#4ade80]" />
@@ -166,17 +170,8 @@ function Workspace({ me, branchId, marketers }: { me: StaffRecord; branchId: str
 function Chrome({ openMenu, children }: { openMenu: () => void; children: ReactNode }) {
   const { m, me } = useMk();
   const alerts = useAlerts();
-  const [tick, setTick] = useState(0);
-  useEffect(() => {
-    const on = () => setTick((t) => t + 1);
-    window.addEventListener('marketer:alerts', on);
-    return () => window.removeEventListener('marketer:alerts', on);
-  }, []);
-  const unread = useMemo(() => {
-    const seen = new Set(seenAlerts(me.id));
-    return alerts.filter((a) => !seen.has(a.key)).length;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [alerts, me.id, tick]);
+  const read = useAlertsRead(me.id);
+  const unread = alerts.filter((a) => !read.isRead(a.key)).length;
   const { fixed } = useMarketerConversations(m.branchId, me.id, m.myAgentIds);
   const fixedIds = useMemo(() => fixed.map((c) => c.id), [fixed]);
   const inboxUnread = useInbox(fixedIds, marketerPrefix(me.id)).unread;

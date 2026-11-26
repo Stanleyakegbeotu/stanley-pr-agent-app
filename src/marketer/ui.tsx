@@ -25,6 +25,8 @@ export interface MarketerCtxValue {
   openHospital: (h: HospitalInfo) => void;
   openRegister: () => void;
   openLog: () => void;
+  /** Hospitals with the agents to follow up in each, then the agents there. */
+  openFollow: () => void;
   /** Open the in-app chat with a PR agent. */
   chat: (agentId: number) => void;
 }
