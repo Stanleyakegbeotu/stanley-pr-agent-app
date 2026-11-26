@@ -16,6 +16,13 @@
  *
  * Saved on this device and queued for the cloud, which delivers them to the
  * agents' phones. No patient data belongs in an announcement.
+ *
+ * Broadcast announcements (owner, 2026-11-26): the Company Admin or a Branch
+ * Manager posts to any mix of PR agents, Front Desk, Branch Managers and the
+ * Company Admin, for every branch or one (a manager: their own branch only).
+ * Each has a time frame: it shows from its start to its end, never for ever,
+ * so it can be scheduled ahead. Everything created is listed as Live,
+ * Scheduled or Ended, and can be ended early or deleted.
  */
 import { useEffect, useState } from 'react';
 
@@ -23,7 +30,12 @@ export type AnnouncementAudience =
   | { kind: 'agent'; agentId: number; name: string; phone: string }
   | { kind: 'branch'; branchId: string; branchName: string }
   /** Agents the admin picked (e.g. one hospital's agents). */
-  | { kind: 'agents'; branchId: string; agents: { id: number; name: string; phone: string }[] };
+  | { kind: 'agents'; branchId: string; agents: { id: number; name: string; phone: string }[] }
+  /** Everyone in the chosen roles, for every branch ('all') or one. */
+  | { kind: 'broadcast'; branchId: string; branchName: string; roles: AnnouncementRole[] };
+
+export type AnnouncementRole = 'agents' | 'frontdesk' | 'manager' | 'admin';
+export const ROLE_TEXT: Record<AnnouncementRole, string> = { agents: 'PR agents', frontdesk: 'Front Desk', manager: 'Branch Managers', admin: 'Company Admin' };
 
 export interface AdminAnnouncement {
   id: string;
@@ -37,6 +49,30 @@ export interface AdminAnnouncement {
   /** Where "Reply" leads on the agent's side (their chat with the admin). */
   replyInChat: boolean;
   status: 'queued' | 'delivered';
+  /** Time frame (ISO). Older announcements without one show for 30 days. */
+  startsAt?: string;
+  endsAt?: string;
+}
+
+export type LiveState = 'scheduled' | 'live' | 'ended';
+export function liveState(a: AdminAnnouncement, now = Date.now()): LiveState {
+  const start = new Date(a.startsAt ?? a.at).getTime();
+  const end = a.endsAt ? new Date(a.endsAt).getTime() : new Date(a.at).getTime() + 30 * 86_400_000;
+  // End first: a scheduled announcement ended early is Ended, not Scheduled.
+  return now >= end ? 'ended' : now < start ? 'scheduled' : 'live';
+}
+/** End an announcement now (it stays in the list as Ended). */
+export function endAnnouncement(id: string) {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(listAnnouncements().map((a) => (a.id === id ? { ...a, endsAt: new Date().toISOString() } : a))));
+  } catch {
+    /* ignore */
+  }
+  window.dispatchEvent(new Event(EVENT));
+}
+/** Live announcements for a staff member (Front Desk, Branch Manager or Company Admin). */
+export function staffAnnouncements(list: AdminAnnouncement[], role: AnnouncementRole, branchId: string | null): AdminAnnouncement[] {
+  return list.filter((a) => a.audience.kind === 'broadcast' && liveState(a) === 'live' && a.audience.roles.includes(role) && (a.audience.branchId === 'all' || !branchId || a.audience.branchId === branchId));
 }
 
 const KEY = 'stanley.admin.announcements.v1';
@@ -92,8 +128,9 @@ export function announcementsFor(list: AdminAnnouncement[], me: { phone?: string
   const mine = me.phone ? digits(me.phone) : '';
   const since = Date.now() - 30 * 86_400_000;
   return list.filter((a) => {
-    if (new Date(a.at).getTime() < since) return false;
+    if (a.endsAt || a.startsAt ? liveState(a) !== 'live' : new Date(a.at).getTime() < since) return false;
     const au = a.audience;
+    if (au.kind === 'broadcast') return au.roles.includes('agents') && (au.branchId === 'all' || au.branchId === me.branchId);
     if (au.kind === 'branch') return au.branchId === me.branchId;
     if (!mine) return false;
     return au.kind === 'agent' ? digits(au.phone) === mine : au.agents.some((x) => digits(x.phone) === mine);

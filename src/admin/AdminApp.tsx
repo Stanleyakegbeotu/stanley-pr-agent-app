@@ -10,7 +10,7 @@
  * is in the menu. Routes: "#/admin/<desktop path>".
  */
 import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
-import { CheckCircle2, Building2, ChartLine, Handshake, LayoutGrid, Menu as MenuIcon, Package, ScrollText, Settings, Trash2, UserRound, Users, Wallet, X, type LucideIcon } from 'lucide-react';
+import { CheckCircle2, Building2, ChartLine, Handshake, LayoutGrid, Megaphone, Menu as MenuIcon, Package, ScrollText, Settings, Trash2, UserRound, Users, Wallet, X, type LucideIcon } from 'lucide-react';
 import { AppStateProvider, useApp as useCompany } from '@company/app/AppState';
 import { isRead, useNotifications } from '@company/services/notifications';
 import { COMPANY as CO } from '@company/data/company';
@@ -33,6 +33,7 @@ import { InventoryPage } from './pages/Inventory';
 import { AuditPage, TrashPage } from './pages/Logs';
 import { ReportsPage } from './pages/Reports';
 import { SettingsPage } from './pages/Settings';
+import { AnnouncementsPage } from './announcementsPage';
 
 interface AdminPage {
   id: string;
@@ -51,6 +52,7 @@ export const ADMIN_PAGES: AdminPage[] = [
   { id: 'patients', label: 'Patients', icon: UserRound, screen: PatientsPage },
   { id: 'finance', label: 'Finance & Expenses', icon: Wallet, screen: FinancePage },
   { id: 'reports', label: 'Reports', icon: ChartLine, screen: ReportsPage },
+  { id: 'announcements', label: 'Announcements', icon: Megaphone, screen: AnnouncementsPage },
   { id: 'settings', label: 'Settings', icon: Settings, screen: SettingsPage },
   { id: 'audit', label: 'Audit Log', icon: ScrollText, screen: AuditPage },
   { id: 'trash', label: 'Trash', icon: Trash2, screen: TrashPage },

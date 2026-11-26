@@ -25,6 +25,7 @@ import { Action, ActivityTiles, AdminTopBar, PageGlow, PaymentsCard, SectionTitl
 import { ExpensesCard, Hospitals, TopAgents, TopServices } from '../sections';
 import { useInsightSlides } from '../insights';
 import { AdminReferrals } from '../referrals';
+import { LiveAnnouncements } from '../announcementsPage';
 
 export function AdminDashboard() {
   const { context, period, user, navigate } = useCompany();
@@ -95,6 +96,9 @@ export function AdminDashboard() {
 
         {/* Incoming referrals across the branches (owner, 2026-11-25): how fast each branch attends to them. */}
         <AdminReferrals />
+
+        {/* Live announcements (owner, 2026-11-26). */}
+        <LiveAnnouncements onManage={() => navigate('/announcements')} />
 
         {/* Smart announcement bar */}
         <SlideCarousel slides={insights.slides} label="What needs you" />

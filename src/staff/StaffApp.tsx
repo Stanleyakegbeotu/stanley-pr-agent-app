@@ -12,7 +12,7 @@
  * Routes: "#/admin/branch/<branchId>/<page>".
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
-import { Banknote, ChartColumn, CheckCircle2, FilePenLine, FolderOpen, Handshake, LayoutGrid, Menu as MenuIcon, Package, Plus, ReceiptText, ScrollText, Settings, Trash2, Users, X, type LucideIcon } from 'lucide-react';
+import { Banknote, ChartColumn, CheckCircle2, FilePenLine, FolderOpen, Handshake, LayoutGrid, Megaphone, Menu as MenuIcon, Package, Plus, ReceiptText, ScrollText, Settings, Trash2, Users, X, type LucideIcon } from 'lucide-react';
 import { AppStateProvider, useApp as useCompany } from '@company/app/AppState';
 import { getBranch } from '@company/data/company';
 import { branchRoute } from '@company/app/router';
@@ -41,6 +41,7 @@ import { STAFF_AGENT_PREFIX, useStaffConversations } from './chat';
 import { useInbox } from '@/domain/chat';
 import { ChatThread } from '@/screens/chat/ChatThread';
 import { ExpensesPage } from './pages/Expenses';
+import { AnnouncementsPage } from '@/admin/announcementsPage';
 
 interface StaffPage {
   id: string;
@@ -59,6 +60,7 @@ const PAGES: StaffPage[] = [
   { id: 'analysis', label: 'Analysis', icon: ChartColumn, screen: ReportsPage },
   { id: 'expenses', label: 'Expenses', icon: Banknote, screen: ExpensesPage },
   { id: 'staff', label: 'Staff Management', icon: Users, screen: () => <StaffPage /> },
+  { id: 'announcements', label: 'Announcements', icon: Megaphone, screen: AnnouncementsPage },
   { id: 'settings', label: 'Settings', icon: Settings, screen: SettingsPage },
   { id: 'audit', label: 'Audit', icon: ScrollText, screen: AuditPage },
   { id: 'trash', label: 'Trash', icon: Trash2, screen: TrashPage },

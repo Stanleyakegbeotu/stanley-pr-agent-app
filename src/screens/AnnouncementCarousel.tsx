@@ -16,7 +16,10 @@ import { announcementsFor, useAnnouncements, type AdminAnnouncement } from '@/do
 /** What the Admin sent (a message, a thank you or a notice) as an announcement slide. Never money. */
 function fromAdmin(a: AdminAnnouncement): Announcement {
   const look = a.kind === 'thanks' ? { kicker: 'A thank you from the Admin', theme: 'violet' as const, sticker: 'trophy' as const } : a.kind === 'message' ? { kicker: 'Message from the Admin', theme: 'blue' as const, sticker: 'envelope' as const } : { kicker: 'Notice from the Admin', theme: 'teal' as const, sticker: 'megaphone' as const };
-  return { id: a.id, kicker: look.kicker, title: a.title, text: a.text, cta: a.replyInChat ? 'Read and reply' : 'Reply to Admin', to: '/messages/admin', theme: look.theme, sticker: look.sticker, badge: 'NEW', date: a.at };
+  // A Branch Manager's announcement comes from the branch, and replies go to the branch.
+  const branch = a.from.role === 'Branch Manager';
+  const kicker = branch ? 'Notice from your branch' : look.kicker;
+  return { id: a.id, kicker, title: a.title, text: a.text, cta: branch ? 'Message the branch' : a.replyInChat ? 'Read and reply' : 'Reply to Admin', to: branch ? '/messages/frontdesk' : '/messages/admin', theme: look.theme, sticker: look.sticker, badge: 'NEW', date: a.startsAt ?? a.at };
 }
 
 const THEME: Record<Announcement['theme'], string> = {
