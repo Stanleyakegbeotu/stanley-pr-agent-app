@@ -196,7 +196,7 @@ function StaffFrame() {
                   ];
                 })}
                 <button type="button" onClick={() => setMenu((m) => !m)} aria-label="More pages" className="press relative flex min-h-15 flex-col items-center justify-center gap-1" style={{ gridColumn: 5 }}>
-                  {allowed.some((p) => !tabs.includes(p.id) && (counts[p.id]?.n ?? 0) > 0) && <span aria-hidden="true" className="absolute right-[calc(50%-16px)] top-2 h-2.5 w-2.5 rounded-full bg-[#ef4444] ring-2 ring-white" />
+                  {allowed.some((p) => !tabs.includes(p.id) && (counts[p.id]?.n ?? 0) > 0) && <span aria-hidden="true" className="absolute right-[calc(50%-16px)] top-2 h-2.5 w-2.5 rounded-full bg-[#ef4444] ring-2 ring-white" />}
                   <MenuIcon size={24} strokeWidth={menu || !tabs.includes(page.id) ? 2.3 : 1.7} className={menu || !tabs.includes(page.id) ? 'text-brand-600' : 'text-[#6b778c]'} />
                   <span className={`text-[12px] ${menu || !tabs.includes(page.id) ? 'font-semibold text-brand-600' : 'text-[#6b778c]'}`}>More</span>
                 </button>
