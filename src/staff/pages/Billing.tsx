@@ -79,6 +79,7 @@ import { ReceiptPanel, methodLabel } from '../receipt';
 import { IncomingEntry, findIncoming, useIncoming, type Incoming } from '../incoming';
 import { QUOTE_KEY, type QuoteHandOver } from '../calculator';
 import { useBranchItems } from '@/admin/branchCatalogue';
+import { GuideButton, aboutOf, useGuide } from '@/admin/testGuide';
 
 type Step = 1 | 2 | 3;
 const STEPS = ['Patient', 'Services', 'Payment', 'Preview'] as const;
@@ -902,6 +903,7 @@ function HospitalPick({ value, agentHospital, onPick, onClose }: { value: string
 /* ─────────────── 2 Services ─────────────── */
 
 function ServicesStep({ s, set, errs, branchId }: StepProps) {
+  const guide = useGuide();
   const { inventory, user } = useCompany();
   const billing = useBilling();
   // The branch's own price list (imported from the company, with its prices and tests).
@@ -940,11 +942,15 @@ function ServicesStep({ s, set, errs, branchId }: StepProps) {
     const on = added.has(i.id);
     return (
       <li key={i.id}>
-        <button type="button" disabled={i.price === null} onClick={() => toggle(i)} className={`press flex w-full items-center gap-3 rounded-2xl p-3 text-left ring-1 disabled:opacity-55 ${on ? 'bg-brand-50 ring-brand-200' : 'bg-white ring-line/70'}`}>
+        <div role="button" tabIndex={i.price === null ? -1 : 0} aria-disabled={i.price === null} onClick={() => !(i.price === null) && toggle(i)} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && !(i.price === null) && (e.preventDefault(), toggle(i))} className={`press flex w-full cursor-pointer items-center gap-3 rounded-2xl p-3 text-left ring-1 aria-disabled:opacity-55 ${on ? 'bg-brand-50 ring-brand-200' : 'bg-white ring-line/70'}`}>
           <span className="min-w-0 flex-1">
             <b className="block text-[14px] leading-snug text-ink">{i.name}</b>
-            <span className="block truncate text-[12px] text-muted">
-              {showCat ? `${labelOf(i.category)} · ` : ''}#{i.id}
+            <span className="block truncate text-[12px] text-muted">{aboutOf(i.name, i.category)}</span>
+            <span className="mt-1 flex items-center gap-2">
+              <GuideButton label={i.name} onClick={() => guide.open({ id: i.id, name: i.name, category: i.category, label: labelOf(i.category), price: i.price })} />
+              <span className="truncate text-[11.5px] text-faint">
+                {showCat ? `${labelOf(i.category)} · ` : ''}#{i.id}
+              </span>
             </span>
           </span>
           <span className="shrink-0 text-right">
@@ -953,7 +959,7 @@ function ServicesStep({ s, set, errs, branchId }: StepProps) {
               {i.price === null ? 'Unavailable' : on ? <><Check size={11} /> Added</> : <><Plus size={11} /> Add</>}
             </span>
           </span>
-        </button>
+        </div>
       </li>
     );
   };
@@ -1018,6 +1024,7 @@ function ServicesStep({ s, set, errs, branchId }: StepProps) {
         </div>
       )}
 
+      {guide.sheet}
       <Card icon={<FlaskConical size={19} />} title={`Selected tests · ${s.services.length}`} hint={canAdjust ? 'Catalogue prices apply. You can change a price for this bill only.' : 'Catalogue prices apply.'}>
         {s.services.length === 0 ? (
           <>

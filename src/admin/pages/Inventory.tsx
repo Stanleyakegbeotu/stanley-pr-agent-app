@@ -49,6 +49,8 @@ import { useStaffChrome } from '@/staff/chrome';
 import { AFTER_IMPORT, addBranchService, branchItems, importCompanyCatalogue, setBranchPrice, setOffered, useBranchCatalogue, type BranchItem } from '../branchCatalogue';
 import { Art, IconPicker, autoIcon, categoryIconOf, resolveIcon, serviceIconOf, setCategoryIcon, setServiceIcon, useIcons, type IconChoice } from '../catalogueIcons';
 import { InfoFields, draftHasContent, draftOf, infoFromDraft, mergeGuide, saveServiceInfo, useServiceInfo, type InfoDraft } from '../serviceInfo';
+import { GuideButton, aboutOf, useGuide } from '../testGuide';
+import { plainAll } from '@/data/services';
 
 /* ─────────────── model (desktop InventoryCatalog) ─────────────── */
 
@@ -360,12 +362,14 @@ export function InventoryPage() {
 }
 
 function ServiceLine({ i, act, label, onClick }: { i: Item; act?: { count: number; revenue: number }; label?: string; onClick: () => void }) {
+  const guide = useGuide();
   const cm = meta(i.category);
   const own = serviceIconOf(i.id);
   const m = own ? { ...cm, ...resolveIcon(own, i.name, cm.sticker) } : cm;
   const b = i as Partial<BranchItem>;
   return (
-    <button type="button" onClick={onClick} className="press flex w-full items-start gap-3 rounded-[18px] bg-white p-3 text-left ring-1 ring-line/70">
+    <>
+    <div role="button" tabIndex={false ? -1 : 0} aria-disabled={false} onClick={() => !(false) && onClick()} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && !(false) && (e.preventDefault(), onClick())} className="press flex w-full cursor-pointer items-start gap-3 rounded-[18px] bg-white p-3 text-left ring-1 ring-line/70">
       <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-linear-to-br ${m.tint}`}>
         <Art photo={m.photo} sticker={m.sticker} size={28} />
       </span>
@@ -374,9 +378,13 @@ function ServiceLine({ i, act, label, onClick }: { i: Item; act?: { count: numbe
           <span className="min-w-0 text-[14.5px] font-semibold leading-snug text-ink">{i.name}</span>
           <span className={`shrink-0 text-[14.5px] font-bold ${i.price === null ? 'text-warn-ink' : 'text-ink'}`}>{money(i.price)}</span>
         </span>
-        <span className="block truncate text-[12px] text-muted">
-          {label ?? i.category} · #{i.id}
-          {act ? ` · ×${formatCount(act.count)} · ${money(act.revenue, true)} billed` : ''}
+        <span className="block truncate text-[12px] text-ink-2">{aboutOf(i.name, i.category)}</span>
+        <span className="mt-1 flex items-center gap-2">
+          <GuideButton label={i.name} onClick={() => guide.open({ id: i.id, name: i.name, category: i.category, label: label ?? i.category, price: i.price })} />
+          <span className="min-w-0 truncate text-[11.5px] text-muted">
+            {label ?? i.category} · #{i.id}
+            {act ? ` · ×${formatCount(act.count)} · ${money(act.revenue, true)} billed` : ''}
+          </span>
         </span>
         {(i.edited || i.source === 'user' || i.note || i.owner || b.branchPrice || b.branchOnly) && (
           <span className="mt-1 flex flex-wrap gap-1.5">
@@ -390,7 +398,9 @@ function ServiceLine({ i, act, label, onClick }: { i: Item; act?: { count: numbe
         )}
       </span>
       <ChevronRight size={16} className="mt-3 shrink-0 text-faint" />
-    </button>
+    </div>
+    {guide.sheet}
+    </>
   );
 }
 
@@ -562,7 +572,7 @@ function ServiceSheet({ id, ids, onClose }: { id: number; ids: string[]; onClose
   const m = own ? { ...cm, ...resolveIcon(own, i.name, cm.sticker) } : cm;
   const b = i as BranchItem;
   const act = activity.get(i.id);
-  const guide = mergeGuide(guideFor(i.name, i.category), written);
+  const guide = plainAll(mergeGuide(guideFor(i.name, i.category), written));
   return (
     <Sheet
       back

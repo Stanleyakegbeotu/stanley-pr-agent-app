@@ -22,6 +22,7 @@ import { Sheet } from '@/admin/ui';
 import { inputCls } from '@/admin/prManage';
 import { buildItems, groupCategories, meta, type Item } from '@/admin/pages/Inventory';
 import { useBranchItems } from '@/admin/branchCatalogue';
+import { GuideButton, aboutOf, useGuide } from '@/admin/testGuide';
 
 interface Line {
   id: number;
@@ -108,22 +109,27 @@ export function PriceCalculator({ branchId, onClose }: { branchId: string; onClo
     navigate(`/branch/${branchId}/billing?quote=1`);
   };
 
+  const guide = useGuide();
   const row = (i: Item, showCat: boolean) => {
     const on = added.has(i.id);
     return (
       <li key={i.id}>
-        <button type="button" disabled={i.price === null} onClick={() => toggle(i)} aria-pressed={on} className={`press flex w-full items-center gap-3 rounded-2xl p-3 text-left disabled:opacity-55 ${on ? 'bg-brand-50 ring-2 ring-brand-500' : 'bg-white ring-1 ring-line/70'}`}>
+        <div role="button" tabIndex={i.price === null ? -1 : 0} aria-disabled={i.price === null} onClick={() => !(i.price === null) && toggle(i)} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && !(i.price === null) && (e.preventDefault(), toggle(i))} aria-pressed={on} className={`press flex w-full cursor-pointer items-center gap-3 rounded-2xl p-3 text-left aria-disabled:opacity-55 ${on ? 'bg-brand-50 ring-2 ring-brand-500' : 'bg-white ring-1 ring-line/70'}`}>
           <span className="min-w-0 flex-1">
             <span className="block text-[14.5px] font-semibold leading-snug text-ink">{i.name}</span>
-            <span className="block truncate text-[12px] text-muted">
-              {showCat ? `${labelOf(i.category)} · ` : ''}#{i.id}
+            <span className="block truncate text-[12px] text-muted">{aboutOf(i.name, i.category)}</span>
+            <span className="mt-1 flex items-center gap-2">
+              <GuideButton label={i.name} onClick={() => guide.open({ id: i.id, name: i.name, category: i.category, label: labelOf(i.category), price: i.price })} />
+              <span className="truncate text-[11.5px] text-faint">
+                {showCat ? `${labelOf(i.category)} · ` : ''}#{i.id}
+              </span>
             </span>
           </span>
           <span className="shrink-0 text-right">
             <span className={`block text-[14px] font-bold ${i.price === null ? 'text-faint' : 'text-ink'}`}>{i.price === null ? 'No price' : money(i.price)}</span>
           </span>
           <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${on ? 'bg-brand-600 text-white' : 'bg-page text-brand-600'}`}>{on ? <Check size={16} strokeWidth={3} /> : <Plus size={16} strokeWidth={2.6} />}</span>
-        </button>
+        </div>
       </li>
     );
   };
@@ -310,6 +316,7 @@ export function PriceCalculator({ branchId, onClose }: { branchId: string; onClo
           )}
         </div>
       )}
+      {guide.sheet}
     </Sheet>
   );
 }

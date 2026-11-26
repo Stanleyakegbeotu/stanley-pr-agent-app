@@ -54,13 +54,13 @@ interface FamilyGuide {
   duration: string;
 }
 /** Owner (2026-11-24): no dashes in text the agent reads. Sentence breaks become commas, ranges "to". */
-const plainText = (t: string) =>
+export const plainText = (t: string) =>
   t
     .replace(/(\d)\s*[\u2013\u2014]\s*(\d)/g, '$1 to $2')
     .replace(/\b([A-Z])[\u2013\u2014]([A-Z])\b/g, '$1 to $2')
     .replace(/\s+[\u2013\u2014]\s+/g, ', ')
     .replace(/[\u2013\u2014]/g, ', ');
-const plainAll = <T,>(v: T): T => (typeof v === 'string' ? (plainText(v) as T) : Array.isArray(v) ? (v.map(plainAll) as T) : v && typeof v === 'object' ? (Object.fromEntries(Object.entries(v).map(([k, x]) => [k, plainAll(x)])) as T) : v);
+export const plainAll = <T,>(v: T): T => (typeof v === 'string' ? (plainText(v) as T) : Array.isArray(v) ? (v.map(plainAll) as T) : v && typeof v === 'object' ? (Object.fromEntries(Object.entries(v).map(([k, x]) => [k, plainAll(x)])) as T) : v);
 const GUIDE = plainAll(CATALOGUE.guide as unknown as { sources: string[]; families: Record<string, FamilyGuide>; byId: Record<string, GuideRow> });
 export const GUIDE_SOURCES = GUIDE.sources;
 

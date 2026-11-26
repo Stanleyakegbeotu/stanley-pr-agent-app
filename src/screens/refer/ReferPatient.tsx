@@ -23,6 +23,8 @@ import { hasDraftContent, useApp } from '@/app/store';
 import { ResumedBanner } from '@/screens/refer/ResumeDraft';
 import { ReferralNoteEditor } from './ReferralNote';
 import { Button, Card, Chip, ChipRow, EmptyState, Field, ScreenHeader, SearchField, ServiceThumb, Stepper, Sticker, Subtitle, FIELD_ON, inputClass } from '@/ui/kit';
+import { GuideButton } from '@/admin/testGuide';
+import { useDetail } from '@/ui/detailSheet';
 
 const STEPS = ['Patient', 'Tests', 'Clinical', 'Review'];
 const PATH = ['/refer', '/refer/services', '/refer/clinical', '/refer/summary'] as const;
@@ -156,6 +158,7 @@ function ReferIllustration() {
 /* ─────────────── 2 · Services ─────────────── */
 
 function ServicesStep() {
+  const detail = useDetail();
   const { draft, setDraft, navigate } = useApp();
   const [q, setQ] = useState('');
   const [cat, setCat] = useState<string>('All');
@@ -246,15 +249,18 @@ function ServicesStep() {
                 const unpriced = s.price == null;
                 return (
                   <li key={s.id}>
-                    <button type="button" role="option" aria-selected={on} aria-disabled={unpriced} onClick={() => (unpriced ? setError(`${s.name} has no price recorded yet. Ask the branch.`) : toggle(s.id))} className={`card press flex w-full items-center gap-3.5 p-3 text-left ${on ? 'border-brand-500 ring-1 ring-brand-500' : ''} ${unpriced ? 'opacity-60' : ''}`}>
+                    <div role="option" tabIndex={0} aria-selected={on} aria-disabled={unpriced} onClick={() => (unpriced ? setError(`${s.name} has no price recorded yet. Ask the branch.`) : toggle(s.id))} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), unpriced ? setError(`${s.name} has no price recorded yet. Ask the branch.`) : toggle(s.id))} className={`card press flex w-full cursor-pointer items-center gap-3.5 p-3 text-left ${on ? 'border-brand-500 ring-1 ring-brand-500' : ''} ${unpriced ? 'opacity-60' : ''}`}>
                       <ServiceThumb service={s} className="h-[72px] w-[80px] shrink-0 rounded-2xl" />
                       <span className="min-w-0 flex-1">
                         <span className="block text-[16px] font-bold text-ink">{s.name}</span>
                         <span className={`mt-0.5 block font-bold ${unpriced ? 'text-[14px] text-muted' : 'text-[17px] text-brand-600'}`}>{priceText(s.price)}</span>
                         <span className="block truncate text-[13px] text-muted">{s.about || categoryInfo(s.category).label}</span>
+                        <span className="mt-1 flex">
+                          <GuideButton label={s.name} onClick={() => detail.open({ kind: 'service', id: s.id })} />
+                        </span>
                       </span>
                       <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-full border-2 ${on ? 'border-brand-600 bg-brand-600 text-white' : 'border-[#c4cfdf]'}`}>{on && <Check size={16} strokeWidth={3} />}</span>
-                    </button>
+                    </div>
                   </li>
                 );
               })}

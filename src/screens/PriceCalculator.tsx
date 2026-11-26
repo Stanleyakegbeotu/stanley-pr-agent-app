@@ -17,6 +17,8 @@ import { naira } from '@/domain/format';
 import { Sheet } from '@/admin/ui';
 import { Sticker, inputClass } from '@/ui/kit';
 import { onlyDigits } from '@/ui/fieldRules';
+import { GuideButton } from '@/admin/testGuide';
+import { useDetail } from '@/ui/detailSheet';
 
 /** Header button (Home and Catalogue). */
 export function CalculatorButton({ tone = 'plain' }: { tone?: 'plain' | 'card' }) {
@@ -33,6 +35,7 @@ export function CalculatorButton({ tone = 'plain' }: { tone?: 'plain' | 'card' }
 
 export function PriceCalculator({ onClose }: { onClose: () => void }) {
   const { draft, setDraft, navigate, showToast } = useApp();
+  const detail = useDetail();
   const [q, setQ] = useState('');
   const [cat, setCat] = useState<string | null>(null);
   const [ids, setIds] = useState<string[]>([]);
@@ -61,14 +64,17 @@ export function PriceCalculator({ onClose }: { onClose: () => void }) {
     const on = ids.includes(s.id);
     return (
       <li key={s.id}>
-        <button type="button" disabled={s.price === null} onClick={() => toggle(s)} aria-pressed={on} className={`press flex w-full items-center gap-3 rounded-2xl p-3 text-left disabled:opacity-55 ${on ? 'bg-brand-50 ring-2 ring-brand-500' : 'bg-white ring-1 ring-line/70'}`}>
+        <div role="button" tabIndex={s.price === null ? -1 : 0} aria-disabled={s.price === null} onClick={() => !(s.price === null) && toggle(s)} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && !(s.price === null) && (e.preventDefault(), toggle(s))} aria-pressed={on} className={`press flex w-full cursor-pointer items-center gap-3 rounded-2xl p-3 text-left aria-disabled:opacity-55 ${on ? 'bg-brand-50 ring-2 ring-brand-500' : 'bg-white ring-1 ring-line/70'}`}>
           <span className="min-w-0 flex-1">
             <span className="block text-[14.5px] font-semibold leading-snug text-ink">{s.name}</span>
             <span className="block truncate text-[12px] text-muted">{s.about}</span>
+            <span className="mt-1 flex">
+              <GuideButton label={s.name} onClick={() => detail.open({ kind: 'service', id: s.id })} />
+            </span>
           </span>
           <b className={`shrink-0 text-[14px] ${s.price === null ? 'text-faint' : 'text-ink'}`}>{s.price === null ? 'At branch' : naira(s.price)}</b>
           <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${on ? 'bg-brand-600 text-white' : 'bg-page text-brand-600'}`}>{on ? <Check size={16} strokeWidth={3} /> : <Plus size={16} strokeWidth={2.6} />}</span>
-        </button>
+        </div>
       </li>
     );
   };
