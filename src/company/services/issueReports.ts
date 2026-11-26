@@ -100,6 +100,8 @@ export interface IssueReport {
   month?: string;
   status: ReportStatus;
   history: ReportStep[];
+  /** People who have opened it ("role|name"): it stays "new" for everyone else until they open it. */
+  readBy?: string[];
   /** Older saved reports. */
   urgent?: boolean;
 }
@@ -184,6 +186,16 @@ export function addReport(r: Omit<IssueReport, "id" | "at" | "status" | "history
   const rep: IssueReport = { ...r, category: r.category ?? about?.category ?? "Other", seenBy: audienceFor(r.aboutKind), id: nextId(list), at, status: "new", history: [{ at, by, action: "Report sent" }] };
   commit([rep, ...list]);
   return rep;
+}
+
+/** Who is reading, for the "new" mark. */
+export const readerId = (u: { role: string; name: string }) => `${u.role}|${u.name}`;
+/** New for this person: not attended yet and they haven't opened it (their own reports are never new to them). */
+export const isNewFor = (r: IssueReport, me: string) => r.status === "new" && !(r.readBy ?? []).includes(me) && `${r.from.role}|${r.from.name}` !== me;
+export function markReportRead(id: string, me: string) {
+  const r = current().find((x) => x.id === id);
+  if (!r || (r.readBy ?? []).includes(me)) return;
+  commit(current().map((x) => (x.id === id ? { ...x, readBy: [...(x.readBy ?? []), me] } : x)));
 }
 
 export function setReportStatus(id: string, status: ReportStatus, by: string, note?: string) {

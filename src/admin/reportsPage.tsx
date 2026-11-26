@@ -10,12 +10,12 @@
  *
  * Company Admin: "#/admin/reports". Branch: "#/admin/branch/<id>/reports".
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, CircleDot, Plus, RotateCcw, Send, Siren } from 'lucide-react';
 import { useApp as useCompany } from '@company/app/AppState';
 import { ACTIVE_BRANCHES, getBranch } from '@company/data/company';
 import { logAudit } from '@company/services/audit';
-import { ABOUT, PRIORITY_TEXT, STATUS_TEXT, TO_TEXT, addReport, addReportNote, byAttention, setReportPriority, setReportStatus, useIssueReports, visibleReports, type AboutKind, type IssueReport, type ReportPriority, type ReportStatus } from '@company/services/issueReports';
+import { ABOUT, PRIORITY_TEXT, STATUS_TEXT, TO_TEXT, addReport, addReportNote, byAttention, isNewFor, markReportRead, readerId, setReportPriority, setReportStatus, useIssueReports, visibleReports, type AboutKind, type IssueReport, type ReportPriority, type ReportStatus } from '@company/services/issueReports';
 import { lastMonths, monthLabel } from '@company/services/payoutMonths';
 import { useNav } from '@/app/store';
 import { SearchField } from '@/ui/kit';
@@ -44,7 +44,8 @@ function useWho() {
 
 export function ReportsPageMobile() {
   const all = useIssueReports();
-  const { kind, branchId, scope } = useWho();
+  const { user, kind, branchId, scope } = useWho();
+  const me = readerId(user);
   const mine = useMemo(() => visibleReports(all, { kind, branchId }, scope).sort(byAttention), [all, kind, branchId, scope?.join(',')]);
   const [q, setQ] = useState('');
   const [tab, setTab] = useState<'open' | 'critical' | 'resolved' | 'all'>('open');
@@ -57,6 +58,9 @@ export function ReportsPageMobile() {
       (!t || `${r.id} ${r.subject} ${r.details} ${r.from.name} ${r.about ?? ''} ${r.patientRef ?? ''} ${r.category}`.toLowerCase().includes(t)),
   );
   const open = openId ? (mine.find((r) => r.id === openId) ?? null) : null;
+  useEffect(() => {
+    if (openId) markReportRead(openId, me);
+  }, [openId, me]);
   const count = { open: mine.filter((r) => r.status !== 'resolved').length, critical: mine.filter((r) => r.priority === 'critical' && r.status !== 'resolved').length, resolved: mine.filter((r) => r.status === 'resolved').length };
   return (
     <div className="relative">
@@ -92,11 +96,14 @@ export function ReportsPageMobile() {
           <ul className="space-y-2.5">
             {shown.map((r) => (
               <li key={r.id}>
-                <button type="button" onClick={() => setOpenId(r.id)} className="press relative flex w-full gap-3 overflow-hidden rounded-[20px] bg-white p-3.5 pl-4 text-left ring-1 ring-line/70">
+                <button type="button" onClick={() => setOpenId(r.id)} className={`press relative flex w-full gap-3 overflow-hidden rounded-[20px] p-3.5 pl-4 text-left ring-1 ${isNewFor(r, me) ? 'bg-brand-50 ring-brand-200' : 'bg-white ring-line/70'}`}>
                   <span aria-hidden="true" className={`absolute inset-y-0 left-0 w-1.5 ${STRIP[r.priority]}`} />
                   <span className="min-w-0 flex-1">
                     <span className="flex items-start justify-between gap-2">
-                      <b className="min-w-0 text-[15px] leading-snug text-ink">{r.subject}</b>
+                      <b className={`min-w-0 text-[15px] leading-snug text-ink ${isNewFor(r, me) ? 'font-extrabold' : ''}`}>
+                        {isNewFor(r, me) && <span aria-label="New" className="mr-1.5 inline-block h-2 w-2 rounded-full bg-[#ef4444] align-[2px]" />}
+                        {r.subject}
+                      </b>
                       <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11.5px] font-bold ${STATUS_PILL[r.status]}`}>{STATUS_TEXT[r.status]}</span>
                     </span>
                     <span className="mt-0.5 block truncate text-[12.5px] text-muted">

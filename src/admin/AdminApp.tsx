@@ -35,6 +35,7 @@ import { ReportsPage } from './pages/Reports';
 import { SettingsPage } from './pages/Settings';
 import { ReportsPageMobile } from './reportsPage';
 import { AnnouncementsPage } from './announcementsPage';
+import { NavCount, useNavCounts } from '@/staff/navCounts';
 
 interface AdminPage {
   id: string;
@@ -160,6 +161,7 @@ function AdminTabs({ current, onMore, moreOpen }: { current: string; onMore: () 
 }
 
 function AdminMenu({ open, current, onClose }: { open: boolean; current: string; onClose: () => void }) {
+  const counts = useNavCounts(null);
   const { navigate, user } = useCompany();
   const role = useRole();
   return (
@@ -195,6 +197,7 @@ function AdminMenu({ open, current, onClose }: { open: boolean; current: string;
               <button key={p.id} type="button" onClick={() => (navigate(`/${p.id}`), onClose())} aria-current={on ? 'page' : undefined} className={`press flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-[15px] ${on ? 'bg-brand-50 font-semibold text-brand-700' : 'text-ink-2 hover:bg-page'}`}>
                 <p.icon size={20} strokeWidth={on ? 2.2 : 1.8} />
                 <span className="flex-1">{p.label}</span>
+                <NavCount id={p.id} counts={counts} />
               </button>
             );
           })}

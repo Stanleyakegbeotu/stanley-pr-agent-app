@@ -43,6 +43,7 @@ import { ChatThread } from '@/screens/chat/ChatThread';
 import { ExpensesPage } from './pages/Expenses';
 import { AnnouncementsPage } from '@/admin/announcementsPage';
 import { ReportsPageMobile } from '@/admin/reportsPage';
+import { NavCount, useNavCounts, type NavCounts } from './navCounts';
 
 interface StaffPage {
   id: string;
@@ -99,6 +100,7 @@ function StaffFrame() {
   const pageId = br?.page ?? 'dashboard';
   const [menu, setMenu] = useState(false);
   const [focus, setFocus] = useState(false);
+  const counts = useNavCounts(branchId);
   const scroller = useRef<HTMLDivElement>(null);
   const notes = useScopedNotes(branchId);
   const { fixed } = useStaffConversations(branchId);
@@ -162,7 +164,7 @@ function StaffFrame() {
       <StaffChromeCtx.Provider value={chrome}>
         <AdminShellCtx.Provider value={{ openMenu: () => setMenu((m) => !m), unread, inboxUnread, paths: { notifications: `/branch/${branchId}/notifications`, inbox: `/branch/${branchId}/messages` }, tools: <CalculatorButton branchId={branchId} /> }}>
           <div className="h-dvh overflow-hidden bg-page">
-            <StaffMenu open={menu} current={page.id} pages={allowed} branchName={branch?.name ?? ''} onClose={() => setMenu(false)} go={go} />
+            <StaffMenu open={menu} current={page.id} counts={counts} pages={allowed} branchName={branch?.name ?? ''} onClose={() => setMenu(false)} go={go} />
             <div ref={scroller} className="h-dvh overflow-y-auto md:ml-[264px]">
               <main className={`mx-auto w-full max-w-[860px] px-5 md:px-8 ${bare ? 'pb-10' : 'pb-32 md:pb-12'}`}>
                 <div key={`${branchId}/${page.id}`} className="page-pop">
@@ -176,7 +178,8 @@ function StaffFrame() {
                   const t = PAGES.find((p) => p.id === id)!;
                   const on = !menu && page.id === id;
                   const tab = (
-                    <button key={id} type="button" onClick={() => go(id)} aria-current={on ? 'page' : undefined} className="press flex min-h-15 flex-col items-center justify-center gap-1">
+                    <button key={id} type="button" onClick={() => go(id)} aria-current={on ? 'page' : undefined} className="press relative flex min-h-15 flex-col items-center justify-center gap-1">
+                      <NavCount id={id} counts={counts} dot />
                       <t.icon size={24} strokeWidth={on ? 2.3 : 1.7} className={on ? 'text-brand-600' : 'text-[#6b778c]'} />
                       <span className={`text-[12px] ${on ? 'font-semibold text-brand-600' : 'text-[#6b778c]'}`}>{id === 'dashboard' ? 'Home' : t.label.split(' ')[0]}</span>
                     </button>
@@ -192,7 +195,8 @@ function StaffFrame() {
                     </button>,
                   ];
                 })}
-                <button type="button" onClick={() => setMenu((m) => !m)} aria-label="More pages" className="press flex min-h-15 flex-col items-center justify-center gap-1" style={{ gridColumn: 5 }}>
+                <button type="button" onClick={() => setMenu((m) => !m)} aria-label="More pages" className="press relative flex min-h-15 flex-col items-center justify-center gap-1" style={{ gridColumn: 5 }}>
+                  {allowed.some((p) => !tabs.includes(p.id) && (counts[p.id]?.n ?? 0) > 0) && <span aria-hidden="true" className="absolute right-[calc(50%-16px)] top-2 h-2.5 w-2.5 rounded-full bg-[#ef4444] ring-2 ring-white" />
                   <MenuIcon size={24} strokeWidth={menu || !tabs.includes(page.id) ? 2.3 : 1.7} className={menu || !tabs.includes(page.id) ? 'text-brand-600' : 'text-[#6b778c]'} />
                   <span className={`text-[12px] ${menu || !tabs.includes(page.id) ? 'font-semibold text-brand-600' : 'text-[#6b778c]'}`}>More</span>
                 </button>
@@ -225,7 +229,7 @@ function NoAccess({ label, role, onHome }: { label: string; role: string; onHome
   );
 }
 
-function StaffMenu({ open, current, pages, branchName, onClose, go }: { open: boolean; current: string; pages: StaffPage[]; branchName: string; onClose: () => void; go: (p: string) => void }) {
+function StaffMenu({ open, current, counts, pages, branchName, onClose, go }: { open: boolean; current: string; counts: NavCounts; pages: StaffPage[]; branchName: string; onClose: () => void; go: (p: string) => void }) {
   const { user, staff } = useCompany();
   const role = useRole();
   const team = useTeam();
@@ -274,6 +278,7 @@ function StaffMenu({ open, current, pages, branchName, onClose, go }: { open: bo
               <button key={p.id} type="button" onClick={() => (go(p.id), onClose())} aria-current={on ? 'page' : undefined} className={`press flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-[15px] ${on ? 'bg-brand-50 font-semibold text-brand-700' : 'text-ink-2 hover:bg-page'}`}>
                 <p.icon size={20} strokeWidth={on ? 2.2 : 1.8} />
                 <span className="flex-1">{p.label}</span>
+                <NavCount id={p.id} counts={counts} />
               </button>
             );
           })}
