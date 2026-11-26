@@ -8,7 +8,7 @@
  *  • Each service: what it is, what it's for, how it's done, how to prepare.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowUpRight, Clock3, Droplets, ScanLine, Lightbulb, ListChecks, Share2, Stethoscope, Target, UserPlus, Utensils } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, Clock3, Droplets, ScanLine, Lightbulb, ListChecks, Share2, Stethoscope, Target, UserPlus, Utensils, Check } from 'lucide-react';
 import { PHOTOS } from '@/assets';
 import { BRANCH } from '@/config/org';
 import { CATEGORIES, GUIDE_SOURCES, SERVICES, categoryFrom, categoryInfo, categoryVisual, serviceById, type Service } from '@/data/services';
@@ -23,7 +23,7 @@ import { CalculatorButton } from '@/screens/PriceCalculator';
 export const priceText = (p: number | null) => (p == null ? 'Price at branch' : naira(p));
 
 const PAGE = 40;
-const FEATURED = ['LAB', 'X-RAY', 'MRI', 'SCAN', 'CT SCAN'];
+export const FEATURED = ['LAB', 'X-RAY', 'MRI', 'SCAN', 'CT SCAN'];
 /** Soft gradient per specialist category (tiles). */
 const TINT: Record<string, string> = {
   PHARYNGOSCOPY: 'from-[#ffe9ef] to-[#ffd6e1]',
@@ -166,7 +166,7 @@ export function CategoryHome({ onOpen, onExample }: { onOpen: (k: string) => voi
   );
 }
 
-function SectionLabel({ title, note }: { title: string; note: string }) {
+export function SectionLabel({ title, note }: { title: string; note: string }) {
   return (
     <div className="mb-3">
       <h2 className="text-[19px] font-bold tracking-[-0.01em] text-ink">{title}</h2>
@@ -175,21 +175,27 @@ function SectionLabel({ title, note }: { title: string; note: string }) {
   );
 }
 
-/** Full-bleed photo card with a soft dark fade, white title and glass details. */
-function PhotoCard({ keyName, big, onOpen }: { keyName: string; big?: boolean; onOpen: () => void }) {
+/** Full-bleed photo card with a soft dark fade, white title and glass details. `added`: tests chosen from it (price calculator). */
+export function PhotoCard({ keyName, big, compact, added = 0, onOpen }: { keyName: string; big?: boolean; compact?: boolean; added?: number; onOpen: () => void }) {
   const c = categoryInfo(keyName);
   const v = categoryVisual(keyName);
   const from = categoryFrom(keyName);
   return (
-    <button type="button" onClick={onOpen} className={`press group relative block w-full overflow-hidden rounded-[24px] text-left shadow-[0_14px_30px_rgba(11,23,48,0.16)] ${big ? 'h-[188px]' : 'h-[158px]'}`}>
+    <button type="button" onClick={onOpen} className={`press group relative block w-full overflow-hidden rounded-[24px] text-left shadow-[0_14px_30px_rgba(11,23,48,0.16)] ${added ? 'ring-[3px] ring-brand-500 ring-offset-2 ring-offset-white' : ''} ${big ? (compact ? 'h-[150px]' : 'h-[188px]') : compact ? 'h-[136px]' : 'h-[158px]'}`}>
       {v.photo ? <img src={PHOTOS[v.photo].hero} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" /> : <span className="absolute inset-0 bg-linear-to-br from-brand-500 to-brand-800" />}
       <span className="absolute inset-0 bg-linear-to-t from-[#06122b]/85 via-[#06122b]/30 to-transparent" />
       <span className="absolute left-3 top-3 rounded-full border border-white/30 bg-white/20 px-2.5 py-1 text-[12px] font-semibold text-white backdrop-blur-md">
         {c.count} test{c.count === 1 ? '' : 's'}
       </span>
-      <span className="absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-full border border-white/30 bg-white/20 text-white backdrop-blur-md">
-        <ArrowUpRight size={18} />
-      </span>
+      {added ? (
+        <span className="absolute right-3 top-3 flex h-8 items-center gap-1 rounded-full bg-white px-2.5 text-[12.5px] font-bold text-brand-700 shadow-[0_6px_14px_rgba(0,0,0,0.2)]">
+          <Check size={14} strokeWidth={3} /> {added} added
+        </span>
+      ) : (
+        <span className="absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-full border border-white/30 bg-white/20 text-white backdrop-blur-md">
+          <ArrowUpRight size={18} />
+        </span>
+      )}
       <span className="absolute inset-x-4 bottom-3.5">
         <span className={`block font-bold leading-tight tracking-[-0.01em] text-white ${big ? 'text-[24px]' : 'text-[18px]'}`}>{c.label}</span>
         <span className="mt-0.5 block text-[12.5px] text-white/85">
@@ -200,13 +206,18 @@ function PhotoCard({ keyName, big, onOpen }: { keyName: string; big?: boolean; o
   );
 }
 
-function SpecialistTile({ keyName, onOpen }: { keyName: string; onOpen: () => void }) {
+export function SpecialistTile({ keyName, added = 0, onOpen }: { keyName: string; added?: number; onOpen: () => void }) {
   const c = categoryInfo(keyName);
   const v = categoryVisual(keyName);
   const from = categoryFrom(keyName);
   return (
-    <button type="button" onClick={onOpen} className={`press relative flex h-[118px] w-full flex-col overflow-hidden rounded-[22px] border border-white/70 bg-linear-to-br p-3.5 text-left shadow-[0_8px_20px_rgba(30,74,160,0.08)] ${TINT[keyName] ?? 'from-tint-blue to-tint-purple'}`}>
+    <button type="button" onClick={onOpen} className={`press relative flex h-[118px] w-full flex-col overflow-hidden rounded-[22px] border bg-linear-to-br p-3.5 text-left shadow-[0_8px_20px_rgba(30,74,160,0.08)] ${added ? 'border-brand-500 ring-2 ring-brand-500' : 'border-white/70'} ${TINT[keyName] ?? 'from-tint-blue to-tint-purple'}`}>
       <Sticker name={v.sticker ?? 'microscope'} size={66} className="absolute -bottom-2 -right-2 rotate-[-8deg]" />
+      {added > 0 && (
+        <span className="absolute right-2.5 top-2.5 flex h-7 items-center gap-1 rounded-full bg-brand-600 px-2 text-[12px] font-bold text-white shadow-[0_6px_14px_rgba(31,111,232,0.35)]">
+          <Check size={13} strokeWidth={3} /> {added}
+        </span>
+      )}
       <span className="relative block max-w-[72%] text-[15.5px] font-bold leading-tight text-ink">{c.label}</span>
       <span className="relative mt-1 block text-[12.5px] font-medium text-ink-2">
         {c.count} test{c.count === 1 ? '' : 's'}

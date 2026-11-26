@@ -8,9 +8,10 @@
  * approved), so the price the patient pays is confirmed at the branch.
  */
 import { useMemo, useState } from 'react';
-import { Calculator, Check, ChevronRight, Plus, Search, X } from 'lucide-react';
+import { ArrowLeft, Calculator, Check, ChevronRight, Plus, Search, X } from 'lucide-react';
+import { CategoryHeader, FEATURED, PhotoCard, SectionLabel, SpecialistTile } from '@/screens/Services';
 import { useApp } from '@/app/store';
-import { CATEGORIES, SERVICES, categoryVisual, serviceById, type Service } from '@/data/services';
+import { CATEGORIES, SERVICES, serviceById, type Service } from '@/data/services';
 import { smartSearch } from '@/domain/testSearch';
 import { naira } from '@/domain/format';
 import { Sheet } from '@/admin/ui';
@@ -45,6 +46,9 @@ export function PriceCalculator({ onClose }: { onClose: () => void }) {
   const pct = total ? Math.round((cut / total) * 100) : 0;
   const result = useMemo(() => (q.trim() ? smartSearch(q, cat ?? 'All') : null), [q, cat]);
   const list: Service[] = result ? result.hits.map((h) => h.service) : cat ? SERVICES.filter((s) => s.category === cat) : [];
+  const featured = FEATURED.filter((k) => CATEGORIES.some((c) => c.key === k));
+  const specialist = CATEGORIES.map((c) => c.key).filter((k) => !FEATURED.includes(k));
+  const addedIn = (k: string) => chosen.filter((x) => x.category === k).length;
   const toggle = (s: Service) => (s.price === null ? undefined : setIds((x) => (x.includes(s.id) ? x.filter((y) => y !== s.id) : [...x, s.id])));
   const start = () => {
     setDraft((d) => ({ ...d, serviceIds: [...new Set([...d.serviceIds, ...ids])], priceAsk: cut > 0 ? { amount: cut, reason: why.trim() } : d.priceAsk, step: d.patient.name.trim() ? 1 : 0 }));
@@ -167,9 +171,12 @@ export function PriceCalculator({ onClose }: { onClose: () => void }) {
             </div>
           )}
           {cat && !q.trim() && (
-            <button type="button" onClick={() => setCat(null)} className="press mb-2 text-[13.5px] font-semibold text-brand-600">
-              All categories
-            </button>
+            <>
+              <button type="button" onClick={() => setCat(null)} className="press mb-3 inline-flex items-center gap-1.5 rounded-full bg-ink px-4 py-2 text-[13.5px] font-semibold text-white">
+                <ArrowLeft size={15} /> All categories
+              </button>
+              <CategoryHeader keyName={cat} />
+            </>
           )}
           {q.trim() || cat ? (
             list.length ? (
@@ -183,20 +190,18 @@ export function PriceCalculator({ onClose }: { onClose: () => void }) {
             )
           ) : (
             <>
-              <p className="mb-2 px-1 text-[13px] font-bold text-ink-2">Categories</p>
-              <div className="grid grid-cols-2 gap-2.5">
-                {CATEGORIES.map((c) => {
-                  const v = categoryVisual(c.key);
-                  const n = chosen.filter((s) => s.category === c.key).length;
-                  return (
-                    <button key={c.key} type="button" onClick={() => setCat(c.key)} className="press relative rounded-[20px] bg-white p-3 text-left ring-1 ring-line/70">
-                      <Sticker name={v.sticker ?? 'microscope'} size={38} />
-                      <b className="mt-1.5 block truncate text-[14.5px] text-ink">{c.label}</b>
-                      <span className="block text-[12px] text-muted">{c.count} tests</span>
-                      {n > 0 && <span className="absolute right-2.5 top-2.5 grid h-6 min-w-6 place-items-center rounded-full bg-brand-600 px-1.5 text-[12px] font-bold text-white">{n}</span>}
-                    </button>
-                  );
-                })}
+              <SectionLabel title="Main categories" note={`${SERVICES.length} tests in ${CATEGORIES.length} categories · tap one to add its tests`} />
+              {featured[0] && <PhotoCard keyName={featured[0]} big compact added={addedIn(featured[0])} onOpen={() => setCat(featured[0]!)} />}
+              <div className="mb-6 mt-3 grid grid-cols-2 gap-3">
+                {featured.slice(1).map((k) => (
+                  <PhotoCard key={k} keyName={k} compact added={addedIn(k)} onOpen={() => setCat(k)} />
+                ))}
+              </div>
+              <SectionLabel title="Specialist services" note="Heart, brain, DNA and procedures" />
+              <div className="grid grid-cols-2 gap-3">
+                {specialist.map((k) => (
+                  <SpecialistTile key={k} keyName={k} added={addedIn(k)} onOpen={() => setCat(k)} />
+                ))}
               </div>
             </>
           )}
