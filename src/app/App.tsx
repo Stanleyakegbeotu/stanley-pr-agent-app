@@ -20,6 +20,7 @@ import { ChatThread } from '@/screens/chat/ChatThread';
 import { Inbox } from '@/screens/chat/Inbox';
 import { useApp } from './store';
 import { Profile } from '@/screens/Profile';
+import { Settings } from '@/screens/Settings';
 import { ResumeDraftPrompt } from '@/screens/refer/ResumeDraft';
 import { ShellCtx } from './shell';
 import { DetailHost } from '@/ui/detailSheet';
@@ -59,6 +60,8 @@ function Screen() {
       return b ? <Article slug={b} /> : <Training />;
     case 'profile':
       return <Profile />;
+    case 'settings':
+      return <Settings />;
     default:
       return <Dashboard />;
   }

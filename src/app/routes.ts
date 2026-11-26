@@ -29,6 +29,7 @@ export type RoutePath =
   | '/training'
   | `/training/${string}`
   | '/profile'
+  | '/settings'
   | `/profile/${string}`;
 
 export interface Route {

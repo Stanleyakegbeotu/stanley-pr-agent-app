@@ -1,5 +1,5 @@
 /** Menu groups (drawer / tablet rail). */
-import { Bell, BookOpen, Building2, CircleHelp, ClipboardList, FileText, HeartPulse, Home, LayoutGrid, MessageCircle, Plus, ShieldCheck, type LucideIcon } from 'lucide-react';
+import { Bell, BookOpen, Building2, CircleHelp, ClipboardList, FileText, HeartPulse, Home, LayoutGrid, MessageCircle, Plus, Settings, ShieldCheck, type LucideIcon } from 'lucide-react';
 import type { RoutePath } from '@/app/routes';
 
 export interface NavItem {
@@ -35,6 +35,7 @@ export const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
       { label: 'Help Centre', to: '/help', icon: CircleHelp },
       { label: 'Training & Resources', to: '/training', icon: BookOpen },
       { label: 'Privacy & Terms', to: '/privacy', icon: ShieldCheck },
+      { label: 'Settings', to: '/settings', icon: Settings },
     ],
   },
 ];
