@@ -23,7 +23,7 @@ import { ConversationRow, InboxSection } from '@/screens/chat/Inbox';
 import { first, initials, plural, stamp } from './data';
 import { WeekAnnouncements } from './insights';
 import { SixMonthsExplain } from './analysis';
-import { TargetGuideCard } from './targetGuide';
+import { BoostPrompt } from './boost';
 import { MyReports } from './reports';
 import { useIssueReports } from '@company/services/issueReports';
 export { MarketerAnalysis } from './analysis';
@@ -151,6 +151,7 @@ export function MarketerHome() {
 
       {m.mine.length > 0 && (
         <>
+          <BoostPrompt />
           <SectionTitle title="Follow up now" action="See all" onAction={openFollow} />
           <Card className="!p-1.5">
             {!m.healthReady ? (
@@ -323,7 +324,7 @@ export function MarketerHospitals() {
           </div>
         ))}
       </div>
-      <TargetGuideCard />
+      <BoostPrompt />
       <StickyTools>
         <div className="mb-2">
           <SearchField value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search a hospital or PR agent" aria-label="Search hospitals and PR agents" />

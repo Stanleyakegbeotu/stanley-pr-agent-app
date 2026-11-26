@@ -19,6 +19,7 @@ import { PageTitle } from '@/admin/branchFirst';
 import { CountUp, Donut, LineChart, useSeen } from '@/admin/charts';
 import { Sheet } from '@/admin/ui';
 import { plural } from './data';
+import { BoostPrompt } from './boost';
 import { GOOD, GrowBar, GrowBars, NEEDS, STATUS_COLOR, useMk } from './ui';
 
 /* ─────────────── the period filter ─────────────── */
@@ -467,6 +468,8 @@ export function MarketerAnalysis() {
             </button>
           ))}
         </div>
+
+        <BoostPrompt />
 
         <Box title="Target for these dates" sub={label(p, b)} onExplain={() => setOpen('target')}>
           <div className="mb-2 flex items-end justify-between">
