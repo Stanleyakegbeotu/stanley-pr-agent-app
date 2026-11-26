@@ -22,6 +22,7 @@ const ENTRIES = [
   'app/AppState.tsx',
   'services/analytics.ts',
   'services/staffQueries.ts',
+  'services/marketing.ts',
   'services/accountAccess.ts',
   'services/finance.ts',
   'services/commission.ts',

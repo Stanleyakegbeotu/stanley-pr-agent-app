@@ -8,6 +8,7 @@
 import { useRole } from '@/domain/role';
 import { AdminApp } from '@/admin/AdminApp';
 import { StaffApp } from '@/staff/StaffApp';
+import { MarketerApp } from '@/marketer/MarketerApp';
 import { App } from './App';
 import { AppStoreProvider } from './store';
 import { PrivacyGuard } from '@/ui/privacy';
@@ -26,6 +27,8 @@ export function Root() {
         <AdminApp key="admin" />
       ) : role === 'manager' || role === 'frontdesk' ? (
         <StaffApp key="staff" />
+      ) : role === 'marketer' ? (
+        <MarketerApp key="marketer" />
       ) : agentOff ? (
         <AccountOff />
       ) : (

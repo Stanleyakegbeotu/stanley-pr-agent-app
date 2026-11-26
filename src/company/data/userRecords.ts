@@ -154,9 +154,12 @@ export const MANAGER_ROLE = "Branch Manager";
  * app; e.g. reports for an accountant are created and printed by the manager.
  */
 export const FRONT_DESK_ROLE = "Front Desk";
+/** Marketers (owner, 2026-11-26) sign in on the mobile app only: their hospitals and PR agents, never the front desk or the desktop. */
+export const MARKETER_ROLE = "Marketer";
 export const STAFF_ROLES: readonly { value: string; access: string; permissions: string[] }[] = [
   { value: MANAGER_ROLE, access: "Runs the branch: billing, PR agents, staff, expenses, reports and settings", permissions: ["Register patients and create bills", "Change prices and give discounts", "Approve expenses and balances", "Manage front-desk staff", "Manage PR agents and hospitals", "Every branch report", "Branch settings, audit and trash"] },
   { value: FRONT_DESK_ROLE, access: "Front-desk attendant: patients, billing and payments", permissions: ["Register patients and create bills", "Take payments and print receipts", "Save and continue drafts", "Record expenses (approved by the manager)", "Payment, balance and price-list reports"] },
+  { value: MARKETER_ROLE, access: "Looks after partner hospitals and their PR agents (mobile app only)", permissions: ["Their own hospitals and the PR agents there", "Follow-ups, visits and new PR agents", "Register new partner hospitals", "Their target and progress", "Hospital totals only: no commission, no agent amounts, no patient details"] },
 ];
 
 export const EMPLOYMENT_TYPES: readonly string[] = ["Full-time", "Part-time", "Contract", "Locum"];
@@ -179,7 +182,6 @@ export const RECORD_ROLES: readonly string[] = [
   "Pharmacist",
   "Accountant",
   "Cashier",
-  "Marketer",
   "IT Support",
   "Cleaner",
   "Security",
@@ -187,7 +189,7 @@ export const RECORD_ROLES: readonly string[] = [
 ];
 export const DEPARTMENTS: readonly string[] = ["Front desk", "Management", "Imaging", "Laboratory", "Clinical", "Finance", "Marketing", "Facilities", "Security", "Transport", "IT"];
 /** The two roles that sign in to STANLEY; everyone else is on record only. */
-export const usesApp = (s: Pick<StaffRecord, "role">) => s.role === MANAGER_ROLE || s.role === FRONT_DESK_ROLE;
+export const usesApp = (s: Pick<StaffRecord, "role">) => s.role === MANAGER_ROLE || s.role === FRONT_DESK_ROLE || s.role === MARKETER_ROLE;
 
 export interface StaffPay {
   /** Monthly basic salary (naira). */
@@ -291,6 +293,9 @@ export const MOCK_STAFF: readonly StaffRecord[] = Object.freeze([
       ["STF-0006", "Halima Sani", "Medical Laboratory Scientist", "Laboratory", 240_000, "2023-01-16"],
       ["STF-0007", "Musa Ibrahim", "Security", "Security", 70_000, "2021-11-01"],
       ["STF-0008", "Grace Udo", "Cleaner", "Facilities", 55_000, "2024-02-05"],
+      ["STF-0009", "Kelechi Obi", MARKETER_ROLE, "Marketing", 150_000, "2023-06-12"],
+      ["STF-0010", "Zainab Yusuf", MARKETER_ROLE, "Marketing", 150_000, "2024-01-08"],
+      ["STF-0011", "Samuel Ade", MARKETER_ROLE, "Marketing", 140_000, "2025-04-14"],
     ] as const
   ).map(
     ([id, name, role, department, salary, startDate]): StaffRecord => ({
@@ -299,7 +304,7 @@ export const MOCK_STAFF: readonly StaffRecord[] = Object.freeze([
       role,
       branchId: LEGACY_BRANCH_ID,
       status: "Active",
-      email: "",
+      email: role === MARKETER_ROLE ? `${name.toLowerCase().replace(/\s+/g, ".")}@example.com` : "",
       phone: "",
       employment: "Full-time",
       startDate,

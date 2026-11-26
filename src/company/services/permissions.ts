@@ -188,6 +188,8 @@ export function can(role: string, permission: string): boolean {
   if (role === "Company Admin") return true;
   const def = PERM_BY_ID.get(permission);
   if (!def || def.adminOnly) return false;
+  // Marketers use their own mobile workspace (services/marketing), never the branch pages.
+  if (role === "Marketer") return false;
   if (role !== "Branch Manager" && def.managersOnly) return false;
   const list = role === "Branch Manager" ? grants["Branch Manager"] : grants["Front Desk"];
   return list.includes(permission);

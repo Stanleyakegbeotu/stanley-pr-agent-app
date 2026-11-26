@@ -14,11 +14,12 @@
  */
 import { useSyncExternalStore } from 'react';
 
-export type Role = 'admin' | 'manager' | 'frontdesk' | 'clinician';
+export type Role = 'admin' | 'manager' | 'frontdesk' | 'marketer' | 'clinician';
 export const ROLES: { id: Role; label: string; note: string }[] = [
   { id: 'admin', label: 'Company Admin', note: 'All branches, finance, staff, PR, reports' },
   { id: 'manager', label: 'Branch Manager', note: 'Runs one branch: billing, staff, expenses' },
   { id: 'frontdesk', label: 'Front Desk', note: 'Patients, billing and payments' },
+  { id: 'marketer', label: 'Marketer', note: 'Their hospitals, PR agents and target' },
   { id: 'clinician', label: 'Referring clinician', note: 'Requests, patients and results' },
 ];
 
@@ -30,7 +31,7 @@ const BRANCH_KEY = 'stanley.dev.branch';
 const listeners = new Set<() => void>();
 const read = (): Role => {
   const r = localStorage.getItem(KEY);
-  return r === 'clinician' || r === 'manager' || r === 'frontdesk' ? r : 'admin';
+  return r === 'clinician' || r === 'manager' || r === 'frontdesk' || r === 'marketer' ? r : 'admin';
 };
 let role = read();
 
@@ -44,7 +45,7 @@ export function setActingStaff(id: string) {
 export function setRole(r: Role) {
   role = r;
   localStorage.setItem(KEY, r);
-  if (r !== 'frontdesk') localStorage.removeItem(STAFF_KEY);
+  if (r !== 'frontdesk' && r !== 'marketer') localStorage.removeItem(STAFF_KEY);
   // Each workspace has its own pages: start on its home screen.
   window.location.hash = r === 'admin' ? '#/admin/dashboard' : r === 'clinician' ? '#/' : `#/admin/branch/${staffBranch()}/dashboard`;
   listeners.forEach((l) => l());

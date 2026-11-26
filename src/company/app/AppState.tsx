@@ -15,7 +15,7 @@ import { useHashRoute, type Route } from "./router";
 import { BRANCH_MANAGER_PLACEHOLDER, CURRENT_USER, getBranch, type AppUser } from "@company/data/company";
 import { LEGACY_BRANCH_ID, hospitalKey } from "@company/data/legacy";
 import { logAudit, setAuditActor } from "@company/services/audit";
-import { BASELINE_AGENTS, EMPTY_INVENTORY_CHANGES, applyAgentEdits, mergeAgents, nextServiceId, nextUserId, type AddedService, type AgentEdit, type AgentRecord, type BankDetails, type InventoryChanges, MOCK_STAFF, isManager, managerOf, nextStaffId, usesApp, type StaffRecord } from "@company/data/userRecords";
+import { BASELINE_AGENTS, EMPTY_INVENTORY_CHANGES, applyAgentEdits, mergeAgents, nextServiceId, nextUserId, type AddedService, type AgentEdit, type AgentRecord, type BankDetails, type InventoryChanges, MOCK_STAFF, MARKETER_ROLE, isManager, managerOf, nextStaffId, usesApp, type StaffRecord } from "@company/data/userRecords";
 import { resolvePhoto, useSettings } from "@company/services/settingsStore";
 import { putBackExpense, takeExpense, type ExpenseRecord } from "@company/services/expenses";
 import { restoreDraft, restoreOrder, takeDraft, takeOrder, type BillingSession, type Order } from "@company/services/billing";
@@ -122,6 +122,7 @@ export interface TrashItem {
 export const TRASH_RETENTION_DAYS = 30;
 
 const STAFF_KEY = "stanley.staff.v1";
+const MARKETERS_SEEDED = "stanley.staff.marketers-seeded";
 function loadStaff(): StaffRecord[] {
   try {
     const raw = readStore(STAFF_KEY);
@@ -134,7 +135,10 @@ function loadStaff(): StaffRecord[] {
       });
       // A team saved before staff records existed gets the sample record-only staff once.
       const extra = list.some((s) => !usesApp(s)) ? [] : MOCK_STAFF.filter((m) => !usesApp(m) && !list.some((s) => s.id === m.id));
-      return [...merged, ...extra];
+      // The sample marketers (2026-11-26) join a saved team once.
+      const marketers = readStore(MARKETERS_SEEDED) ? [] : MOCK_STAFF.filter((m) => m.role === MARKETER_ROLE && !list.some((s) => s.id === m.id));
+      writeStore(MARKETERS_SEEDED, "1");
+      return [...merged, ...extra, ...marketers];
     }
   } catch {
     /* unreadable — start from the sample team */
