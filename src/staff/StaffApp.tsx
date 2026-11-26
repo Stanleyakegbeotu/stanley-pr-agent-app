@@ -231,7 +231,7 @@ function StaffMenu({ open, current, pages, branchName, onClose, go }: { open: bo
   return (
     <>
       <button aria-label="Close menu" aria-hidden={!open} tabIndex={open ? 0 : -1} className={`fixed inset-0 z-40 bg-[#0b1730]/30 backdrop-blur-[2px] transition-opacity duration-300 md:hidden ${open ? 'opacity-100' : 'pointer-events-none opacity-0'}`} onClick={onClose} />
-      <aside aria-label="Branch menu" className={`fixed bottom-0 left-0 top-0 z-50 flex w-[290px] flex-col border-r border-line bg-white pb-[var(--safe-bottom)] pt-[var(--safe-top)] transition-[transform,box-shadow] duration-[380ms] ease-[cubic-bezier(0.22,0.8,0.24,1)] md:w-[264px] md:translate-x-0 ${open ? 'translate-x-0 shadow-[10px_0_40px_rgba(11,23,48,0.12)]' : '-translate-x-full'}`}>
+      <aside aria-label="Branch menu" className={`fixed bottom-0 left-0 top-0 z-50 flex w-[290px] flex-col border-r border-line bg-white pb-[var(--safe-bottom)] pt-[var(--safe-top)] transition-[translate,box-shadow] duration-[380ms] ease-[cubic-bezier(0.22,0.8,0.24,1)] md:w-[264px] md:translate-x-0 ${open ? 'translate-x-0 shadow-[10px_0_40px_rgba(11,23,48,0.12)]' : '-translate-x-full'}`}>
         <div className="flex items-center justify-between px-5 pb-2 pt-4">
           <div>
             <p className="text-[21px] font-extrabold leading-none tracking-[-0.03em] text-brand-700">STANLEY</p>

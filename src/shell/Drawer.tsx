@@ -1,7 +1,8 @@
 /**
- * Navigation: a slide-in drawer on phones (it opens BELOW the screen's top
- * bar so the iPhone notch can never cover it) and a permanent rail on
- * tablets / desktop.
+ * Navigation: a full-height slide-in drawer on phones, like the admin and
+ * branch menus (owner, 2026-11-26): it slides out from the left, and slides
+ * back on Close or a tap outside. The safe area keeps
+ * the notch clear. A permanent rail on tablets / desktop.
  */
 import { ChevronRight, MapPin, Settings, Stethoscope, X } from 'lucide-react';
 import { BRANCH, COMPANY, ROLE_LABEL } from '@/config/org';
@@ -21,10 +22,10 @@ export function Drawer({ open, onClose }: { open: boolean; onClose: () => void }
   };
   return (
     <>
-      <button aria-label="Close menu" aria-hidden={!open} tabIndex={open ? 0 : -1} className={`fixed inset-x-0 bottom-0 top-[calc(4rem+var(--safe-top))] z-40 bg-[#0b1730]/30 backdrop-blur-[2px] transition-opacity duration-300 md:hidden ${open ? 'opacity-100' : 'pointer-events-none opacity-0'}`} onClick={onClose} />
+      <button aria-label="Close menu" aria-hidden={!open} tabIndex={open ? 0 : -1} className={`fixed inset-0 z-40 bg-[#0b1730]/30 backdrop-blur-[2px] transition-opacity duration-300 md:hidden ${open ? 'opacity-100' : 'pointer-events-none opacity-0'}`} onClick={onClose} />
       <aside
         aria-label="Main menu"
-        className={`fixed bottom-0 left-0 top-[calc(4rem+var(--safe-top))] z-50 flex w-[286px] flex-col rounded-tr-3xl border-r border-line bg-white pb-[var(--safe-bottom)] transition-[transform,box-shadow] duration-[380ms] ease-[cubic-bezier(0.22,0.8,0.24,1)] md:top-0 md:w-[264px] md:translate-x-0 md:rounded-none md:shadow-none ${open ? 'translate-x-0 shadow-[10px_0_40px_rgba(11,23,48,0.12)]' : '-translate-x-full shadow-none'}`}
+        className={`fixed bottom-0 left-0 top-0 z-50 flex w-[290px] flex-col rounded-r-[28px] border-r border-line bg-white pb-[var(--safe-bottom)] pt-[var(--safe-top)] will-change-[translate] transition-[translate,box-shadow] duration-[380ms] ease-[cubic-bezier(0.22,0.8,0.24,1)] md:top-0 md:w-[264px] md:translate-x-0 md:rounded-none md:shadow-none ${open ? 'translate-x-0 shadow-[10px_0_40px_rgba(11,23,48,0.12)]' : '-translate-x-full shadow-none'}`}
       >
         <div className="flex items-center justify-between px-5 pb-2 pt-5">
           <button type="button" onClick={() => go('/')} className="flex items-center gap-2.5 text-left" aria-label="Dashboard">
