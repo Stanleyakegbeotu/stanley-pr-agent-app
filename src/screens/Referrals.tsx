@@ -16,6 +16,7 @@ import { copyText } from '@/ui/privacy';
 import { BRANCH } from '@/config/org';
 import { displayPhone, naira, shortDate } from '@/domain/format';
 import { NOT_ATTENDED_DAYS, RETENTION_DAYS, STAGES, STATUS_LABEL, STATUS_NOTE, countsFor, inMonth, isToday, partialNote, quoteOf, serviceSummary, servicesOf, statusOf, type Referral, type ReferralStatus } from '@/domain/referrals';
+import { MonthLog } from './referrals/MonthLog';
 import { useApp } from '@/app/store';
 import { Button, Card, Chip, ChipRow, EmptyState, InitialsAvatar, ScreenHeader, SearchField, Segmented, ServiceThumb, StatusBadge, Sticker, Subtitle } from '@/ui/kit';
 import { Sheet } from '@/admin/ui';
@@ -102,6 +103,9 @@ export function MyReferrals() {
           </button>
         ))}
       </div>
+
+      {/* Monthly history (owner, 2026-11-26): Ongoing, Ended, Ended ✓, Under review, Resolved. */}
+      <MonthLog />
 
       <Segmented<Period>
         value={period}

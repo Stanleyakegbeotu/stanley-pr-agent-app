@@ -40,6 +40,10 @@ const ENTRIES = [
   'data/serviceGuide/index.ts',
   // Incoming referrals: the branch folder (demo referrals, statuses, weekly reset) and the branch's status updates.
   'services/incoming.ts',
+  // Reports (complaints and issues), monthly payout marks and the PR agent monitor.
+  'services/issueReports.ts',
+  'services/payoutMonths.ts',
+  'services/agentMonitor.ts',
   // Reports: the same report definitions, document model, page layout and print styles,
   // so a report made on the phone is identical to the desktop's (print, PDF, spreadsheet).
   'features/reports/specs.ts',

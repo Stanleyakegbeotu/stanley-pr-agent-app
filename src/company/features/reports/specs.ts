@@ -14,6 +14,7 @@ import { DAILY, DATA_START, addDays, diffDays, isoDate } from "@company/data/dem
 import { ledger, openBalances, patientVisits, type LedgerEntry, type PatientVisit } from "@company/data/demo/dailyLines";
 import { LEGACY_BRANCH_ID, buildHospitalDirectory, hasPhone, hospitalKey } from "@company/data/legacy";
 import { netPay, usesApp, type AgentRecord, type StaffRecord } from "@company/data/userRecords";
+import { STATUS_HINT as AGENT_STATUS_HINT, STATUS_LABEL as AGENT_STATUS_LABEL, agentHealth, checkUpsNow, type AgentHealth, type AgentStatus } from "@company/services/agentMonitor";
 import type { Currency, DateRange } from "@company/data/types";
 import { EXPENSE_CATEGORIES, PAYMENT_METHODS } from "@company/data/types";
 import { financeTotals } from "@company/services/finance";
@@ -580,6 +581,7 @@ const AGENTS: ReportSpec = {
     { id: "payout", label: "Monthly commission payout", description: "What to pay each agent for a month, grouped by bank (A–Z) with bank name, account name and number, phone, patients, rate and commission.", periodMode: "month" },
     { id: "performance", label: "Agent performance", description: "One line per agent with the columns you choose." },
     { id: "patients", label: "Agents with referred patients", description: "Each agent followed by the patients they referred: date, tests, billed, paid and commission." },
+    { id: "monitor", label: "Activity monitor and visit plan", description: "Who is slipping, gone quiet, inactive or growing, with what to do, the last check-up, and a visit plan by hospital for the marketers.", dated: false },
   ],
   columns: { performance: AGENT_COLUMNS, payout: PAYOUT_COLUMNS },
   selects: [
@@ -607,6 +609,7 @@ const AGENTS: ReportSpec = {
   ],
   suggestPaper: (p) => (p.variant === "patients" || p.variant === "payout" ? { size: "A4", orientation: "landscape" } : paperFor(p.columns.length)),
   build(p, ctx) {
+    if (p.variant === "monitor") return agentMonitorDoc(p, ctx);
     if (p.variant === "payout") return buildPayout(p, ctx);
     const list = agentAggregates(p, ctx);
     const blocks: Block[] = [];
@@ -1103,6 +1106,29 @@ const STAFF: ReportSpec = {
     return { title: "Staff activity report", subtitle: `${STAFF.variants.find((v) => v.id === p.variant)?.label} · ${branchLabel(p)} · ${rangeLabel(p.range)}`, meta: baseMeta(STAFF, p), blocks, footnote: FOOT_DEMO, filename: fileName(STAFF, p) };
   },
 };
+
+/** PR agent activity monitor and visit plan (owner, 2026-11-26), from services/agentMonitor. */
+function agentMonitorDoc(p: ReportParams, ctx: ReportCtx): ReportDoc {
+  const ids = branchIdsOf(p);
+  const list = ids.flatMap((id) => agentHealth(id, ctx.agents, checkUpsNow()));
+  const blocks: Block[] = [];
+  const n = (s: AgentStatus) => list.filter((a) => a.status === s).length;
+  blocks.push({ kind: "summary", items: [{ label: "Check up on now", value: formatCount(list.filter((a) => a.due).length), tone: "bad" }, { label: "Slipping", value: formatCount(n("slipping")) }, { label: "Gone quiet", value: formatCount(n("quiet")) }, { label: "Inactive", value: formatCount(n("inactive")) }, { label: "Growing or top", value: formatCount(n("rising") + n("top")) }] });
+  const cols: Column[] = [{ key: "a", label: "PR agent", weight: 1.3 }, { key: "h", label: "Hospital", weight: 1 }, { key: "ph", label: "Phone", weight: 0.9 }, { key: "l", label: "Last 4 weeks", align: "right", weight: 0.7 }, { key: "p", label: "4 weeks before", align: "right", weight: 0.7 }, { key: "d", label: "Last referral", weight: 0.8 }, { key: "w", label: "What to do", weight: 2.2 }, { key: "c", label: "Last check-up", weight: 1.1 }];
+  const row = (a: AgentHealth): Cell[] => [txt(a.agent.name, { b: true }), txt(a.hospital), txt(hasPhone(a.agent.phone) ? a.agent.phone : "—", { tone: hasPhone(a.agent.phone) ? undefined : "muted" }), count(a.last28), count(a.prev28), txt(a.lastAt ? day(a.lastAt) : "Never", { tone: a.lastAt ? undefined : "muted" }), txt(a.action), txt(a.lastCheck ? `${a.lastCheck.kind}, ${day(new Date(a.lastCheck.at))}: ${a.lastCheck.outcome}` : "None yet", { tone: a.lastCheck ? undefined : "muted" })];
+  // The visit plan: agents to see now, grouped by hospital (most agents first).
+  const due = list.filter((a) => a.due);
+  const byHosp = new Map<string, AgentHealth[]>();
+  for (const a of due) byHosp.set(a.hospital, [...(byHosp.get(a.hospital) ?? []), a]);
+  for (const [h, agents] of [...byHosp.entries()].sort((x, y) => y[1].length - x[1].length)) blocks.push({ kind: "table", title: `Visit plan · ${h}`, subtitle: `${agents.length} agent${agents.length === 1 ? "" : "s"} to see`, columns: cols, rows: agents.map(row) });
+  if (!due.length) blocks.push({ kind: "note", text: "Nobody to check up on now: every slipping or quiet agent has a recent check-up." });
+  for (const s of ["inactive", "never", "rising", "top"] as AgentStatus[]) {
+    const part = list.filter((a) => a.status === s && !a.due);
+    if (part.length) blocks.push({ kind: "table", title: `${AGENT_STATUS_LABEL[s]} · ${formatCount(part.length)}`, subtitle: AGENT_STATUS_HINT[s], columns: cols, rows: part.slice(0, 200).map(row) });
+  }
+  blocks.push({ kind: "note", text: "Log each visit or call in PR Management (PR agent monitor) so the branch knows; the agent leaves the check-up list until the next date." });
+  return { title: "PR agent activity monitor", subtitle: `${branchLabel(p)} · ${day(new Date())}`, meta: baseMeta(AGENTS, p), blocks, footnote: "Last 4 weeks compared with the 4 weeks before. Statuses: services/agentMonitor.", filename: fileName(AGENTS, p) };
+}
 
 /** Staff directory and Salaries & bank details (owner, 2026-11-26): everyone on record in Staff Management. */
 function staffRecordsDoc(p: ReportParams, ctx: ReportCtx, ids: string[]): ReportDoc {

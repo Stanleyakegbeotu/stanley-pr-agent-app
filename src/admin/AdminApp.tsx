@@ -10,7 +10,7 @@
  * is in the menu. Routes: "#/admin/<desktop path>".
  */
 import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
-import { CheckCircle2, Building2, ChartLine, Handshake, LayoutGrid, Megaphone, Menu as MenuIcon, Package, ScrollText, Settings, Trash2, UserRound, Users, Wallet, X, type LucideIcon } from 'lucide-react';
+import { CheckCircle2, Building2, ChartLine, Flag, Handshake, LayoutGrid, Megaphone, Menu as MenuIcon, Package, ScrollText, Settings, Trash2, UserRound, Users, Wallet, X, type LucideIcon } from 'lucide-react';
 import { AppStateProvider, useApp as useCompany } from '@company/app/AppState';
 import { isRead, useNotifications } from '@company/services/notifications';
 import { COMPANY as CO } from '@company/data/company';
@@ -33,6 +33,7 @@ import { InventoryPage } from './pages/Inventory';
 import { AuditPage, TrashPage } from './pages/Logs';
 import { ReportsPage } from './pages/Reports';
 import { SettingsPage } from './pages/Settings';
+import { ReportsPageMobile } from './reportsPage';
 import { AnnouncementsPage } from './announcementsPage';
 
 interface AdminPage {
@@ -51,7 +52,8 @@ export const ADMIN_PAGES: AdminPage[] = [
   { id: 'pr', label: 'PR Management', icon: Handshake, screen: PRPage },
   { id: 'patients', label: 'Patients', icon: UserRound, screen: PatientsPage },
   { id: 'finance', label: 'Finance & Expenses', icon: Wallet, screen: FinancePage },
-  { id: 'reports', label: 'Analysis', icon: ChartLine, screen: ReportsPage },
+  { id: 'analysis', label: 'Analysis', icon: ChartLine, screen: ReportsPage },
+  { id: 'reports', label: 'Reports', icon: Flag, screen: ReportsPageMobile },
   { id: 'announcements', label: 'Announcements', icon: Megaphone, screen: AnnouncementsPage },
   { id: 'settings', label: 'Settings', icon: Settings, screen: SettingsPage },
   { id: 'audit', label: 'Audit Log', icon: ScrollText, screen: AuditPage },
@@ -79,8 +81,8 @@ function AdminFrame() {
   const { notes } = useNotifications();
   const unread = useMemo(() => notes.filter((n) => !isRead(n)).length, [notes]);
   const [pageId, sub] = route.segments;
-  // Desktop renamed Reports to Analysis (2026-11-26): its links (/analysis?report=...) open the same page here.
-  const page = [...ADMIN_PAGES, ...EXTRA].find((p) => p.id === (pageId === 'analysis' ? 'reports' : pageId)) ?? ADMIN_PAGES[0]!;
+  // Reports are complaints and issues; the report builder is Analysis (older "/reports?report=…" links still open it).
+  const page = [...ADMIN_PAGES, ...EXTRA].find((p) => p.id === (pageId === 'reports' && route.query.get('report') ? 'analysis' : pageId)) ?? ADMIN_PAGES[0]!;
   // Admin chats are registered before any screen renders (chat threads look them up).
   const { fixed } = useAdminConversations();
   const fixedIds = useMemo(() => fixed.map((c) => c.id), [fixed]);

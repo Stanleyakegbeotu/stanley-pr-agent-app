@@ -90,7 +90,7 @@ export function AdminDashboard() {
         {/* Search + scope */}
         <form onSubmit={search} className="mb-3 flex gap-3" role="search">
           <SearchField value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search patients by name, ID or phone..." aria-label="Search patients" className="[&_input]:text-[14.5px]" />
-          <FilterButton onClick={() => navigate('/reports')} label="Reports" />
+          <FilterButton onClick={() => navigate('/analysis')} label="Analysis" />
         </form>
         <ScopeBar />
 
@@ -135,7 +135,7 @@ export function AdminDashboard() {
           <Action tint="bg-tint-orange border-[#ffe2c6]" sticker="megaphone" label="PR agents" onClick={() => navigate('/pr')} />
           <Action tint="bg-tint-pink border-[#ffd8e4]" sticker="healthWorker" label="Staff" onClick={() => navigate('/staff')} />
           <Action tint="bg-[#e0f7f5] border-[#c4ece7]" sticker="testTube" label="Inventory" onClick={() => navigate('/inventory')} />
-          <Action tint="bg-[#eef1ff] border-[#dfe3ff]" sticker="chart" label="Reports" onClick={() => navigate('/reports')} />
+          <Action tint="bg-[#eef1ff] border-[#dfe3ff]" sticker="chart" label="Analysis" onClick={() => navigate('/analysis')} />
           <Action tint="bg-[#f4f6fa] border-line" sticker="sparkles" label="Settings" onClick={() => navigate('/settings')} />
         </div>
 

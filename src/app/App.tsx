@@ -18,6 +18,7 @@ import { LegalPage, PrivacyHub } from '@/screens/Legal';
 import { PatientsOnly } from './Gate';
 import { ChatThread } from '@/screens/chat/ChatThread';
 import { Inbox } from '@/screens/chat/Inbox';
+import { MyReports } from '@/screens/MyReports';
 import { useApp } from './store';
 import { Profile } from '@/screens/Profile';
 import { Settings } from '@/screens/Settings';
@@ -62,6 +63,8 @@ function Screen() {
       return <Profile />;
     case 'settings':
       return <Settings />;
+    case 'reports':
+      return <MyReports />;
     default:
       return <Dashboard />;
   }

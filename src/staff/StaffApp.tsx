@@ -12,7 +12,7 @@
  * Routes: "#/admin/branch/<branchId>/<page>".
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
-import { Banknote, ChartColumn, CheckCircle2, FilePenLine, FolderOpen, Handshake, LayoutGrid, Megaphone, Menu as MenuIcon, Package, Plus, ReceiptText, ScrollText, Settings, Trash2, Users, X, type LucideIcon } from 'lucide-react';
+import { Banknote, ChartColumn, CheckCircle2, FilePenLine, Flag, FolderOpen, Handshake, LayoutGrid, Megaphone, Menu as MenuIcon, Package, Plus, ReceiptText, ScrollText, Settings, Trash2, Users, X, type LucideIcon } from 'lucide-react';
 import { AppStateProvider, useApp as useCompany } from '@company/app/AppState';
 import { getBranch } from '@company/data/company';
 import { branchRoute } from '@company/app/router';
@@ -42,6 +42,7 @@ import { useInbox } from '@/domain/chat';
 import { ChatThread } from '@/screens/chat/ChatThread';
 import { ExpensesPage } from './pages/Expenses';
 import { AnnouncementsPage } from '@/admin/announcementsPage';
+import { ReportsPageMobile } from '@/admin/reportsPage';
 
 interface StaffPage {
   id: string;
@@ -58,6 +59,7 @@ const PAGES: StaffPage[] = [
   { id: 'inventory', label: 'Inventory', icon: Package, screen: InventoryPage },
   { id: 'pr', label: 'PR Management', icon: Handshake, screen: () => <PRPage /> },
   { id: 'analysis', label: 'Analysis', icon: ChartColumn, screen: ReportsPage },
+  { id: 'reports', label: 'Reports', icon: Flag, screen: ReportsPageMobile },
   { id: 'expenses', label: 'Expenses', icon: Banknote, screen: ExpensesPage },
   { id: 'staff', label: 'Staff Management', icon: Users, screen: () => <StaffPage /> },
   { id: 'announcements', label: 'Announcements', icon: Megaphone, screen: AnnouncementsPage },
