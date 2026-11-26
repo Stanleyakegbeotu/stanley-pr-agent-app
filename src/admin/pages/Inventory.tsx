@@ -48,6 +48,7 @@ import { useRight } from '../access';
 import { useStaffChrome } from '@/staff/chrome';
 import { AFTER_IMPORT, addBranchService, branchItems, importCompanyCatalogue, setBranchPrice, setOffered, useBranchCatalogue, type BranchItem } from '../branchCatalogue';
 import { Art, IconPicker, autoIcon, categoryIconOf, resolveIcon, serviceIconOf, setCategoryIcon, setServiceIcon, useIcons, type IconChoice } from '../catalogueIcons';
+import { InfoFields, draftHasContent, draftOf, infoFromDraft, mergeGuide, saveServiceInfo, useServiceInfo, type InfoDraft } from '../serviceInfo';
 
 /* ─────────────── model (desktop InventoryCatalog) ─────────────── */
 
@@ -552,6 +553,8 @@ function ServiceSheet({ id, ids, onClose }: { id: number; ids: string[]; onClose
   const [trash, setTrash] = useState(false);
   const [focus, setFocus] = useState<Focus | null>(null);
   const i = items.find((x) => x.id === id);
+  const written = useServiceInfo(id);
+  const [infoOpen, setInfoOpen] = useState(false);
   if (!i) return null;
   const g = groups.find((x) => x.key === i.category);
   const cm = meta(i.category);
@@ -559,7 +562,7 @@ function ServiceSheet({ id, ids, onClose }: { id: number; ids: string[]; onClose
   const m = own ? { ...cm, ...resolveIcon(own, i.name, cm.sticker) } : cm;
   const b = i as BranchItem;
   const act = activity.get(i.id);
-  const guide = guideFor(i.name, i.category);
+  const guide = mergeGuide(guideFor(i.name, i.category), written);
   return (
     <Sheet
       back
@@ -655,8 +658,14 @@ function ServiceSheet({ id, ids, onClose }: { id: number; ids: string[]; onClose
         </p>
       )}
 
-      <p className="mb-2 flex items-center gap-1.5 px-1 text-[13px] font-semibold text-ink-2">
-        <BookOpen size={15} /> Test guide
+      <p className="mb-2 flex flex-wrap items-center gap-1.5 px-1 text-[13px] font-semibold text-ink-2">
+        <span className="flex items-center gap-1.5 whitespace-nowrap"><BookOpen size={15} /> Test guide</span>
+        {guide.written && <span className="whitespace-nowrap rounded-full bg-tint-green px-2 py-0.5 text-[11px] font-semibold text-good-ink">Written in STANLEY</span>}
+        {canEdit && (
+          <button type="button" onClick={() => setInfoOpen(true)} className="press ml-auto flex items-center gap-1 whitespace-nowrap rounded-full bg-brand-50 px-2.5 py-1 text-[12px] font-semibold text-brand-700">
+            <Pencil size={12} /> Edit information
+          </button>
+        )}
       </p>
       <div className="space-y-2.5 rounded-[20px] bg-white p-4 ring-1 ring-line/70 text-[13.5px] leading-relaxed text-ink">
         <GuidePart title="What it is" text={guide.about} />
@@ -689,11 +698,12 @@ function ServiceSheet({ id, ids, onClose }: { id: number; ids: string[]; onClose
             ))}
           </p>
         )}
-        <p className="text-[11.5px] text-muted">General guidance written from {GUIDE_SOURCES.join(', ')}. The requesting doctor and the branch confirm the details for each patient.</p>
+        <p className="text-[11.5px] text-muted">{guide.written ? `Written in STANLEY${written?.by ? ` by ${written.by}` : ''}; anything left empty uses the general guide.` : `General guidance written from ${GUIDE_SOURCES.join(', ')}.`} The requesting doctor and the branch confirm the details for each patient.</p>
       </div>
 
       {focus && <FocusSheet focus={focus} branchIds={ids} period={period} onClose={() => setFocus(null)} />}
       {edit && <EditServiceSheet item={i} onClose={() => setEdit(false)} />}
+      {infoOpen && <InfoSheet id={i.id} name={i.name} onClose={() => setInfoOpen(false)} />}
       {bprice && branchId && <BranchPriceSheet branchId={branchId} item={b} onClose={() => setBprice(false)} />}
       {picture && <PictureSheet title={`Picture for ${i.name}`} text={`${i.name} ${i.category}`} value={serviceIconOf(i.id) ?? { kind: 'auto' }} onSave={(c) => setServiceIcon(i.id, c)} onClose={() => setPicture(false)} />}
       {trash && (
@@ -842,9 +852,10 @@ function AddServiceSheet({ category: initial, branchId, onClose, onAdded }: { ca
   const [category, setCategory] = useState(initial);
   const [catQ, setCatQ] = useState('');
   const [price, setPrice] = useState('');
-  const [turnaround, setTurnaround] = useState('');
-  const [sample, setSample] = useState('');
   const [notes, setNotes] = useState('');
+  // Test information (owner, 2026-11-26): free text, Enter = new line, shown on the service's Test guide.
+  const [info, setInfo] = useState<InfoDraft>(draftOf());
+  const { user } = useCompany();
   const [tried, setTried] = useState(false);
   const value = Number(price.replace(/,/g, ''));
   const validPrice = Number.isFinite(value) && value > 0;
@@ -874,11 +885,12 @@ function AddServiceSheet({ category: initial, branchId, onClose, onAdded }: { ca
               id = addBranchService(branchId, { name: name.trim(), category: cat, price: value });
               showToast(`${name.trim()} added to this branch at ${formatMoney(value, 'NGN')}`);
             } else {
-              const rec = addService({ name: name.trim(), category: cat, price: value, turnaround: turnaround.trim() || undefined, sample: sample.trim() || undefined, notes: notes.trim() || undefined });
+              const rec = addService({ name: name.trim(), category: cat, price: value, turnaround: info.duration.trim() || undefined, sample: info.sample.trim() || undefined, notes: notes.trim() || undefined });
               id = rec.id;
               showToast(`${rec.name} added to ${rec.category} at ${formatMoney(rec.price, 'NGN')}`);
             }
             if (pic.kind !== 'auto' && !(pic.kind === 'photo' && !pic.src)) setServiceIcon(id, pic);
+            if (draftHasContent(info)) saveServiceInfo(id, infoFromDraft(info, user.name));
             if (isNewCat && catPic.kind !== 'auto' && !(catPic.kind === 'photo' && !catPic.src)) setCategoryIcon(cat, catPic);
             onAdded?.(id);
             onClose();
@@ -936,14 +948,11 @@ function AddServiceSheet({ category: initial, branchId, onClose, onAdded }: { ca
           </div>
         )}
         <IconPicker title="Picture for this test" text={`${name} ${category}`} value={pic} onChange={setPic} />
-        <label className="block">
-          <FieldLabel label="Turnaround" optional />
-          <input value={turnaround} onChange={(e) => setTurnaround(e.target.value)} placeholder="For example same day, 48 hours" className={inputCls()} />
-        </label>
-        <label className="block">
-          <FieldLabel label="Sample" optional />
-          <input value={sample} onChange={(e) => setSample(e.target.value)} placeholder="For example blood (serum)" className={inputCls()} />
-        </label>
+        <div className="rounded-[22px] bg-[#f6f9ff] p-3.5 ring-1 ring-[#e3eaf4]">
+          <p className="text-[15px] font-bold text-ink">Test information</p>
+          <p className="mb-3 text-[12.5px] leading-snug text-muted">Shown on this test's guide for staff and PR agents. Type freely: Enter starts a new line, it never saves the form.</p>
+          <InfoFields d={info} set={setInfo} />
+        </div>
         <LongText label="Notes" optional value={notes} onChange={setNotes} max={400} placeholder={"For example: patient should fast for 8 hours.\nKeep the sample cold."} hint="Preparation or handling notes for staff." />
         <p className="text-[12px] text-muted">New services are kept for this session until the database is connected.</p>
       </div>
@@ -1109,6 +1118,42 @@ function PictureSheet({ title, text, value, onSave, onClose }: { title: string; 
     >
       <div className="px-1 pb-2">
         <IconPicker title="Picture" text={text} value={c} onChange={setC} />
+      </div>
+    </Sheet>
+  );
+}
+
+
+/** Edit a test's information (Test guide), free text, Enter = new line. */
+function InfoSheet({ id, name, onClose }: { id: number; name: string; onClose: () => void }) {
+  const { user } = useCompany();
+  const { showToast } = useNav();
+  const cur = useServiceInfo(id);
+  const [d, setD] = useState<InfoDraft>(draftOf(cur));
+  return (
+    <Sheet
+      back
+      title="Test information"
+      subtitle={name}
+      onClose={onClose}
+      tall
+      footer={
+        <button
+          type="button"
+          onClick={() => {
+            saveServiceInfo(id, infoFromDraft(d, user.name));
+            showToast('Test information saved');
+            onClose();
+          }}
+          className="press min-h-12 w-full rounded-2xl bg-brand-600 text-[15px] font-semibold text-white"
+        >
+          Save test information
+        </button>
+      }
+    >
+      <div className="px-1 pb-3">
+        <p className="mb-3 rounded-2xl bg-page px-3.5 py-2.5 text-[12.5px] text-ink-2">Type freely: Enter starts a new line. Anything left empty keeps the general guide.</p>
+        <InfoFields d={d} set={setD} />
       </div>
     </Sheet>
   );
