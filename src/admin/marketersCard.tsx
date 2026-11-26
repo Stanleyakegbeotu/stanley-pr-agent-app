@@ -39,7 +39,7 @@ export function MarketersCard({ branchId }: { branchId: string }) {
   if (!right('referral.manage') || !d.marketers.length) return null;
   const unowned = d.hospitals.filter((h) => !h.owner);
   const waiting = d.st.partners.filter((p) => p.branchId === branchId && p.status === 'proposed');
-  const totals = d.progress.reduce((s, p) => ({ patients: s.patients + p.patients, target: s.target + p.target }), { patients: 0, target: 0 });
+  const totals = d.progress.reduce((s, p) => ({ revenue: s.revenue + p.revenue, target: s.target + p.target }), { revenue: 0, target: 0 });
   return (
     <section className="mt-4 rounded-[24px] bg-white p-4 ring-1 ring-line/70">
       <div className="flex items-center gap-3">
@@ -49,7 +49,7 @@ export function MarketersCard({ branchId }: { branchId: string }) {
         <span className="min-w-0 flex-1">
           <b className="block text-[16px] text-ink">Marketers</b>
           <span className="block text-[12.5px] text-muted">
-            {formatCount(totals.patients)} of {formatCount(totals.target)} patients targeted · {monthName(d.ym)}
+            {d.money(totals.revenue)} of {d.money(totals.target)} targeted · {monthName(d.ym)}
           </span>
         </span>
       </div>
@@ -66,8 +66,8 @@ export function MarketersCard({ branchId }: { branchId: string }) {
                   <span className="flex items-center justify-between gap-2">
                     <b className="truncate text-[14.5px] text-ink">{m.name}</b>
                     <span className="shrink-0 text-[13px] font-bold text-ink">
-                      {formatCount(p.patients)}
-                      <span className="font-medium text-muted">/{formatCount(p.target)}</span>
+                      {d.money(p.revenue)}
+                      <span className="font-medium text-muted">/{d.money(p.target)}</span>
                     </span>
                   </span>
                   <Bar p={p} />
@@ -152,7 +152,7 @@ function MarketerSheet({ branchId, d, marketerId, onClose }: { branchId: string;
   const p = d.progress.find((x) => x.marketerId === marketerId)!;
   const [target, setT] = useState(String(p.target));
   const history = useMemo(() => [-5, -4, -3, -2, -1, 0].map((n) => progressFor(d.st, branchId, marketerId, d.hospitals, d.agents, d.checkUps, shiftMonth(d.ym, n))), [d, branchId, marketerId]);
-  const max = Math.max(...history.map((h) => Math.max(h.patients, h.target)), 1);
+  const max = Math.max(...history.map((h) => Math.max(h.revenue, h.target)), 1);
   const myAgents = new Set(d.hospitals.filter((h) => h.owner?.marketerId === marketerId).flatMap((h) => h.agentIds));
   const work = [
     ...d.st.entries.filter((e) => e.branchId === branchId && e.marketerId === marketerId).map((e) => ({ at: e.at, title: e.hospital ? `${ENTRY_TEXT[e.kind]} · ${e.hospital}` : ENTRY_TEXT[e.kind], text: e.text })),
@@ -165,17 +165,17 @@ function MarketerSheet({ branchId, d, marketerId, onClose }: { branchId: string;
     <Sheet back tall title={m.name} subtitle={`Marketer · ${formatCount(p.hospitals.length)} hospitals, ${formatCount(p.agents)} PR agents`} onClose={onClose}>
       <div className="mb-3 grid grid-cols-2 gap-2">
         <div className="rounded-2xl bg-white p-3 ring-1 ring-line/70">
-          <p className="text-[11.5px] text-muted">Patients against target</p>
+          <p className="text-[11.5px] text-muted">Amount against target</p>
           <p className="text-[20px] font-extrabold text-ink">
-            {formatCount(p.patients)}
-            <span className="text-[14px] text-muted">/{formatCount(p.target)}</span>
+            {d.money(p.revenue)}
+            <span className="text-[14px] text-muted">/{d.money(p.target)}</span>
           </p>
           <span className={`rounded-full px-1.5 text-[11.5px] font-bold ${TONE[pw.tone]}`}>{pw.text}</span>
         </div>
         <div className="rounded-2xl bg-white p-3 ring-1 ring-line/70">
-          <p className="text-[11.5px] text-muted">Their hospitals generated</p>
-          <p className="text-[20px] font-extrabold text-ink">{formatMoney(p.revenue, d.currency, true)}</p>
-          <p className="text-[11.5px] text-muted">Usual month {formatCount(p.baseline)} patients</p>
+          <p className="text-[11.5px] text-muted">Patients attended</p>
+          <p className="text-[20px] font-extrabold text-ink">{formatCount(p.patients)}</p>
+          <p className="text-[11.5px] text-muted">Usual month {d.money(p.baseline)}</p>
         </div>
       </div>
       <div className="mb-3 rounded-[20px] bg-white p-3.5 ring-1 ring-line/70">
@@ -185,7 +185,7 @@ function MarketerSheet({ branchId, d, marketerId, onClose }: { branchId: string;
             <div key={h.month} className="flex h-full flex-col items-center justify-end gap-1">
               <span className="flex h-full w-full items-end justify-center gap-[3px]">
                 <i className="w-2.5 rounded-t bg-page ring-1 ring-line" style={{ height: `${(h.target / max) * 100}%` }} />
-                <i className={`w-2.5 rounded-t ${h.patients >= h.target ? 'bg-[#22a06b]' : 'bg-brand-500'}`} style={{ height: `${(h.patients / max) * 100}%` }} />
+                <i className={`w-2.5 rounded-t ${h.revenue >= h.target ? 'bg-[#22a06b]' : 'bg-brand-500'}`} style={{ height: `${(h.revenue / max) * 100}%` }} />
               </span>
               <span className="text-[10.5px] font-semibold text-muted">{monthName(h.month).split(' ')[0]}</span>
             </div>
@@ -193,16 +193,16 @@ function MarketerSheet({ branchId, d, marketerId, onClose }: { branchId: string;
         </div>
       </div>
       <div className="mb-3 rounded-[20px] bg-white p-3.5 ring-1 ring-line/70">
-        <p className="mb-2 text-[13px] font-semibold text-ink-2">Target for {monthName(d.ym, true)}</p>
+        <p className="mb-2 text-[13px] font-semibold text-ink-2">Target for {monthName(d.ym, true)} (₦, amount generated)</p>
         <div className="flex gap-2">
-          <input inputMode="numeric" value={target} onChange={(e) => setT(e.target.value.replace(/\D/g, ''))} className={inputCls()} aria-label="Target patients" />
+          <input inputMode="numeric" value={target} onChange={(e) => setT(e.target.value.replace(/\D/g, ''))} className={inputCls()} aria-label="Target amount" />
           <button
             type="button"
             disabled={!Number(target) || Number(target) === p.target}
             onClick={() => {
               setTarget(branchId, marketerId, d.ym, Number(target), user.name);
-              logAudit({ category: 'PR agents', action: 'Marketer target set', record: `${m.name} · ${monthName(d.ym, true)}`, details: `${target} patients (usual month ${p.baseline})`, branchId });
-              showToast(`Target set: ${target} patients`);
+              logAudit({ category: 'PR agents', action: 'Marketer target set', record: `${m.name} · ${monthName(d.ym, true)}`, details: `${d.money(Number(target))} (usual month ${d.money(p.baseline)})`, branchId });
+              showToast(`Target set: ${d.money(Number(target))}`);
             }}
             className="press flex min-h-12 shrink-0 items-center gap-1.5 rounded-2xl bg-brand-600 px-4 text-[14px] font-semibold text-white disabled:opacity-40"
           >

@@ -44,7 +44,9 @@ export interface OwnerChange {
   reason: string;
 }
 export interface MonthTarget {
-  patients: number;
+  /** Monthly target amount (older saved targets had "patients" and are ignored). */
+  amount?: number;
+  patients?: number;
   by: string;
   at: string;
 }
@@ -283,14 +285,34 @@ const sumFor = (figs: Map<string, HospitalFigures>, keys: string[]) =>
   }, { patients: 0, revenue: 0, referring: 0 } as HospitalFigures);
 
 /* ─────────────── targets and progress ─────────────── */
+/*
+ * Targets are MONEY (owner, 2026-11-26): the amount a marketer's hospitals
+ * generate in the month, not the number of patients. Each month also splits
+ * into weekly targets (the month's target spread over its days).
+ */
 
 const targetKey = (branchId: string, marketerId: string, ym: string) => `${branchId}|${marketerId}|${ym}`;
-export function setTarget(branchId: string, marketerId: string, ym: string, patients: number | null, by: string) {
+/** Set (or clear with null) a marketer's target for a month, in the branch currency. */
+export function setTarget(branchId: string, marketerId: string, ym: string, amount: number | null, by: string) {
   const st = current();
   const targets = { ...st.targets };
-  if (patients === null) delete targets[targetKey(branchId, marketerId, ym)];
-  else targets[targetKey(branchId, marketerId, ym)] = { patients: Math.max(1, Math.round(patients)), by, at: nowIso() };
+  if (amount === null) delete targets[targetKey(branchId, marketerId, ym)];
+  else targets[targetKey(branchId, marketerId, ym)] = { amount: Math.max(1000, Math.round(amount)), by, at: nowIso() };
   commit({ ...st, targets });
+}
+/** Round a suggested target to a tidy figure (nearest ₦10,000). */
+const tidy = (n: number) => Math.max(50_000, Math.round(n / 10_000) * 10_000);
+
+export interface WeekProgress {
+  /** Monday of the week (yyyy-mm-dd) and the last day counted. */
+  from: string;
+  to: string;
+  revenue: number;
+  patients: number;
+  target: number;
+  pct: number;
+  /** Where an even pace puts them by today (0–1). */
+  pace: number;
 }
 
 export interface Progress {
@@ -298,26 +320,41 @@ export interface Progress {
   month: string;
   hospitals: string[];
   agents: number;
+  /** Patients who attended from their hospitals this month. */
   patients: number;
+  /** Amount their hospitals generated this month (the target is on this). */
   revenue: number;
   referring: number;
   /** Same days of last month, for a fair comparison mid-month. */
   lastMonthSoFar: number;
+  lastMonthSoFarRevenue: number;
   lastMonth: number;
-  /** Average of the three full months before. */
+  lastMonthRevenue: number;
+  /** Average amount of the three full months before. */
   baseline: number;
+  baselinePatients: number;
+  /** Monthly target (money). */
   target: number;
   targetSetBy: string | null;
   /** Share of the target reached (0–1+). */
   pct: number;
   /** Where they should be by today at an even pace (0–1). */
   pace: number;
+  week: WeekProgress;
   followUps: number;
   recruits: number;
   newHospitals: number;
 }
 
-/** A marketer's month: their hospitals' patients against the target. */
+const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+/** Monday of the week containing d. */
+export function weekStartOf(d: Date): Date {
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
+  return x;
+}
+
+/** A marketer's month: the amount their hospitals generated against the target, and this week. */
 export function progressFor(st: State, branchId: string, marketerId: string, hospitals: HospitalInfo[], agents: readonly AgentRecord[], checkUps: CheckUp[], ym = monthKey(), byName?: string): Progress {
   const mine = hospitals.filter((h) => h.owner?.marketerId === marketerId);
   const keys = mine.map((h) => h.key);
@@ -330,14 +367,22 @@ export function progressFor(st: State, branchId: string, marketerId: string, hos
   const dayOfMonth = thisRange.to.getDate();
   const prevSoFarRange = resolveRange({ key: "custom", from: `${prevYm}-01`, to: `${prevYm}-${String(Math.min(dayOfMonth, prevRange.to.getDate())).padStart(2, "0")}` });
   const prevSoFar = sumFor(hospitalFigures(branchId, prevSoFarRange, agents), keys);
-  const base = [1, 2, 3].map((n) => sumFor(hospitalFigures(branchId, monthRange(shiftMonth(ym, -n)), agents), keys).patients);
-  const baseline = Math.round(base.reduce((s, n) => s + n, 0) / 3);
+  const base = [1, 2, 3].map((n) => sumFor(hospitalFigures(branchId, monthRange(shiftMonth(ym, -n)), agents), keys));
+  const baseline = Math.round(base.reduce((s, x) => s + x.revenue, 0) / 3);
+  const baselinePatients = Math.round(base.reduce((s, x) => s + x.patients, 0) / 3);
   const set = st.targets[targetKey(branchId, marketerId, ym)];
-  const target = set?.patients ?? Math.max(5, Math.round(baseline * 1.1));
+  const target = set?.amount ?? tidy(baseline * 1.1);
   const daysIn = new Date(Number(ym.slice(0, 4)), Number(ym.slice(5)), 0).getDate();
   const isCurrent = ym === monthKey();
   const pace = isCurrent ? Math.min(1, dayOfMonth / daysIn) : 1;
-  const inMonth = (iso: string) => iso.slice(0, 7) === ym;
+  // This week (Monday to today), or the month's last week for a past month.
+  const end = isCurrent ? TODAY : thisRange.to;
+  const ws = weekStartOf(end);
+  const wr = resolveRange({ key: "custom", from: iso(ws), to: iso(end) });
+  const w = sumFor(hospitalFigures(branchId, wr, agents), keys);
+  const weekTarget = Math.round((target * 7) / daysIn);
+  const weekDays = Math.round((end.getTime() - ws.getTime()) / 86_400_000) + 1;
+  const inMonth = (s: string) => s.slice(0, 7) === ym;
   const followUps = checkUps.filter((c) => c.branchId === branchId && agentIds.has(c.agentId) && inMonth(c.at) && (!byName || c.by.name === byName)).length;
   const entries = st.entries.filter((e) => e.branchId === branchId && e.marketerId === marketerId && inMonth(e.at));
   return {
@@ -349,16 +394,31 @@ export function progressFor(st: State, branchId: string, marketerId: string, hos
     revenue: now.revenue,
     referring: now.referring,
     lastMonthSoFar: prevSoFar.patients,
+    lastMonthSoFarRevenue: prevSoFar.revenue,
     lastMonth: prev.patients,
+    lastMonthRevenue: prev.revenue,
     baseline,
+    baselinePatients,
     target,
     targetSetBy: set?.by ?? null,
-    pct: target ? now.patients / target : 0,
+    pct: target ? now.revenue / target : 0,
     pace,
+    week: { from: iso(ws), to: iso(end), revenue: w.revenue, patients: w.patients, target: weekTarget, pct: weekTarget ? w.revenue / weekTarget : 0, pace: isCurrent ? Math.min(1, weekDays / 7) : 1 },
     followUps,
     recruits: entries.filter((e) => e.kind === "recruit").length,
     newHospitals: entries.filter((e) => e.kind === "hospital").length,
   };
+}
+
+/** Day-by-day amount and patients for their hospitals (for charts). */
+export function dailyFor(branchId: string, keys: string[], r: DateRange, agents: readonly AgentRecord[]): { date: string; revenue: number; patients: number }[] {
+  const out: { date: string; revenue: number; patients: number }[] = [];
+  for (let d = new Date(r.from); d <= r.to; d.setDate(d.getDate() + 1)) {
+    const day = resolveRange({ key: "custom", from: iso(d), to: iso(d) });
+    const f = sumFor(hospitalFigures(branchId, day, agents), keys);
+    out.push({ date: iso(d), revenue: f.revenue, patients: f.patients });
+  }
+  return out;
 }
 
 /** On track, behind or ahead, in plain words. */
