@@ -20,7 +20,8 @@
  * the day), Did not come, or Cancelled (domain/referralStatus); the PR agent
  * sees it on their request. The referral ID can be copied.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { DAY_MS, hash, isOpen, statusLabel, thisWeek, useIncomingFrom, weekStart, ago, STATUS_TEXT, type Incoming, type IncomingStatus, type PoolItem, type Urgency } from '@company/services/incoming';
 import { ArrowRight, BadgeCheck, CalendarDays, Check, ChevronRight, Clock3, Copy, FilePlus2, Hash, ListChecks, MessageCircle, Mic, Pause, Phone, Play, Search, Siren, Stethoscope } from 'lucide-react';
 import { useApp as useCompany } from '@company/app/AppState';
 import { getBranch } from '@company/data/company';
@@ -44,49 +45,8 @@ import { FieldErr, FieldLabel, inputCls } from '@/admin/prManage';
 import { branchUpdateText, setBranchUpdate, useBranchUpdates, type BranchUpdate, type BranchUpdateKind } from '@/domain/referralStatus';
 import { branchItems, catalogueOf, useBranchCatalogue } from '@/admin/branchCatalogue';
 
-export type Urgency = 'Routine' | 'Urgent' | 'Emergency';
-export type IncomingStatus = 'waiting' | 'billing' | 'attended' | BranchUpdateKind;
+export { STATUS_TEXT, ago, findIncoming, isOpen, thisWeek, weekStart, type Incoming, type IncomingStatus, type Urgency } from '@company/services/incoming';
 
-export interface Incoming {
-  id: string;
-  branchId: string;
-  sentAt: Date;
-  patient: { name: string; phone: string; gender: 'Male' | 'Female'; age: number };
-  agentId: number;
-  agentName: string;
-  hospital: string;
-  services: SelectedService[];
-  urgency: Urgency;
-  indication?: string;
-  /** The PR agent's note for the branch, and their voice note (Referrer Portal). */
-  note?: string;
-  voiceNote?: { duration: number };
-  /** A lower price the PR agent asked for (their price calculator); the branch manager approves it at billing. */
-  priceAsk?: { amount: number; reason: string };
-  status: IncomingStatus;
-  /** When the patient was attended (bill saved), and by whom / which invoice. */
-  attended?: { at: Date; invoiceNo?: string; by?: string };
-  /** The open bill (draft) for this referral. */
-  draftId?: string;
-  /** What the branch said (Coming later, Did not come, Cancelled). */
-  update?: BranchUpdate;
-  /** From a past week and never updated: closed as Not attended. */
-  closed?: boolean;
-}
-
-/** Still to be dealt with: waiting, bill started, or coming later. */
-export const isOpen = (r: Incoming) => r.status === 'waiting' || r.status === 'billing' || r.status === 'coming';
-/** Monday 00:00 of this week: the folder resets every week. */
-export function weekStart(d = new Date()) {
-  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
-  return x;
-}
-export const thisWeek = (list: Incoming[]) => {
-  const w = weekStart().getTime();
-  return list.filter((r) => r.sentAt.getTime() >= w);
-};
-export const STATUS_TEXT: Record<IncomingStatus, string> = { waiting: 'Waiting', billing: 'Bill started', attended: 'Attended', coming: 'Coming later', no_show: 'Did not come', cancelled: 'Cancelled' };
 export const STATUS_PILL: Record<IncomingStatus, string> = {
   waiting: 'bg-[#fff1de] text-[#b45309]',
   billing: 'bg-[#e8f1ff] text-brand-700',
@@ -95,143 +55,22 @@ export const STATUS_PILL: Record<IncomingStatus, string> = {
   no_show: 'bg-[#f1f3f7] text-ink-2',
   cancelled: 'bg-[#ffe9e9] text-[#b42318]',
 };
-const statusLabel = (r: Incoming) => (r.closed ? 'Not attended' : STATUS_TEXT[r.status]);
-/** Kept for Referral history (about two months of the demo). */
-const HISTORY_DAYS = 55;
-
-const hash = (n: number) => {
-  let h = (n * 2654435761) >>> 0;
-  h = Math.imul(h ^ (h >>> 15), 2246822519) >>> 0;
-  return (h ^ (h >>> 13)) >>> 0;
-};
-const DAY = 86_400_000;
-const FEMALE = new Set(['Adaeze', 'Aisha', 'Amaka', 'Amina', 'Bola', 'Chiamaka', 'Chioma', 'Esther', 'Fatima', 'Funke', 'Grace', 'Halima', 'Ifeoma', 'Joy', 'Kemi', 'Ladi', 'Maryam', 'Nkechi', 'Ngozi', 'Nneka', 'Ronke', 'Yetunde', 'Zainab', 'Blessing', 'Hauwa', 'Rukayat', 'Hadiza']);
-const INDICATIONS = ['Persistent cough for three weeks', 'Abdominal pain, right upper side', 'Follow up after treatment', 'Fever and body weakness for five days', 'Antenatal check, second trimester', 'Routine screening before surgery', 'Headache and dizziness', 'Painful swelling of the right knee', 'Suspected urinary tract infection', 'High blood pressure review'];
-const ASK_REASONS = ['The patient is short of money for all the tests.', 'Pensioner, cannot pay the full price.', 'Student, the family is paying.'];
-const NOTES = ['Patient is fasting since last night.', 'Please call me when the results are ready.', 'Elderly patient, comes with a relative.', 'Patient has an HMO card.', 'Repeat test after two weeks of treatment.'];
-
-/** Age in words, "12 min ago". */
-export function ago(d: Date, now = new Date()) {
-  const m = Math.max(0, Math.round((now.getTime() - d.getTime()) / 60_000));
-  if (m < 1) return 'just now';
-  if (m < 60) return `${m} min ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h} hr${h === 1 ? '' : 's'} ago`;
-  const days = Math.floor(h / 24);
-  return days === 1 ? 'yesterday' : `${days} days ago`;
-}
+const DAY = DAY_MS;
 
 /** The branch's incoming referrals, newest first, with their live status. */
 export const useIncoming = (branchId: string): Incoming[] => useIncomingMany(useMemo(() => [branchId], [branchId]));
 
-/** Incoming referrals for several branches (the Company Admin's view), newest first. */
+/** Incoming referrals for several branches (the Company Admin's view), newest first. Each branch's own price list. */
 export function useIncomingMany(branchIds: string[]): Incoming[] {
-  const { agents, inventory } = useCompany();
-  const billing = useBilling();
-  const updates = useBranchUpdates();
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    const t = window.setInterval(() => setNow(new Date()), 60_000);
-    return () => window.clearInterval(t);
-  }, []);
-  const minute = Math.floor(now.getTime() / 60_000);
-  const key = branchIds.join(',');
+  const { inventory } = useCompany();
   const catalogues = useBranchCatalogue(branchIds[0] ?? '');
   const company = useMemo(() => buildItems(inventory), [inventory]);
-  const items = company;
-  const labels = useMemo(() => new Map(groupCategories(items, inventory.categoryNames).map((g) => [g.key, g.label])), [items, inventory.categoryNames]);
-  const pools = useMemo(() => {
-    const range = resolveRange({ key: 'custom', from: isoDate(addDays(new Date(), -59)), to: isoDate(new Date()) });
-    return new Map(
-      branchIds.map((id) => {
-        const list = branchItems(company, catalogueOf(id));
-        const byId = new Map(list.map((i) => [i.id, i]));
-        const ranked = serviceRanking([id], range)
-          .map((r) => byId.get(r.id))
-          .filter((i): i is NonNullable<typeof i> => !!i && i.price !== null)
-          .slice(0, 60);
-        return [id, ranked.length ? ranked : list.filter((i) => i.price !== null).slice(0, 60)] as const;
-      }),
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, company, catalogues]);
-
-  const base = useMemo(() => {
-    const out: Omit<Incoming, 'status' | 'attended' | 'draftId'>[] = [];
-    if (!agents.length) return out;
-    const nowD = new Date(minute * 60_000);
-    const today0 = new Date(nowD.getFullYear(), nowD.getMonth(), nowD.getDate()).getTime();
-    for (const branchId of branchIds) {
-      const pool = pools.get(branchId) ?? [];
-      if (!pool.length) continue;
-      const prefix = branchPrefix(branchId);
-      const salt = [...branchId].reduce((x, c) => (x * 31 + c.charCodeAt(0)) >>> 0, 7) % 9973;
-      for (let d = HISTORY_DAYS; d >= 0; d--) {
-        const dayStart = today0 - d * DAY;
-        const dayNo = Math.floor(dayStart / DAY);
-        const n = 4 + (hash(dayNo + salt) % 4);
-        for (let k = 0; k < n; k++) {
-          const seed = dayNo * 16 + k;
-          const h = hash(seed + salt * 1_000_003);
-          // Sent between 07:30 and 18:30, spread through the day.
-          const sentAt = new Date(dayStart + (7.5 * 60 + Math.floor((k + (h % 100) / 100) * (660 / n))) * 60_000);
-          if (sentAt.getTime() > nowD.getTime()) continue;
-          const ag = agents[h % agents.length]!;
-          const count = 1 + (h % 3 === 0 ? 1 : 0) + (h % 7 === 0 ? 1 : 0);
-          const services: SelectedService[] = [];
-          for (let j = 0; j < count; j++) {
-            const it = pool[hash(h + j * 7919) % pool.length]!;
-            if (!services.some((x) => x.id === it.id)) services.push({ id: it.id, name: it.name, category: labels.get(it.category) ?? it.category, price: it.price!, overridePrice: null });
-          }
-          const name = patientNameOf(700_000 + (h % 900_000));
-          const imaging = services.some((x) => !/lab/i.test(x.category));
-          out.push({
-            id: `${prefix}-R${String(400_000 + (seed % 500_000)).padStart(6, '0')}`,
-            branchId,
-            sentAt,
-            patient: { name, phone: `080${String(hash(h * 5) % 100_000_000).padStart(8, '0')}`, gender: FEMALE.has(name.split(' ')[0]!) ? 'Female' : 'Male', age: 18 + (h % 58) },
-            agentId: ag.id,
-            agentName: ag.name,
-            hospital: hospitalKey(ag.hospital) || ag.hospital,
-            services,
-            urgency: h % 23 === 0 ? 'Emergency' : h % 6 === 0 ? 'Urgent' : 'Routine',
-            indication: imaging || h % 4 === 0 ? INDICATIONS[h % INDICATIONS.length] : undefined,
-            note: h % 5 === 0 || h % 3 === 0 ? NOTES[h % NOTES.length] : undefined,
-            voiceNote: h % 3 === 0 ? { duration: 7 + (h % 38) } : undefined,
-            priceAsk: h % 7 === 2 && services.reduce((n, x) => n + x.price, 0) > 8000 ? { amount: 1000 * (1 + (h % 3)), reason: ASK_REASONS[h % ASK_REASONS.length]! } : undefined,
-          });
-        }
-      }
-    }
-    return out;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agents, pools, labels, key, minute]);
-
-  return useMemo(() => {
-    const nowT = minute * 60_000;
-    const week = weekStart(new Date(nowT)).getTime();
-    return base
-      .map((r): Incoming => {
-        const order = billing.orders.find((o) => o.branchId === r.branchId && o.referral.referralId === r.id);
-        if (order) return { ...r, status: 'attended', attended: { at: new Date(order.createdAt), invoiceNo: order.invoiceNo, by: order.createdBy.name } };
-        const draft = billing.drafts.find((x) => x.branchId === r.branchId && x.referralId === r.id);
-        if (draft) return { ...r, status: 'billing', draftId: draft.id };
-        const u = updates[r.id.toUpperCase()];
-        if (u) return { ...r, status: u.status, update: u };
-        // Demo: most patients arrive within a few hours of the referral (the older ones are already attended).
-        const h = hash(Number(r.id.replace(/\D/g, '')) + r.branchId.length);
-        const arrive = r.sentAt.getTime() + (40 + (h % 200)) * 60_000;
-        const age = nowT - r.sentAt.getTime();
-        if (age > 150 * 60_000 && h % 4 !== 0 && arrive <= nowT) return { ...r, status: 'attended', attended: { at: new Date(arrive) } };
-        // A past week's referral that nobody updated is closed as Not attended (it moves to Referral history).
-        if (r.sentAt.getTime() < week) return { ...r, status: 'no_show', closed: true };
-        return { ...r, status: 'waiting' };
-      })
-      .sort((x, y) => y.sentAt.getTime() - x.sentAt.getTime());
-  }, [base, billing.orders, billing.drafts, updates, minute]);
+  const labels = useMemo(() => new Map(groupCategories(company, inventory.categoryNames).map((g) => [g.key, g.label])), [company, inventory.categoryNames]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const itemsOf = useCallback((id: string): PoolItem[] => branchItems(company, catalogueOf(id)), [company, catalogues]);
+  const labelOf = useCallback((k: string) => labels.get(k) ?? k, [labels]);
+  return useIncomingFrom(branchIds, itemsOf, labelOf);
 }
-
-export const findIncoming = (list: Incoming[], id: string) => list.find((r) => r.id.toUpperCase() === id.trim().toUpperCase()) ?? null;
 
 const URGENT_TONE: Record<Urgency, string> = { Routine: 'bg-page text-ink-2', Urgent: 'bg-[#fff1de] text-[#b45309]', Emergency: 'bg-[#ffe4e4] text-[#b42318]' };
 const STRIP: Record<Urgency, string> = { Routine: 'bg-brand-400', Urgent: 'bg-[#f59e0b]', Emergency: 'bg-[#ef4444]' };

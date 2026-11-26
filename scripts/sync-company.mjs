@@ -38,6 +38,8 @@ const ENTRIES = [
   'services/config.ts',
   'services/receiptProfile.ts',
   'data/serviceGuide/index.ts',
+  // Incoming referrals: the branch folder (demo referrals, statuses, weekly reset) and the branch's status updates.
+  'services/incoming.ts',
   // Reports: the same report definitions, document model, page layout and print styles,
   // so a report made on the phone is identical to the desktop's (print, PDF, spreadsheet).
   'features/reports/specs.ts',
