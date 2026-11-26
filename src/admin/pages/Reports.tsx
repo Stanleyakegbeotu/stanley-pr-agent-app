@@ -406,7 +406,7 @@ async function printPages(doc: ReturnType<ReportSpec['build']>, pages: Page[], p
 }
 
 function BuilderSheet({ spec, initialBranch, onClose, lockBranch = false, long = true }: { spec: ReportSpec; initialBranch: string; onClose: () => void; /** Branch workspace: its own branch only. */ lockBranch?: boolean; /** Periods longer than a month. */ long?: boolean }) {
-  const { agents: raw, user } = useCompany();
+  const { agents: raw, user, staff } = useCompany();
   const { showToast } = useNav();
   const banks = useAgentBanks();
   // The payout report groups agents by bank: include the account details kept on this device.
@@ -446,7 +446,7 @@ function BuilderSheet({ spec, initialBranch, onClose, lockBranch = false, long =
     return { size, orientation };
   }, [paperKey]);
   const params = useMemo<ReportParams>(() => ({ variant, range, branch, options, columns: cols, selects, paper }), [variant, range, branch, options, cols, selects, paper]);
-  const doc = useMemo(() => spec.build(params, { agents, hideProfit }), [spec, params, agents, hideProfit]);
+  const doc = useMemo(() => spec.build(params, { agents, hideProfit, staff }), [spec, params, agents, hideProfit, staff]);
   const { pages, measurer } = usePagination(doc, paper);
   const rows = tableRowCount(doc);
   const toggleColumn = (id: string) =>

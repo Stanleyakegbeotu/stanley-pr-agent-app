@@ -161,6 +161,51 @@ export const STAFF_ROLES: readonly { value: string; access: string; permissions:
 
 export const EMPLOYMENT_TYPES: readonly string[] = ["Full-time", "Part-time", "Contract", "Locum"];
 
+/**
+ * Staff records (owner, 2026-11-26): everyone who works at a branch is on
+ * record in Staff Management, not only the people who use STANLEY. These
+ * roles never sign in; the Company Admin and the Branch Manager keep their
+ * profile, job, salary and bank details (for the salary report in Analysis).
+ */
+export const RECORD_ROLES: readonly string[] = [
+  "Radiologist",
+  "Radiographer",
+  "Sonographer",
+  "Medical Laboratory Scientist",
+  "Laboratory Technician",
+  "Phlebotomist",
+  "Doctor",
+  "Nurse",
+  "Pharmacist",
+  "Accountant",
+  "Cashier",
+  "Marketer",
+  "IT Support",
+  "Cleaner",
+  "Security",
+  "Driver",
+];
+export const DEPARTMENTS: readonly string[] = ["Front desk", "Management", "Imaging", "Laboratory", "Clinical", "Finance", "Marketing", "Facilities", "Security", "Transport", "IT"];
+/** The two roles that sign in to STANLEY; everyone else is on record only. */
+export const usesApp = (s: Pick<StaffRecord, "role">) => s.role === MANAGER_ROLE || s.role === FRONT_DESK_ROLE;
+
+export interface StaffPay {
+  /** Monthly basic salary (naira). */
+  salary: number;
+  /** Monthly allowances (transport, housing …). */
+  allowances?: number;
+  /** Monthly deductions (tax, pension, loans …). */
+  deductions?: number;
+}
+export interface StaffBank {
+  bankName: string;
+  accountName: string;
+  /** 10-digit NUBAN. */
+  accountNumber: string;
+}
+/** Take-home pay for a month. */
+export const netPay = (p?: StaffPay) => (p ? Math.max(0, p.salary + (p.allowances ?? 0) - (p.deductions ?? 0)) : 0);
+
 export interface StaffRecord {
   id: string;
   name: string;
@@ -176,6 +221,18 @@ export interface StaffRecord {
   notes?: string;
   /** Default profile photo (URL). The person's own upload in Settings replaces it. */
   photo?: string;
+  /** Job (owner, 2026-11-26): department and what the person does. */
+  department?: string;
+  jobDescription?: string;
+  /** Salary, allowances and deductions (seen by the Company Admin and the Branch Manager only). */
+  pay?: StaffPay;
+  /** Where the salary is paid. */
+  bank?: StaffBank;
+  gender?: "Female" | "Male";
+  /** yyyy-mm-dd */
+  dateOfBirth?: string;
+  qualification?: string;
+  nextOfKin?: { name: string; phone: string; relationship: string };
   /** Assignment history: transfers, role and status changes (newest first). */
   history?: { at: string; by: string; action: string }[];
   createdAt: string;
@@ -192,11 +249,18 @@ export interface StaffRecord {
  * dashboard greeting is unchanged.
  */
 const MOCK_NOTE = "Sample staff record (mock data) — replace with the real team.";
+/** Sample bank details for the sample team (not real accounts). */
+const SAMPLE_BANKS = [
+  (n: string): StaffBank => ({ bankName: "Access Bank", accountName: n, accountNumber: "0012345678" }),
+  (n: string): StaffBank => ({ bankName: "GTBank", accountName: n, accountNumber: "0123456789" }),
+  (n: string): StaffBank => ({ bankName: "First Bank", accountName: n, accountNumber: "3012345678" }),
+  (n: string): StaffBank => ({ bankName: "Zenith Bank", accountName: n, accountNumber: "2012345678" }),
+];
 /** Bundled sample photo (works offline, and from a sub-path / file://). */
 export const mockPhoto = (slug: string) => `${import.meta.env.BASE_URL}mock-photos/${slug}.jpg`;
 const MOCK_CREATED = "2026-11-22T08:00:00.000Z";
-export const MOCK_STAFF: readonly StaffRecord[] = Object.freeze(
-  (
+export const MOCK_STAFF: readonly StaffRecord[] = Object.freeze([
+  ...(
     [
       ["STF-0001", "Chioma Okafor", MANAGER_ROLE, "Active", "Full-time", "2023-02-01"],
       ["STF-0002", "Amina Bello", "Front Desk", "Active", "Full-time", "2024-03-11"],
@@ -216,9 +280,37 @@ export const MOCK_STAFF: readonly StaffRecord[] = Object.freeze(
     notes: MOCK_NOTE,
     // Stock headshots (Pexels, see public/mock-photos/CREDITS.md) so the demo shows profile photos.
     photo: mockPhoto(name.toLowerCase().replace(/\s+/g, "-")),
+    department: role === MANAGER_ROLE ? "Management" : "Front desk",
+    pay: role === MANAGER_ROLE ? { salary: 350_000, allowances: 60_000, deductions: 38_500 } : { salary: 120_000, allowances: 25_000, deductions: 11_200 },
+    bank: SAMPLE_BANKS[name.length % SAMPLE_BANKS.length]!(name),
     createdAt: MOCK_CREATED,
   })),
-);
+  ...(
+    [
+      ["STF-0005", "Tunde Adeyemi", "Radiographer", "Imaging", 220_000, "2022-08-01"],
+      ["STF-0006", "Halima Sani", "Medical Laboratory Scientist", "Laboratory", 240_000, "2023-01-16"],
+      ["STF-0007", "Musa Ibrahim", "Security", "Security", 70_000, "2021-11-01"],
+      ["STF-0008", "Grace Udo", "Cleaner", "Facilities", 55_000, "2024-02-05"],
+    ] as const
+  ).map(
+    ([id, name, role, department, salary, startDate]): StaffRecord => ({
+      id,
+      name,
+      role,
+      branchId: LEGACY_BRANCH_ID,
+      status: "Active",
+      email: "",
+      phone: "",
+      employment: "Full-time",
+      startDate,
+      notes: MOCK_NOTE,
+      department,
+      pay: { salary, allowances: Math.round(salary * 0.15), deductions: Math.round(salary * 0.08) },
+      bank: SAMPLE_BANKS[name.length % SAMPLE_BANKS.length]!(name),
+      createdAt: MOCK_CREATED,
+    }),
+  ),
+]);
 
 export const isManager = (s: Pick<StaffRecord, "role">) => s.role === MANAGER_ROLE;
 

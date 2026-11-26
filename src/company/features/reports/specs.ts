@@ -13,7 +13,7 @@ import { CATALOGUE_INVENTORY } from "@company/data/catalogueRules";
 import { DAILY, DATA_START, addDays, diffDays, isoDate } from "@company/data/demo/generator";
 import { ledger, openBalances, patientVisits, type LedgerEntry, type PatientVisit } from "@company/data/demo/dailyLines";
 import { LEGACY_BRANCH_ID, buildHospitalDirectory, hasPhone, hospitalKey } from "@company/data/legacy";
-import type { AgentRecord } from "@company/data/userRecords";
+import { netPay, usesApp, type AgentRecord, type StaffRecord } from "@company/data/userRecords";
 import type { Currency, DateRange } from "@company/data/types";
 import { EXPENSE_CATEGORIES, PAYMENT_METHODS } from "@company/data/types";
 import { financeTotals } from "@company/services/finance";
@@ -37,6 +37,8 @@ export interface ReportParams {
 
 export interface ReportCtx {
   agents: readonly AgentRecord[];
+  /** Staff on record (Staff Management), for the staff directory and salary reports. */
+  staff?: readonly StaffRecord[];
   /** Owner rule: only the Company Admin sees net profit / margin — reports for anyone else leave them out. */
   hideProfit?: boolean;
 }
@@ -1029,20 +1031,27 @@ const PAYMENTS: ReportSpec = {
 
 const STAFF: ReportSpec = {
   id: "staff",
-  title: "Staff activity report",
+  title: "Staff report",
   short: "Staff",
-  tagline: "Front-desk activity by role",
+  tagline: "Staff, salaries & activity",
   icon: UsersRound,
-  description: "Front-desk activity by role. Named staff reports arrive with Staff Management.",
-  guide: "Staff accounts are not set up yet, so this report groups work by role (receptionist, branch manager). Named, per-person reports will be added when Staff Management is built.",
+  description: "Every staff member on record, their monthly salaries and bank details, and front-desk activity by role.",
+  guide: "Staff directory and Salaries & bank details list everyone in Staff Management, including staff who don't use STANLEY (radiographers, lab, security …). Salaries are the monthly pay set on each profile, grouped by bank for paying. Activity reports group front-desk work by role.",
   variants: [
+    { id: "salaries", label: "Salaries & bank details", description: "Monthly pay for every staff member: salary, allowances, deductions and net pay, with bank name, account name and number. Totals per bank.", dated: false },
+    { id: "directory", label: "Staff directory", description: "Everyone who works at the branch: role, department, whether they use STANLEY, status, start date and contacts.", dated: false },
     { id: "roles", label: "Activity by role", description: "Visits processed and money collected at the front desk, per role." },
     { id: "daily", label: "Daily front-desk activity", description: "One line per day: visits processed by each role and money collected." },
   ],
-  suggestPaper: () => ({ size: "A4", orientation: "portrait" }),
-  build(p) {
+  options: [
+    { id: "left", label: "Include staff who have left", help: "Adds people whose status is Left (kept for history).", default: false, variants: ["salaries", "directory"] },
+    { id: "bankSummary", label: "Add a total per bank at the end", help: "How much to send to each bank, handy when paying salaries in bulk.", default: true, variants: ["salaries"] },
+  ],
+  suggestPaper: (p) => ({ size: "A4", orientation: p.variant === "salaries" || p.variant === "directory" ? "landscape" : "portrait" }),
+  build(p, ctx) {
     const ids = branchIdsOf(p);
     const c0 = curOf(ids[0]);
+    if (p.variant === "salaries" || p.variant === "directory") return staffRecordsDoc(p, ctx, ids);
     const visits = patientVisits(ids, p.range);
     const blocks: Block[] = [];
     const roles = ["Receptionist", "Branch Manager"] as const;
@@ -1094,6 +1103,53 @@ const STAFF: ReportSpec = {
     return { title: "Staff activity report", subtitle: `${STAFF.variants.find((v) => v.id === p.variant)?.label} · ${branchLabel(p)} · ${rangeLabel(p.range)}`, meta: baseMeta(STAFF, p), blocks, footnote: FOOT_DEMO, filename: fileName(STAFF, p) };
   },
 };
+
+/** Staff directory and Salaries & bank details (owner, 2026-11-26): everyone on record in Staff Management. */
+function staffRecordsDoc(p: ReportParams, ctx: ReportCtx, ids: string[]): ReportDoc {
+  const c0 = curOf(ids[0]!);
+  const multi = ids.length > 1;
+  const people = (ctx.staff ?? [])
+    .filter((x) => ids.includes(x.branchId) && (p.options.left || x.status !== "Left"))
+    .sort((a, b) => (multi ? a.branchId.localeCompare(b.branchId) : 0) || a.name.localeCompare(b.name));
+  const bcol: Column[] = multi ? [{ key: "br", label: "Branch", weight: 0.8 }] : [];
+  const bcell = (x: StaffRecord): Cell[] => (multi ? [txt(getBranch(x.branchId)?.name ?? x.branchId)] : []);
+  const blocks: Block[] = [];
+  const month = new Date().toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+  if (p.variant === "directory") {
+    blocks.push({ kind: "summary", items: [{ label: "Staff", value: formatCount(people.length) }, { label: "Use STANLEY", value: formatCount(people.filter(usesApp).length) }, { label: "Records only", value: formatCount(people.filter((x) => !usesApp(x)).length) }, { label: "Active", value: formatCount(people.filter((x) => x.status === "Active").length) }] });
+    blocks.push({
+      kind: "table",
+      title: "Staff directory",
+      columns: [{ key: "n", label: "Name", weight: 1.3 }, { key: "id", label: "Staff ID", weight: 0.7 }, ...bcol, { key: "r", label: "Role", weight: 1.2 }, { key: "d", label: "Department", weight: 0.9 }, { key: "a", label: "Uses STANLEY", weight: 0.7 }, { key: "s", label: "Status", weight: 0.6 }, { key: "e", label: "Employment", weight: 0.7 }, { key: "st", label: "Started", weight: 0.8 }, { key: "ph", label: "Phone", weight: 1 }, { key: "em", label: "Email", weight: 1.3 }],
+      rows: people.map((x) => [txt(x.name, { b: true }), txt(x.id), ...bcell(x), txt(x.role), txt(x.department ?? "—"), txt(usesApp(x) ? "Yes" : "No"), txt(x.status, { tone: x.status === "Active" ? "good" : undefined }), txt(x.employment), txt(x.startDate ? day(new Date(`${x.startDate}T00:00:00`)) : "—"), txt(x.phone || "—", { tone: x.phone ? undefined : "muted" }), txt(x.email || "—", { tone: x.email ? undefined : "muted" })]),
+      empty: "No staff on record.",
+    });
+    return { title: "Staff directory", subtitle: `${branchLabel(p)} · as of ${day(new Date())}`, meta: baseMeta(STAFF, p), blocks, footnote: "From Staff Management. Includes staff who do not use STANLEY (records only).", filename: fileName(STAFF, p) };
+  }
+  const paid = people.filter((x) => x.pay);
+  const sumOf = (list: readonly StaffRecord[], k: "salary" | "allowances" | "deductions" | "net") => sum([...list], (x) => (k === "net" ? netPay(x.pay) : (x.pay?.[k] ?? 0)));
+  blocks.push({ kind: "summary", items: [{ label: "Staff paid", value: formatCount(paid.length) }, { label: "Basic salaries", value: formatMoney(sumOf(paid, "salary"), c0) }, { label: "Allowances", value: formatMoney(sumOf(paid, "allowances"), c0) }, { label: "Deductions", value: formatMoney(sumOf(paid, "deductions"), c0) }, { label: "Net pay to send", value: formatMoney(sumOf(paid, "net"), c0) }] });
+  const cols: Column[] = [{ key: "n", label: "Name", weight: 1.3 }, ...bcol, { key: "r", label: "Role", weight: 1.1 }, { key: "b", label: "Bank", weight: 0.9 }, { key: "an", label: "Account name", weight: 1.2 }, { key: "ac", label: "Account number", weight: 1 }, { key: "s", label: "Salary", align: "right", weight: 0.9 }, { key: "al", label: "Allowances", align: "right", weight: 0.9 }, { key: "de", label: "Deductions", align: "right", weight: 0.9 }, { key: "ne", label: "Net pay", align: "right", weight: 0.9 }];
+  // Grouped by bank (A–Z), like the PR commission payout, so each bank's transfers are together.
+  const byBank = [...paid].sort((a, b) => (a.bank?.bankName ?? "~").localeCompare(b.bank?.bankName ?? "~") || a.name.localeCompare(b.name));
+  blocks.push({
+    kind: "table",
+    title: `Salaries for ${month}`,
+    subtitle: "Grouped by bank",
+    columns: cols,
+    rows: byBank.map((x) => [txt(x.name, { b: true }), ...bcell(x), txt(x.role), txt(x.bank?.bankName ?? "No bank details", { tone: x.bank ? undefined : "bad" }), txt(x.bank?.accountName ?? "—"), txt(x.bank?.accountNumber ?? "—"), money(x.pay!.salary, c0), money(x.pay!.allowances ?? 0, c0), money(x.pay!.deductions ?? 0, c0), money(netPay(x.pay), c0, { b: true })]),
+    total: [txt("Total", { b: true }), ...Array.from({ length: cols.length - 5 }, () => txt("")), money(sumOf(paid, "salary"), c0), money(sumOf(paid, "allowances"), c0), money(sumOf(paid, "deductions"), c0), money(sumOf(paid, "net"), c0)],
+    empty: "No salaries on record. Add them on each staff profile (Staff Management → Pay & bank).",
+  });
+  if (p.options.bankSummary && paid.length) {
+    const banks = new Map<string, StaffRecord[]>();
+    for (const x of paid) banks.set(x.bank?.bankName ?? "No bank details", [...(banks.get(x.bank?.bankName ?? "No bank details") ?? []), x]);
+    blocks.push({ kind: "table", title: "Total per bank", columns: [{ key: "b", label: "Bank", weight: 1.4 }, { key: "c", label: "Staff", align: "right" }, { key: "t", label: "Net pay to send", align: "right", weight: 1.2 }], rows: [...banks.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([b, list]) => [txt(b, { b: true }), count(list.length), money(sumOf(list, "net"), c0)]), total: [txt("Total", { b: true }), count(paid.length), money(sumOf(paid, "net"), c0)] });
+  }
+  const missing = people.filter((x) => !x.pay || !x.bank);
+  if (missing.length) blocks.push({ kind: "note", text: `Missing pay or bank details: ${missing.map((x) => x.name).join(", ")}. Add them on their profiles in Staff Management.` });
+  return { title: "Salaries & bank details", subtitle: `${branchLabel(p)} · ${month}`, meta: baseMeta(STAFF, p), blocks, footnote: "Monthly pay as set on each staff profile. Confidential: for the Company Admin and the Branch Manager.", filename: fileName(STAFF, p) };
+}
 
 export const REPORTS: ReportSpec[] = [REVENUE, AGENTS, HOSPITALS, SERVICES_SPEC, PAYMENTS, STAFF];
 export const reportById = (id: string | null) => REPORTS.find((r) => r.id === id);
