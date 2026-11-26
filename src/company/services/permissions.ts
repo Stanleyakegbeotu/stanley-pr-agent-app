@@ -28,6 +28,8 @@ export interface PermissionDef {
   sensitive?: boolean;
   /** Only the Company Admin — can't be granted to branch roles (by design). */
   adminOnly?: boolean;
+  /** Never given to the Front Desk (owner, 2026-11-26): e.g. Staff Management, since they are staff themselves. */
+  managersOnly?: boolean;
 }
 
 export interface PermissionGroup {
@@ -105,8 +107,8 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     id: "staff",
     label: "Staff",
     perms: [
-      { id: "staff.view", label: "View staff", description: "Open Staff Management for the branch." },
-      { id: "staff.manage", label: "Add & manage front-desk staff", description: "Add staff, change status, edit profiles, move to trash.", sensitive: true },
+      { id: "staff.view", label: "View staff", description: "Open Staff Management for the branch. Branch Manager and Company Admin only: the front desk are staff themselves.", managersOnly: true },
+      { id: "staff.manage", label: "Add & manage front-desk staff", description: "Add staff, change status, edit profiles, move to trash.", sensitive: true, managersOnly: true },
     ],
   },
   {
@@ -144,7 +146,7 @@ export const ALL_PERMISSIONS = PERMISSION_GROUPS.flatMap((g) => g.perms);
 const PERM_BY_ID = new Map(ALL_PERMISSIONS.map((p) => [p.id, p]));
 
 const MANAGER_DEFAULT = ALL_PERMISSIONS.filter((p) => !p.adminOnly).map((p) => p.id);
-const FRONT_DESK_DEFAULT = ["dash.branch", "analytics.view", "patients.view", "patients.register", "billing.create", "billing.reprint", "expenses.record", "services.view", "reports.view"];
+const FRONT_DESK_DEFAULT = ["dash.branch", "analytics.view", "patients.view", "patients.register", "billing.create", "billing.reprint", "expenses.record", "services.view", "reports.view", "referral.view"];
 
 export const DEFAULT_GRANTS: Record<Exclude<RoleName, "Company Admin">, string[]> = {
   "Branch Manager": MANAGER_DEFAULT,
@@ -160,7 +162,8 @@ function load(): Grants {
     if (!raw) return { ...DEFAULT_GRANTS };
     const saved = JSON.parse(raw) as Partial<Grants>;
     const clean = (list: unknown, fallback: string[]) => (Array.isArray(list) ? list.filter((id) => PERM_BY_ID.has(id) && !PERM_BY_ID.get(id)!.adminOnly) : fallback);
-    return { "Branch Manager": clean(saved["Branch Manager"], MANAGER_DEFAULT), "Front Desk": clean(saved["Front Desk"], FRONT_DESK_DEFAULT) };
+    const frontDesk = clean(saved["Front Desk"], FRONT_DESK_DEFAULT).filter((id) => !PERM_BY_ID.get(id)!.managersOnly);
+    return { "Branch Manager": clean(saved["Branch Manager"], MANAGER_DEFAULT), "Front Desk": frontDesk };
   } catch {
     return { ...DEFAULT_GRANTS };
   }
@@ -185,6 +188,7 @@ export function can(role: string, permission: string): boolean {
   if (role === "Company Admin") return true;
   const def = PERM_BY_ID.get(permission);
   if (!def || def.adminOnly) return false;
+  if (role !== "Branch Manager" && def.managersOnly) return false;
   const list = role === "Branch Manager" ? grants["Branch Manager"] : grants["Front Desk"];
   return list.includes(permission);
 }
@@ -208,7 +212,7 @@ export function usePermissions(): number {
 
 export function setPermission(role: Exclude<RoleName, "Company Admin">, permission: string, on: boolean, by: string) {
   const def = PERM_BY_ID.get(permission);
-  if (!def || def.adminOnly) return;
+  if (!def || def.adminOnly || (def.managersOnly && role === "Front Desk")) return;
   const cur = grants[role];
   if (on === cur.includes(permission)) return;
   commit({ ...grants, [role]: on ? [...cur, permission] : cur.filter((p) => p !== permission) });
@@ -218,6 +222,13 @@ export function setPermission(role: Exclude<RoleName, "Company Admin">, permissi
 export function resetRole(role: Exclude<RoleName, "Company Admin">, by: string) {
   commit({ ...grants, [role]: [...DEFAULT_GRANTS[role]] });
   logAudit({ category: "Settings", action: "Role reset to defaults", record: role, details: `All ${role} permissions restored to the standard set · by ${by}`, branchId: null });
+}
+
+/** Can this permission ever be given to the role? (Company-only and manager-only ones are locked.) */
+export function grantable(role: string, permission: string): boolean {
+  if (role === "Company Admin") return true;
+  const def = PERM_BY_ID.get(permission);
+  return !!def && !def.adminOnly && !(def.managersOnly && role !== "Branch Manager");
 }
 
 /** Branch pages and the permission each needs (Settings is always available — everyone has their own account). */

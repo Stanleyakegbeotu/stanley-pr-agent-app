@@ -18,13 +18,12 @@
  * agent's flag goes off until that date, or for two weeks. Check-ups are on
  * the agent's record. Saved on this device until the cloud is connected.
  */
-import { useMemo, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { useApp } from "@company/app/AppState";
 import { addDays } from "@company/data/demo/generator";
-import { patientVisits } from "@company/data/demo/dailyLines";
 import { LEGACY_BRANCH_ID, hospitalKey } from "@company/data/legacy";
 import type { AgentRecord } from "@company/data/userRecords";
-import { resolveRange } from "@company/services/analytics";
+import { referralsByDay, resolveRange } from "@company/services/analytics";
 
 export type AgentStatus = "top" | "rising" | "steady" | "slipping" | "quiet" | "inactive" | "never";
 export const STATUS_LABEL: Record<AgentStatus, string> = { top: "Top", rising: "Growing", steady: "Steady", slipping: "Slipping", quiet: "Gone quiet", inactive: "Inactive", never: "No referrals yet" };
@@ -143,18 +142,29 @@ export function agentHealth(branchId: string, agents: readonly AgentRecord[], ch
   // The PR network on record belongs to the Abuja branch (legacy export).
   if (branchId !== LEGACY_BRANCH_ID || !agents.length) return [];
   const range = resolveRange({ key: "custom", from: addDays(now, -119).toISOString().slice(0, 10), to: now.toISOString().slice(0, 10) });
-  const dates = new Map<number, number[]>();
-  for (const v of patientVisits([branchId], range)) if (v.agentId != null) dates.set(v.agentId, [...(dates.get(v.agentId) ?? []), v.at.getTime()]);
+  // One pass over the visits (correction 2026-11-26: the old per-agent filtering froze the page while it opened).
   const today = n0(now);
+  type Acc = { last7: number; last28: number; prev28: number; weeks: number[]; lastT: number };
+  const acc = new Map<number, Acc>();
+  for (const d of referralsByDay(branchId, range)) {
+    const at = new Date(`${d.date}T12:00:00`);
+    const t = at.getTime();
+    const ago = Math.floor((today - n0(at)) / DAY);
+    for (const id of d.agentIds) {
+      let a = acc.get(id);
+      if (!a) acc.set(id, (a = { last7: 0, last28: 0, prev28: 0, weeks: new Array(12).fill(0), lastT: 0 }));
+      if (ago < 7) a.last7 += 1;
+      if (ago < 28) a.last28 += 1;
+      else if (ago < 56) a.prev28 += 1;
+      const w = Math.floor(ago / 7);
+      if (w >= 0 && w < 12) a.weeks[11 - w] += 1;
+      if (t > a.lastT) a.lastT = t;
+    }
+  }
   const base = agents.map((agent) => {
-    const ts = dates.get(agent.id) ?? [];
-    const ago = (t: number) => Math.floor((today - n0(new Date(t))) / DAY);
-    const last7 = ts.filter((t) => ago(t) < 7).length;
-    const last28 = ts.filter((t) => ago(t) < 28).length;
-    const prev28 = ts.filter((t) => ago(t) >= 28 && ago(t) < 56).length;
-    const weeks = Array.from({ length: 12 }, (_, i) => ts.filter((t) => Math.floor(ago(t) / 7) === 11 - i).length);
-    const lastT = ts.length ? Math.max(...ts) : null;
-    return { agent, last7, last28, prev28, weeks, lastAt: lastT ? new Date(lastT) : null, daysSince: lastT ? ago(lastT) : null };
+    const a = acc.get(agent.id);
+    if (!a) return { agent, last7: 0, last28: 0, prev28: 0, weeks: new Array(12).fill(0), lastAt: null, daysSince: null };
+    return { agent, last7: a.last7, last28: a.last28, prev28: a.prev28, weeks: a.weeks, lastAt: new Date(a.lastT), daysSince: Math.floor((today - n0(new Date(a.lastT))) / DAY) };
   });
   // Top: the busiest tenth this month (at least 6 referrals).
   const sorted = base.map((b) => b.last28).sort((a, b) => b - a);
@@ -175,6 +185,12 @@ export function useAgentHealth(branchId: string): AgentHealth[] {
   const { agents } = useApp();
   const checkUps = useCheckUps();
   const day = new Date().toDateString();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  return useMemo(() => agentHealth(branchId, agents, checkUps), [branchId, agents, checkUps, day]);
+  // Worked out after the page has appeared, so opening PR Management is never held up.
+  const [list, setList] = useState<AgentHealth[]>([]);
+  useEffect(() => {
+    const t = window.setTimeout(() => setList(agentHealth(branchId, agents, checkUps)), 30);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branchId, agents, checkUps, day]);
+  return list;
 }

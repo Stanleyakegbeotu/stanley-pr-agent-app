@@ -88,6 +88,11 @@ function records(branchId: string, r: DateRange): DayRecord[] {
   return end < start ? [] : all.slice(start, end + 1);
 }
 
+/** The PR agents who referred a patient, day by day (light: from the daily records, no visit details). */
+export function referralsByDay(branchId: string, r: DateRange): { date: string; agentIds: readonly number[] }[] {
+  return records(branchId, r).map((d) => ({ date: d.date, agentIds: d.referralAgentIds }));
+}
+
 function recordAt(branchId: string, d: Date): DayRecord | undefined {
   const all = DAILY[branchId];
   if (!all) return undefined;
