@@ -51,6 +51,7 @@ import { Art, IconPicker, autoIcon, categoryIconOf, resolveIcon, serviceIconOf, 
 import { InfoFields, draftHasContent, draftOf, infoFromDraft, mergeGuide, saveServiceInfo, useServiceInfo, type InfoDraft } from '../serviceInfo';
 import { GuideButton, aboutOf, useGuide } from '../testGuide';
 import { plainAll } from '@/data/services';
+import { TestAvailabilityBox } from '@/staff/availabilityControls';
 
 /* ─────────────── model (desktop InventoryCatalog) ─────────────── */
 
@@ -667,6 +668,8 @@ function ServiceSheet({ id, ids, onClose }: { id: number; ids: string[]; onClose
           <CircleAlert size={15} className="mt-0.5 shrink-0" /> {i.note}
         </p>
       )}
+
+      <TestAvailabilityBox id={i.id} name={i.name} category={i.category} branchId={branchId} />
 
       <p className="mb-2 flex flex-wrap items-center gap-1.5 px-1 text-[13px] font-semibold text-ink-2">
         <span className="flex items-center gap-1.5 whitespace-nowrap"><BookOpen size={15} /> Test guide</span>

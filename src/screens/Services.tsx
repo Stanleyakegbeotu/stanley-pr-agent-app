@@ -18,6 +18,7 @@ import { useApp } from '@/app/store';
 import { Button, Chip, EmptyState, ScreenHeader, SearchField, ServiceThumb, Sticker, Subtitle } from '@/ui/kit';
 import { useDetail } from '@/ui/detailSheet';
 import { CalculatorButton } from '@/screens/PriceCalculator';
+import { TestAvailability, TestAvailabilityLine } from '@/ui/availability';
 
 /** Price, or a clear note when the branch hasn't recorded one. */
 export const priceText = (p: number | null) => (p == null ? 'Price at branch' : naira(p));
@@ -262,6 +263,7 @@ function ServiceRow({ s, reason }: { s: Service; reason?: string }) {
         </span>
         <span className="mt-0.5 line-clamp-1 text-[12.5px] text-muted">{s.about}</span>
         <span className="mt-2 flex flex-wrap gap-1.5">
+          <TestAvailability id={s.id} category={s.category} compact />
           {reason ? (
             <span className="inline-flex items-center gap-1 rounded-full bg-tint-purple px-2 py-0.5 text-[11.5px] font-medium text-violet">
               <Lightbulb size={11} /> {reason}
@@ -386,6 +388,9 @@ export function ServiceDetails({ id }: { id: string }) {
 
       <h2 className="text-[23px] font-bold leading-tight tracking-[-0.02em] text-ink">{s.name}</h2>
       <p className={`mt-1 font-bold ${s.price == null ? 'text-[16px] text-muted' : 'text-[26px] text-brand-600'}`}>{priceText(s.price)}</p>
+      <div className="mt-1.5 rounded-2xl bg-page px-3 py-2">
+        <TestAvailabilityLine id={s.id} category={s.category} />
+      </div>
       <p className="mt-2 text-[15.5px] leading-relaxed text-ink-2">{s.about}</p>
       <div className="mt-3 flex flex-wrap gap-1.5">
         {tagsOf(s).map((t) => (

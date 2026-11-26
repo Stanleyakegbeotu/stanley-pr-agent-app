@@ -19,6 +19,7 @@ import { Sticker, inputClass } from '@/ui/kit';
 import { onlyDigits } from '@/ui/fieldRules';
 import { GuideButton } from '@/admin/testGuide';
 import { useDetail } from '@/ui/detailSheet';
+import { TestAvailability } from '@/ui/availability';
 
 /** Header button (Home and Catalogue). */
 export function CalculatorButton({ tone = 'plain' }: { tone?: 'plain' | 'card' }) {
@@ -68,8 +69,9 @@ export function PriceCalculator({ onClose }: { onClose: () => void }) {
           <span className="min-w-0 flex-1">
             <span className="block text-[14.5px] font-semibold leading-snug text-ink">{s.name}</span>
             <span className="block truncate text-[12px] text-muted">{s.about}</span>
-            <span className="mt-1 flex">
+            <span className="mt-1 flex flex-wrap items-center gap-1.5">
               <GuideButton label={s.name} onClick={() => detail.open({ kind: 'service', id: s.id })} />
+              <TestAvailability id={s.id} category={s.category} compact />
             </span>
           </span>
           <b className={`shrink-0 text-[14px] ${s.price === null ? 'text-faint' : 'text-ink'}`}>{s.price === null ? 'At branch' : naira(s.price)}</b>

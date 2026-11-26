@@ -19,6 +19,7 @@ import { useProfile } from '@/domain/profile';
 import { BranchUpdates, TodayPatients } from '@/screens/home/HomeSections';
 import { AnnouncementCarousel } from './AnnouncementCarousel';
 import { CalculatorButton } from '@/screens/PriceCalculator';
+import { BranchOpenChip } from '@/ui/availability';
 
 export function Dashboard() {
   const { referrals, navigate } = useApp();
@@ -87,6 +88,7 @@ export function Dashboard() {
             <button type="button" onClick={() => navigate('/branch')} className="mt-2.5 flex items-center gap-2 text-left text-[15px] text-ink-2">
               <Building2 size={18} className="shrink-0 text-muted" />
               <span className="truncate">{BRANCH.label}</span>
+              <BranchOpenChip />
               <ChevronRight size={17} className="shrink-0" />
             </button>
           </div>

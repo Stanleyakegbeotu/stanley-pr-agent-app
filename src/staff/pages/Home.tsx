@@ -35,6 +35,7 @@ import { AgentAvatar } from '@/admin/agentPhotos';
 import { meta } from '@/admin/pages/Inventory';
 import { useStaffChrome } from '../chrome';
 import { IncomingEntry } from '../incoming';
+import { ReceivingCard } from '../availabilityControls';
 
 export const canOpenPage = (role: string, page: string) => {
   const perm = PAGE_PERMISSION[page.split('?')[0] || 'dashboard'];
@@ -157,6 +158,8 @@ export function StaffHome() {
         <ScopeBar periodOnly />
 
         {/* Incoming referrals from PR agents (owner, 2026-11-25): always first, with the waiting count. */}
+        {/* Is the branch receiving patients now (PR agents see it before sending anyone). */}
+        <ReceivingCard branchId={branchId} />
         {canOpen('billing') && <IncomingEntry branchId={branchId} />}
 
         {/* Quick actions */}

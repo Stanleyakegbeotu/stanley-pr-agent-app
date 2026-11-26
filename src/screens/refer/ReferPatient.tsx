@@ -25,6 +25,9 @@ import { ReferralNoteEditor } from './ReferralNote';
 import { Button, Card, Chip, ChipRow, EmptyState, Field, ScreenHeader, SearchField, ServiceThumb, Stepper, Sticker, Subtitle, FIELD_ON, inputClass } from '@/ui/kit';
 import { GuideButton } from '@/admin/testGuide';
 import { useDetail } from '@/ui/detailSheet';
+import { TestAvailability } from '@/ui/availability';
+import { branchStatus, testStatus, useAvailability } from '@/domain/availability';
+import { serviceById } from '@/data/services';
 
 const STEPS = ['Patient', 'Tests', 'Clinical', 'Review'];
 const PATH = ['/refer', '/refer/services', '/refer/clinical', '/refer/summary'] as const;
@@ -255,8 +258,9 @@ function ServicesStep() {
                         <span className="block text-[16px] font-bold text-ink">{s.name}</span>
                         <span className={`mt-0.5 block font-bold ${unpriced ? 'text-[14px] text-muted' : 'text-[17px] text-brand-600'}`}>{priceText(s.price)}</span>
                         <span className="block truncate text-[13px] text-muted">{s.about || categoryInfo(s.category).label}</span>
-                        <span className="mt-1 flex">
+                        <span className="mt-1 flex flex-wrap items-center gap-1.5">
                           <GuideButton label={s.name} onClick={() => detail.open({ kind: 'service', id: s.id })} />
+                          <TestAvailability id={s.id} category={s.category} compact />
                         </span>
                       </span>
                       <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-full border-2 ${on ? 'border-brand-600 bg-brand-600 text-white' : 'border-[#c4cfdf]'}`}>{on && <Check size={16} strokeWidth={3} />}</span>
@@ -452,6 +456,7 @@ function SummaryStep() {
             </div>
           </div>
         )}
+        <NotNowWarning ids={draft.serviceIds} />
         <p className="mt-1 text-[12.5px] text-muted">The patient sees these prices. The final price is confirmed at the branch{draft.priceAsk?.amount ? ', and the branch manager decides on the reduction' : ''}.</p>
       </Card>
 
@@ -534,6 +539,27 @@ export function ReferralSent({ id }: { id: string }) {
           Back to Home
         </Button>
       </div>
+    </div>
+  );
+}
+
+
+/** Review step: tests that can't be done right now, and when they can (so the patient isn't sent at the wrong time). */
+function NotNowWarning({ ids }: { ids: string[] }) {
+  const avail = useAvailability();
+  const branch = branchStatus(avail);
+  const later = ids.map((id) => serviceById(id)).filter((x): x is NonNullable<typeof x> => !!x).map((x) => ({ s: x, st: testStatus(x.id, x.category, avail) })).filter((x) => !x.st.ok);
+  if (!later.length && branch.ok) return null;
+  return (
+    <div className="mt-3 rounded-2xl bg-[#fff8ec] p-3 ring-1 ring-[#f6e1b3]">
+      <p className="text-[13.5px] font-bold text-[#7a4a00]">Tell the patient when to come</p>
+      {!branch.ok && <p className="mt-0.5 text-[12.5px] text-[#7a4a00]">{branch.detail}</p>}
+      {later.map(({ s, st }) => (
+        <p key={s.id} className="mt-0.5 text-[12.5px] text-[#7a4a00]">
+          <b>{s.name}:</b> {st.detail}
+        </p>
+      ))}
+      <p className="mt-1 text-[12px] text-[#9a6a1c]">The message to the patient says this too.</p>
     </div>
   );
 }

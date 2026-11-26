@@ -167,8 +167,12 @@ export function BillingPage() {
     if (cur && cur.step < 5 && hasContent(cur)) saveDraft(cur);
     const open = store.drafts.find((d) => d.referralId === r.id && d.branchId === branchId);
     if (open) return start(open);
-    start({ ...newSession(branchId, 'referral', me), patient: { uuid: null, existingId: null, existingType: null, name: r.patient.name, phone: r.patient.phone }, walkIn: false, agentId: r.agentId, hospital: null, referralId: r.id, services: r.services, step: 1, ...(r.priceAsk ? { discount: { amount: r.priceAsk.amount, reason: `PR agent asked: ${r.priceAsk.reason}`, approvedBy: '' } } : {}) });
-    setNotice(`Referral ${r.id} from ${r.agentName}: check the patient's details, then continue.${r.priceAsk ? ` The agent asked for ${money(r.priceAsk.amount)} off: it is on the payment step, waiting for the branch manager's approval.` : ''}`);
+    const s0: BillingSession = { ...newSession(branchId, 'referral', me), patient: { uuid: null, existingId: null, existingType: null, name: r.patient.name, phone: r.patient.phone }, walkIn: false, agentId: r.agentId, hospital: null, referralId: r.id, services: r.services, step: 1, ...(r.priceAsk ? { discount: { amount: r.priceAsk.amount, reason: `PR agent asked: ${r.priceAsk.reason}`, approvedBy: '' } } : {}) };
+    // Owner, 2026-11-26: the referral already carries the patient, the referrer and the tests, so it opens on Payment
+    // (Back to remove a test). Anything missing opens the step that needs it.
+    const ready = check(s0, 1).ok && check(s0, 2).ok;
+    start(ready ? { ...ensureReservation(s0), step: 3 } : s0);
+    setNotice(`Referral ${r.id} from ${r.agentName}: ${ready ? `${r.patient.name} and ${r.services.length} test${r.services.length === 1 ? '' : 's'} are filled in. Take the payment, or go Back to remove a test.` : "check the patient's details, then continue."}${r.priceAsk ? ` The agent asked for ${money(r.priceAsk.amount)} off: it is below, waiting for the branch manager's approval.` : ''}`);
   };
   const incParam = route.query.get('incoming');
   useEffect(() => {
