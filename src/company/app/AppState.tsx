@@ -15,7 +15,7 @@ import { useHashRoute, type Route } from "./router";
 import { BRANCH_MANAGER_PLACEHOLDER, CURRENT_USER, getBranch, type AppUser } from "@company/data/company";
 import { LEGACY_BRANCH_ID, hospitalKey } from "@company/data/legacy";
 import { logAudit, setAuditActor } from "@company/services/audit";
-import { BASELINE_AGENTS, EMPTY_INVENTORY_CHANGES, applyAgentEdits, mergeAgents, nextServiceId, nextUserId, type AddedService, type AgentEdit, type AgentRecord, type BankDetails, type InventoryChanges, MOCK_STAFF, isManager, managerOf, nextStaffId, type StaffRecord } from "@company/data/userRecords";
+import { BASELINE_AGENTS, EMPTY_INVENTORY_CHANGES, applyAgentEdits, mergeAgents, nextServiceId, nextUserId, type AddedService, type AgentEdit, type AgentRecord, type BankDetails, type InventoryChanges, MOCK_STAFF, isManager, managerOf, nextStaffId, usesApp, type StaffRecord } from "@company/data/userRecords";
 import { resolvePhoto, useSettings } from "@company/services/settingsStore";
 import { putBackExpense, takeExpense, type ExpenseRecord } from "@company/services/expenses";
 import { restoreDraft, restoreOrder, takeDraft, takeOrder, type BillingSession, type Order } from "@company/services/billing";
@@ -125,7 +125,16 @@ function loadStaff(): StaffRecord[] {
   try {
     const raw = readStore(STAFF_KEY);
     const list = raw ? (JSON.parse(raw) as StaffRecord[]) : null;
-    if (Array.isArray(list)) return list.map((s) => ({ ...s, photo: s.photo ?? MOCK_STAFF.find((m) => m.id === s.id)?.photo }));
+    if (Array.isArray(list)) {
+      // Sample job, pay and bank details for the sample team (staff records, 2026-11-26).
+      const merged = list.map((s) => {
+        const m = MOCK_STAFF.find((x) => x.id === s.id);
+        return { ...s, photo: s.photo ?? m?.photo, department: s.department ?? m?.department, pay: s.pay ?? m?.pay, bank: s.bank ?? m?.bank };
+      });
+      // A team saved before staff records existed gets the sample record-only staff once.
+      const extra = list.some((s) => !usesApp(s)) ? [] : MOCK_STAFF.filter((m) => !usesApp(m) && !list.some((s) => s.id === m.id));
+      return [...merged, ...extra];
+    }
   } catch {
     /* unreadable — start from the sample team */
   }
