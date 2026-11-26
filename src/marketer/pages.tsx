@@ -21,6 +21,7 @@ import { Sheet } from '@/admin/ui';
 import { AgentAvatar } from '@/admin/agentPhotos';
 import { ConversationRow, InboxSection } from '@/screens/chat/Inbox';
 import { first, initials, plural, stamp } from './data';
+import { WeekAnnouncements } from './insights';
 import { marketerAgentChat, marketerPrefix, useMarketerConversations } from './chat';
 import { AgentRow, Card, GOOD, GrowBar, GrowBars, GrowRing, NEEDS, STATUS_COLOR, useMk } from './ui';
 
@@ -121,6 +122,8 @@ export function MarketerHome() {
       </div>
 
       {p && <WeekCard />}
+      {/* System-written announcements about the week (owner, 2026-11-26). */}
+      <WeekAnnouncements />
 
       <div className="mt-2.5 grid grid-cols-4 gap-2">
         {[
