@@ -51,7 +51,7 @@ export const ADMIN_PAGES: AdminPage[] = [
   { id: 'pr', label: 'PR Management', icon: Handshake, screen: PRPage },
   { id: 'patients', label: 'Patients', icon: UserRound, screen: PatientsPage },
   { id: 'finance', label: 'Finance & Expenses', icon: Wallet, screen: FinancePage },
-  { id: 'reports', label: 'Reports', icon: ChartLine, screen: ReportsPage },
+  { id: 'reports', label: 'Analysis', icon: ChartLine, screen: ReportsPage },
   { id: 'announcements', label: 'Announcements', icon: Megaphone, screen: AnnouncementsPage },
   { id: 'settings', label: 'Settings', icon: Settings, screen: SettingsPage },
   { id: 'audit', label: 'Audit Log', icon: ScrollText, screen: AuditPage },
@@ -79,7 +79,8 @@ function AdminFrame() {
   const { notes } = useNotifications();
   const unread = useMemo(() => notes.filter((n) => !isRead(n)).length, [notes]);
   const [pageId, sub] = route.segments;
-  const page = [...ADMIN_PAGES, ...EXTRA].find((p) => p.id === pageId) ?? ADMIN_PAGES[0]!;
+  // Desktop renamed Reports to Analysis (2026-11-26): its links (/analysis?report=...) open the same page here.
+  const page = [...ADMIN_PAGES, ...EXTRA].find((p) => p.id === (pageId === 'analysis' ? 'reports' : pageId)) ?? ADMIN_PAGES[0]!;
   // Admin chats are registered before any screen renders (chat threads look them up).
   const { fixed } = useAdminConversations();
   const fixedIds = useMemo(() => fixed.map((c) => c.id), [fixed]);

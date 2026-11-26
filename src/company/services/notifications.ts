@@ -234,8 +234,8 @@ function generate(): Note[] {
           note: "Print the monthly payout report — agents are grouped by bank with account details, ready for payment.",
           branchId: b.id,
           priority: "normal",
-          route: `/reports?report=agents&variant=payout&month=${isoDate(prevStart).slice(0, 7)}&branch=${b.id}`,
-          target: "Reports · PR agents · monthly commission payout",
+          route: `/analysis?report=agents&variant=payout&month=${isoDate(prevStart).slice(0, 7)}&branch=${b.id}`,
+          target: "Analysis · PR agents · monthly commission payout",
         });
       }
     });
