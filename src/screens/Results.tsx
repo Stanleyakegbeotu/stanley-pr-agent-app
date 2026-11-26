@@ -13,8 +13,10 @@ import { RESULT_ACCESS_DAYS, accessDaysLeft, resultFor } from '@/domain/results'
 import { partialNote, statusOf } from '@/domain/referrals';
 import { shortDate } from '@/domain/format';
 import { Card, EmptyState, InitialsAvatar, ScreenHeader, Subtitle } from '@/ui/kit';
+import { useDetail } from '@/ui/detailSheet';
 
 export function ResultsList() {
+  const detail = useDetail();
   const { referrals, navigate } = useApp();
   const ready = referrals.filter((r) => statusOf(r) === 'ResultsReady' && accessDaysLeft(r) > 0);
   const waiting = referrals.filter((r) => statusOf(r) === 'TestsDone').length;
@@ -33,7 +35,7 @@ export function ResultsList() {
         <ul className="space-y-2.5">
           {ready.map((r) => (
             <li key={r.id}>
-              <button type="button" onClick={() => navigate(`/results/${r.id}`)} className="press flex w-full items-center gap-3.5 rounded-[20px] bg-white p-3.5 text-left shadow-[0_6px_20px_rgba(30,74,160,0.07)] ring-1 ring-line/70">
+              <button type="button" onClick={() => detail.open({ kind: 'result', id: r.id })} className="press flex w-full items-center gap-3.5 rounded-[20px] bg-white p-3.5 text-left shadow-[0_6px_20px_rgba(30,74,160,0.07)] ring-1 ring-line/70">
                 <InitialsAvatar name={r.patient.name} size={48} />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[15.5px] font-bold text-ink">{r.patient.name}</span>

@@ -16,6 +16,7 @@ import { naira } from '@/domain/format';
 import { SEARCH_EXAMPLES, smartSearch } from '@/domain/testSearch';
 import { useApp } from '@/app/store';
 import { Button, Chip, EmptyState, ScreenHeader, SearchField, ServiceThumb, Sticker, Subtitle } from '@/ui/kit';
+import { useDetail } from '@/ui/detailSheet';
 
 /** Price, or a clear note when the branch hasn't recorded one. */
 export const priceText = (p: number | null) => (p == null ? 'Price at branch' : naira(p));
@@ -76,7 +77,7 @@ export function ServiceCatalogue() {
 
   return (
     <>
-      <ScreenHeader title="Service Catalogue" />
+      <ScreenHeader title="Test Catalogue" />
       <Subtitle>Explore all diagnostic tests and services offered at your branch.</Subtitle>
 
       <div className="sticky top-[calc(4rem+var(--safe-top))] z-20 -mx-5 mb-4 bg-page px-5 pb-3 pt-1 md:-mx-8 md:px-8">
@@ -237,9 +238,10 @@ export function CategoryHeader({ keyName }: { keyName: string }) {
 /* ─────────────── Service rows ─────────────── */
 
 function ServiceRow({ s, reason }: { s: Service; reason?: string }) {
+  const detail = useDetail();
   const { navigate } = useApp();
   return (
-    <button type="button" onClick={() => navigate(`/services/${s.id}`)} className="press flex w-full items-start gap-3.5 rounded-[20px] bg-white p-3 text-left shadow-[0_6px_20px_rgba(30,74,160,0.07)] ring-1 ring-line/70">
+    <button type="button" onClick={() => detail.open({ kind: 'service', id: s.id })} className="press flex w-full items-start gap-3.5 rounded-[20px] bg-white p-3 text-left shadow-[0_6px_20px_rgba(30,74,160,0.07)] ring-1 ring-line/70">
       <ServiceThumb service={s} className="h-[64px] w-[64px] shrink-0 rounded-[16px]" />
       <span className="min-w-0 flex-1">
         <span className="flex items-start justify-between gap-2">

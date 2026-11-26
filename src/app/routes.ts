@@ -39,13 +39,14 @@ export interface Route {
 }
 
 /** Bottom-tab a route belongs to (for the highlighted tab). */
-export type Tab = 'home' | 'referrals' | 'refer' | 'results' | 'more';
+export type Tab = 'home' | 'referrals' | 'refer' | 'results' | 'catalogue' | 'more';
 export function tabOf(r: Route): Tab | null {
   const p = r.parts[0] ?? '';
   if (p === '') return 'home';
   if (p === 'referrals') return 'referrals';
   if (p === 'refer') return 'refer';
   if (p === 'results') return 'results';
+  if (p === 'services') return 'catalogue';
   return null;
 }
 

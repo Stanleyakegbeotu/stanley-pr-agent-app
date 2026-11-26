@@ -6,7 +6,7 @@
  *    patient names because they are inside the unlocked app; phone
  *    notifications never do (data/content NOTIFICATIONS).
  *  • Today's patients: every request sent today, with the same rules as
- *    My Patients; "No patients requested today" when there are none.
+ *    My Patients; "No referrals sent today" when there are none.
  */
 import { useEffect, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
 import { CheckCircle2, ChevronRight, DoorOpen, FileText, FlaskConical, Plus, Send, UserX, X } from 'lucide-react';
@@ -14,6 +14,7 @@ import { useApp } from '@/app/store';
 import { STATUS_LABEL, isToday, partialNote, statusOf, type Referral, type ReferralStatus } from '@/domain/referrals';
 import { Button, SectionTitle } from '@/ui/kit';
 import { PatientCard } from '@/screens/Referrals';
+import { useDetail } from '@/ui/detailSheet';
 
 const timeOf = (iso: string) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 /** When the branch last changed this request. */
@@ -166,18 +167,19 @@ function Update({ r, s, when, onOpen, onDismiss }: { r: Referral; s: ReferralSta
 /* ─────────────── Today's patients ─────────────── */
 
 export function TodayPatients() {
+  const detail = useDetail();
   const { referrals, navigate } = useApp();
   const today = referrals.filter((r) => isToday(r.createdAt)).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   return (
     <section className="mt-6">
-      <SectionTitle title="Today’s Patients" action={today.length ? 'See all' : undefined} onAction={() => navigate('/referrals')} />
+      <SectionTitle title="Today’s Referrals" action={today.length ? 'See all' : undefined} onAction={() => navigate('/referrals')} />
       {today.length === 0 ? (
         <div className="card flex flex-col items-center px-5 py-7 text-center">
           <span className="grid h-14 w-14 place-items-center rounded-full bg-tint-blue text-brand-600">
             <Send size={24} />
           </span>
           <p className="mt-3 text-[16px] font-bold text-ink">No patients requested today</p>
-          <p className="mt-1 text-[13.5px] text-muted">Patients you request tests for today will show here with their status.</p>
+          <p className="mt-1 text-[13.5px] text-muted">Referrals you send today will show here with their status.</p>
           <div className="mt-4 w-full max-w-[240px]">
             <Button block onClick={() => navigate('/refer')}>
               <Plus size={18} /> New request
@@ -188,7 +190,7 @@ export function TodayPatients() {
         <ul className="space-y-2.5">
           {today.map((r) => (
             <li key={r.id}>
-              <PatientCard r={r} onOpen={() => navigate(`/referrals/${r.id}`)} />
+              <PatientCard r={r} onOpen={() => detail.open({ kind: 'referral', id: r.id })} />
             </li>
           ))}
         </ul>

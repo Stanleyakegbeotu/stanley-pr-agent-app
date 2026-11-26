@@ -11,6 +11,7 @@ import { CATEGORIES, SERVICES } from '@/data/services';
 import { shortDate } from '@/domain/format';
 import { useApp } from '@/app/store';
 import { Button, Card, EmptyState, ScreenHeader, Sticker, Subtitle } from '@/ui/kit';
+import { useDetail } from '@/ui/detailSheet';
 
 /* ─────────────── Branch ─────────────── */
 
@@ -96,6 +97,7 @@ export function Campaigns() {
 }
 
 export function Announcements() {
+  const detail = useDetail();
   const { navigate } = useApp();
   return (
     <>
@@ -104,7 +106,7 @@ export function Announcements() {
       <ul className="space-y-3">
         {ANNOUNCEMENTS.map((a) => (
           <li key={a.id}>
-            <button type="button" onClick={() => navigate(a.to)} className="card press flex w-full items-center gap-4 p-4 text-left">
+            <button type="button" onClick={() => detail.openPath(a.to)} className="card press flex w-full items-center gap-4 p-4 text-left">
               <span className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl bg-tint-blue">
                 <Sticker name={a.sticker} size={50} />
               </span>
@@ -125,6 +127,7 @@ export function Announcements() {
 }
 
 export function Notifications() {
+  const detail = useDetail();
   const { navigate } = useApp();
   // Generic on purpose: phone notifications never show patient names or tests.
   return (
@@ -133,7 +136,7 @@ export function Notifications() {
       <ul className="space-y-3">
         {NOTIFICATIONS.map((n) => (
           <li key={n.id}>
-            <button type="button" onClick={() => n.to && navigate(n.to)} className="card press flex w-full items-start gap-3.5 p-4 text-left">
+            <button type="button" onClick={() => n.to && detail.openPath(n.to)} className="card press flex w-full items-start gap-3.5 p-4 text-left">
               <Sticker name={n.sticker} size={42} />
               <span className="min-w-0 flex-1">
                 <span className="block text-[15.5px] font-bold text-ink">{n.title}</span>
@@ -182,6 +185,7 @@ export function HelpCentre() {
 }
 
 export function Training() {
+  const detail = useDetail();
   const { navigate } = useApp();
   return (
     <>
@@ -190,7 +194,7 @@ export function Training() {
       <ul className="space-y-3">
         {RESOURCES.map((r) => (
           <li key={r.slug}>
-            <button type="button" onClick={() => navigate(`/training/${r.slug}`)} className="card press flex w-full items-center gap-4 p-4 text-left">
+            <button type="button" onClick={() => detail.open({ kind: 'article', id: r.slug })} className="card press flex w-full items-center gap-4 p-4 text-left">
               <span className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl bg-tint-purple">
                 <Sticker name={r.sticker} size={48} />
               </span>

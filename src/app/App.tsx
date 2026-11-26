@@ -22,6 +22,7 @@ import { useApp } from './store';
 import { Profile } from '@/screens/Profile';
 import { ResumeDraftPrompt } from '@/screens/refer/ResumeDraft';
 import { ShellCtx } from './shell';
+import { DetailHost } from '@/ui/detailSheet';
 
 
 function Screen() {
@@ -79,6 +80,7 @@ export function App() {
 
   return (
     <ShellCtx.Provider value={{ openMenu: () => setMenu((m) => !m) }}>
+      <DetailHost>
       <div className="h-dvh overflow-hidden bg-page">
         <Drawer open={menu} onClose={() => setMenu(false)} />
         <div ref={scroller} className="h-dvh overflow-y-auto md:ml-[264px]">
@@ -97,6 +99,7 @@ export function App() {
           </div>
         )}
       </div>
+      </DetailHost>
     </ShellCtx.Provider>
   );
 }

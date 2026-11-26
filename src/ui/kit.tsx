@@ -10,6 +10,7 @@ import type { Service } from '@/data/services';
 import { initials } from '@/domain/format';
 import { STATUS_LABEL, type ReferralStatus } from '@/domain/referrals';
 import { useNav } from '@/app/store';
+import { useInSheet } from './inSheet';
 
 const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(' ');
 
@@ -34,6 +35,9 @@ export function ServiceThumb({ service, className = '' }: { service: Service; cl
 /** Sticky screen title bar with a back arrow (inner screens). */
 export function ScreenHeader({ title, back = true, right }: { title: string; back?: boolean; right?: ReactNode }) {
   const { back: goBack } = useNav();
+  // Inside a slide-up the card has its own title bar.
+  const inSheet = useInSheet();
+  if (inSheet) return null;
   return (
     <header className="sticky top-0 z-30 -mx-5 flex min-h-16 items-center gap-3 bg-page px-5 pt-[var(--safe-top)] md:-mx-8 md:px-8">
       {back && (

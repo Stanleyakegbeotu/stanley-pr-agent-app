@@ -14,7 +14,7 @@ export const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     label: 'WORKSPACE',
     items: [
       { label: 'Dashboard', to: '/', icon: Home },
-      { label: 'My Patients', to: '/referrals', icon: ClipboardList },
+      { label: 'Referrals', to: '/referrals', icon: ClipboardList },
       { label: 'New Request', to: '/refer', icon: Plus },
       { label: 'Results', to: '/results', icon: FileText },
       { label: 'Test Catalogue', to: '/services', icon: LayoutGrid },

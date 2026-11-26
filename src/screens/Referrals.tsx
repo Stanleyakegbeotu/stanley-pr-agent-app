@@ -16,12 +16,14 @@ import { ReferralNoteView } from '@/screens/refer/ReferralNote';
 import { PatientMessageButton } from '@/screens/refer/PatientMessage';
 import { priceText } from '@/screens/Services';
 import { BRANCH_UPDATE_LABEL, branchUpdateText, useBranchUpdates } from '@/domain/referralStatus';
+import { useDetail } from '@/ui/detailSheet';
 
 type Period = 'today' | 'month' | 'all';
 type FilterKey = 'All' | ReferralStatus;
 const FILTERS: FilterKey[] = ['All', 'Requested', 'Arrived', 'TestsDone', 'ResultsReady', 'NotAttended'];
 
 export function MyReferrals() {
+  const detail = useDetail();
   const { referrals, navigate, route } = useApp();
   const qs = route.query.get('status') as ReferralStatus | null;
   const [period, setPeriod] = useState<Period>(qs ? 'all' : 'month');
@@ -41,8 +43,8 @@ export function MyReferrals() {
 
   return (
     <>
-      <ScreenHeader title="My Patients" back={false} />
-      <Subtitle>Patients you requested tests for. Each stays here for {RETENTION_DAYS} days after results or non-attendance.</Subtitle>
+      <ScreenHeader title="Referrals" back={false} />
+      <Subtitle>Your referrals: the patients you requested tests for. Each stays here for {RETENTION_DAYS} days after results or non-attendance.</Subtitle>
 
       {/* Month summary: counts only */}
       <section className="mb-4 rounded-[22px] bg-linear-to-br from-brand-600 to-brand-800 p-4 text-white shadow-[0_14px_30px_rgba(31,111,232,0.28)]">
@@ -100,7 +102,7 @@ export function MyReferrals() {
         <ul className="space-y-2.5">
           {list.map((r) => (
             <li key={r.id}>
-              <PatientCard r={r} onOpen={() => navigate(`/referrals/${r.id}`)} />
+              <PatientCard r={r} onOpen={() => detail.open({ kind: 'referral', id: r.id })} />
             </li>
           ))}
         </ul>
@@ -141,6 +143,7 @@ export function PatientCard({ r, onOpen }: { r: Referral; onOpen: () => void }) 
 const STAGE_TIME: Record<string, (r: Referral) => string | undefined> = { Requested: (r) => r.createdAt, Arrived: (r) => r.arrivedAt, TestsDone: (r) => r.testsDoneAt, ResultsReady: (r) => r.resultsAt };
 
 export function ReferralDetails({ id }: { id: string }) {
+  const detail = useDetail();
   const { referrals, navigate } = useApp();
   const updates = useBranchUpdates();
   const r = referrals.find((x) => x.id === id);
@@ -193,7 +196,7 @@ export function ReferralDetails({ id }: { id: string }) {
       )}
 
       {s === 'ResultsReady' && (
-        <Button block className="mb-3.5" onClick={() => navigate(`/results/${r.id}`)}>
+        <Button block className="mb-3.5" onClick={() => detail.open({ kind: 'result', id: r.id })}>
           <FileText size={19} /> View results
         </Button>
       )}

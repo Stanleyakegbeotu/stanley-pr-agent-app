@@ -1,5 +1,5 @@
-/** Bottom tab bar (phones): Home · Patients · New request (raised blue button) · Results · More. */
-import { ClipboardList, FileText, Home, LayoutGrid, Plus } from 'lucide-react';
+/** Bottom tab bar (phones): Home · Referrals · New request (raised blue button) · Test catalogue · More (owner, 2026-11-26). */
+import { ClipboardList, FlaskConical, Home, LayoutGrid, Plus } from 'lucide-react';
 import { useApp } from '@/app/store';
 import { tabOf, type Tab } from '@/app/routes';
 
@@ -27,14 +27,14 @@ export function BottomNav({ onMore, moreOpen }: { onMore: () => void; moreOpen: 
   return (
     <nav aria-label="Tabs" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-white px-1 pb-[max(8px,var(--safe-bottom))] pt-1.5 shadow-[0_-8px_28px_rgba(30,74,160,0.08)] backdrop-blur-xl md:hidden">
       {item('home', 'Home', Home, '/')}
-      {item('referrals', 'Patients', ClipboardList, '/referrals')}
+      {item('referrals', 'Referrals', ClipboardList, '/referrals')}
       <button type="button" onClick={() => navigate('/refer')} aria-label="New request" className="press flex flex-col items-center">
         <span className="-mt-7 grid h-16 w-16 place-items-center rounded-full border-4 border-white bg-linear-to-b from-brand-500 to-brand-600 text-white shadow-[0_10px_24px_rgba(31,111,232,0.45)]">
           <Plus size={32} strokeWidth={2.6} />
         </span>
         <span className={`mt-1 text-[12.5px] ${tab === 'refer' ? 'font-semibold' : 'font-medium'} text-brand-600`}>Request</span>
       </button>
-      {item('results', 'Results', FileText, '/results')}
+      {item('catalogue', 'Catalogue', FlaskConical, '/services')}
       {item('more', 'More', LayoutGrid, '')}
     </nav>
   );

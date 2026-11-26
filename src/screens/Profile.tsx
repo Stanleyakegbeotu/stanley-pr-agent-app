@@ -74,7 +74,7 @@ export function Profile() {
 
       {/* Counts only, last 90 days */}
       <div className="mb-2 grid grid-cols-3 gap-2.5">
-        <Stat icon={<ClipboardList size={18} />} tone="bg-tint-blue text-brand-700" value={counts.referred} label="Patients" onClick={() => navigate('/referrals')} />
+        <Stat icon={<ClipboardList size={18} />} tone="bg-tint-blue text-brand-700" value={counts.referred} label="Referrals" onClick={() => navigate('/referrals')} />
         <Stat icon={<DoorOpen size={18} />} tone="bg-tint-orange text-orange" value={counts.attended} label="Attended" onClick={() => navigate('/referrals')} />
         <Stat icon={<FileText size={18} />} tone="bg-tint-green text-good-ink" value={counts.resultsReady} label="Results ready" onClick={() => navigate('/results')} />
       </div>
