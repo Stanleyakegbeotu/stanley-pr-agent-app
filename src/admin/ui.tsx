@@ -4,7 +4,7 @@
  * section headings, money display (currencies are never combined, as on the
  * desktop), ranked bar lists, a trend chart and bottom sheets.
  */
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowLeft, Bell, Building2, CalendarDays, Check, ChevronDown, ChevronRight, Menu, Search, X } from 'lucide-react';
 import { useApp as useCompany } from '@company/app/AppState';
@@ -123,6 +123,8 @@ function Option({ on, title, sub, onClick }: { on: boolean; title: string; sub?:
  * never trap it (that made the period picker overflow off the top).
  */
 const stack: symbol[] = [];
+/** A sheet opened from inside another sheet always stacks above it, even when both open at once. */
+const SheetLevel = createContext(-1);
 
 export interface SheetSearch {
   value: string;
@@ -146,7 +148,8 @@ export interface SheetFilter {
  */
 export function Sheet({ title, subtitle, onClose, children, tall, footer, search, filter, back }: { title: string; subtitle?: string; onClose: () => void; children: ReactNode; tall?: boolean; footer?: ReactNode; search?: SheetSearch; filter?: SheetFilter; back?: boolean }) {
   const [me] = useState(() => Symbol('sheet'));
-  const [level] = useState(() => stack.length);
+  const parent = useContext(SheetLevel);
+  const [level] = useState(() => Math.max(stack.length, parent + 1));
   const [searching, setSearching] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const input = useRef<HTMLInputElement>(null);
@@ -231,7 +234,7 @@ export function Sheet({ title, subtitle, onClose, children, tall, footer, search
           {filterOpen && filter && <div className="drop-down absolute inset-x-3 top-full z-10 max-h-[60vh] overflow-y-auto rounded-[22px] bg-white p-2 shadow-[0_18px_44px_rgba(11,23,48,0.2)] ring-1 ring-line">{filter.render(() => setFilterOpen(false))}</div>}
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-[max(16px,var(--safe-bottom))]" onPointerDown={() => filterOpen && setFilterOpen(false)}>
-          {children}
+          <SheetLevel.Provider value={level}>{children}</SheetLevel.Provider>
         </div>
         {footer && <div className="shrink-0 border-t border-line px-4 pb-[max(14px,var(--safe-bottom))] pt-3">{footer}</div>}
       </div>

@@ -158,7 +158,7 @@ function MyBranchSection() {
         <Store size={20} className="text-brand-600" />
         <span className="min-w-0 flex-1">
           <b className="block text-[14.5px] text-ink">{b?.name} branch · {b?.code}</b>
-          <span className="block text-[12.5px] text-muted">{right('branch.settings') ? 'Contact details and opening hours (printed on receipts)' : 'View the branch details'}</span>
+          <span className="block text-[12.5px] text-muted">{right('branch.settings') ? 'Address, phone, Google Maps link and opening hours' : 'View the branch details'}</span>
         </span>
         <ChevronRight size={17} className="text-faint" />
       </button>
@@ -198,7 +198,7 @@ const BRANCH_GROUPS = (right: (p: string) => boolean): { label: string; sections
   {
     label: 'My branch',
     sections: [
-      { id: 'mybranch', label: 'Branch details', icon: Store, tint: 'bg-tint-purple text-violet', hint: 'Address, phone and hours printed on receipts.', keywords: 'branch address phone email hours receipt' },
+      { id: 'mybranch', label: 'Branch details', icon: Store, tint: 'bg-tint-purple text-violet', hint: 'Address, phone, Google Maps link and opening hours. PR agents send them to patients.', keywords: 'branch address phone email hours opening map google location receipt' },
       ...ALL.filter((s) => s.id === 'approvals' && right('expenses.approve')),
     ],
   },

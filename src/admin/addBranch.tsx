@@ -25,6 +25,8 @@ import { useConfig } from '@company/services/config';
 import { addBranch, idCodeProblem, normCode, setBranchPayments } from '@company/services/org';
 import { updateBranchContact } from '@company/services/receiptProfile';
 import { updateBranchProfile } from '@company/services/settingsStore';
+import { DEFAULT_WEEK, mapLinkProblem, weekProblem, weekText, type WeekHours } from '@company/services/openingHours';
+import { MapLinkInput, WeekHoursEditor } from './hoursEditor';
 import { Sticker } from '@/ui/kit';
 import { Sheet } from './ui';
 import { LongText } from './fields';
@@ -123,7 +125,8 @@ export function AddBranchSheet({ onClose }: { onClose: () => void }) {
   const [email, setEmail] = useState('');
   const [contact, setContact] = useState('');
   const [openedOn, setOpenedOn] = useState(() => new Date().toISOString().slice(0, 10));
-  const [hours, setHours] = useState('');
+  const [week, setWeek] = useState<WeekHours>(DEFAULT_WEEK);
+  const [mapLink, setMapLink] = useState('');
   const [payMode, setPayMode] = useState<'inherit' | 'custom'>('inherit');
   const [methods, setMethods] = useState<Record<PaymentMethod, boolean>>({ ...cfg.payments.enabled });
   const [pick, setPick] = useState<'country' | 'region' | 'city' | null>(null);
@@ -149,6 +152,8 @@ export function AddBranchSheet({ onClose }: { onClose: () => void }) {
     region: filled(region) ? '' : 'Choose or type the state / region.',
     city: filled(city) ? '' : 'Choose or type the city.',
     address: filled(address) ? '' : 'Enter the branch address. It prints on receipts.',
+    map: mapLinkProblem(mapLink) ?? '',
+    week: weekProblem(week) ?? '',
     phone: badPhone ? 'Enter valid phone numbers, e.g. 0803 123 4567.' : !validPhones.length && !filled(email) ? 'Enter a phone number or an email.' : '',
     email: emailBad ?? '',
     pay: payMode === 'custom' && !Object.values(methods).some(Boolean) ? 'Turn on at least one payment method.' : '',
@@ -156,9 +161,9 @@ export function AddBranchSheet({ onClose }: { onClose: () => void }) {
   const firstErr = Object.values(errs).find(Boolean);
   const steps = [
     { label: 'Identity', done: !errs.name && !errs.code },
-    { label: 'Location', done: !errs.region && !errs.city && !errs.address },
+    { label: 'Location', done: !errs.region && !errs.city && !errs.address && !errs.map },
     { label: 'Contact', done: !errs.phone && !errs.email },
-    { label: 'Setup', done: !errs.pay },
+    { label: 'Setup', done: !errs.pay && !errs.week },
     { label: 'Inventory', done: true },
   ];
   const show = (k: keyof typeof errs) => (tried && errs[k] ? <span className="mt-1 block text-[12.5px] font-medium text-[#d93036]">{errs[k]}</span> : null);
@@ -169,7 +174,7 @@ export function AddBranchSheet({ onClose }: { onClose: () => void }) {
     const phone = validPhones.map((p) => (p.startsWith('+') || p.startsWith('0') ? p : `${c.dial} ${p}`)).join(', ');
     const b = addBranch({ name: name.trim(), idCode: norm, city: city.trim(), state: region.trim(), country: c.name, address: address.trim(), phone, email: email.trim(), contactPerson: contact.trim(), openedOn, timezone: 'Africa/Lagos' }, user.name);
     updateBranchContact(b.id, { address: address.trim(), phone });
-    updateBranchProfile(b.id, { email: email.trim(), hours: hours.trim() });
+    updateBranchProfile(b.id, { email: email.trim(), mapLink: mapLink.trim(), week, hours: weekText(week) });
     if (payMode === 'custom') setBranchPayments(b.id, methods, user.name);
     setupBranchCatalogue(b.id, b.name, inv, user.name);
     showToast(inv === 'import' ? `${b.name} branch created with the company inventory. Check its prices in Inventory` : `${b.name} branch created. Add its tests in Inventory`);
@@ -252,6 +257,7 @@ export function AddBranchSheet({ onClose }: { onClose: () => void }) {
             <LongText value={address} onChange={setAddress} max={240} placeholder={"For example:\n12 Admiralty Way, Lekki Phase 1\nOpposite the filling station"} hint="Street, building, area and a landmark. Press Enter for a new line. Printed on receipts." />
             {show('address')}
           </Label>
+          <MapLinkInput value={mapLink} onChange={setMapLink} error={tried ? errs.map || null : null} />
         </Section>
 
         <Section title="Contact" sticker="speech" icon={<Phone size={16} />}>
@@ -292,13 +298,12 @@ export function AddBranchSheet({ onClose }: { onClose: () => void }) {
             </div>
             <span className="mt-1 block text-[12px] text-muted">A branch records every amount in one currency. Company totals keep currencies apart.</span>
           </Label>
-          <div className="grid grid-cols-2 gap-2">
-            <Label text="Opening date">
-              <input type="date" value={openedOn} onChange={(e) => setOpenedOn(e.target.value)} className={inputCls} />
-            </Label>
-            <Label text="Opening hours">
-              <input value={hours} onChange={(e) => setHours(e.target.value)} placeholder="Mon to Sat, 7:30am to 8pm" className={inputCls} />
-            </Label>
+          <Label text="Opening date">
+            <input type="date" value={openedOn} onChange={(e) => setOpenedOn(e.target.value)} className={inputCls} />
+          </Label>
+          <div>
+            <span className="mb-1.5 block text-[14px] font-semibold text-ink">Opening hours</span>
+            <WeekHoursEditor value={week} onChange={setWeek} error={tried ? errs.week || null : null} />
           </div>
           <Label text="Payment methods">
             <div className="grid grid-cols-2 gap-2">

@@ -21,6 +21,8 @@ import { pct, rateSummary, useCommission } from '@company/services/commission';
 import { branchPaymentMode, enabledMethods, setBranchPayments, setBranchStatus, statusHistory, useBranches } from '@company/services/org';
 import { BRANCH_ROLES, PERMISSION_GROUPS, can, isDefault, resetRole, setPermission, usePermissions, type RoleName } from '@company/services/permissions';
 import { updateBranchContact, updateReceiptProfile, useReceiptProfile } from '@company/services/receiptProfile';
+import { DEFAULT_WEEK, mapLinkProblem, weekProblem, weekText, type WeekHours } from '@company/services/openingHours';
+import { MapLinkInput, WeekHoursEditor } from './hoursEditor';
 import { readImage, updateBranchProfile, updateCompany, updateProfile, useBranchProfile, useCompanyProfile, useProfile, type CompanyProfile } from '@company/services/settingsStore';
 import { resolveRange, summarize } from '@company/services/analytics';
 import { useOrgFacts } from '@company/features/settings/admin/orgData';
@@ -424,12 +426,17 @@ export function BranchSettingsSheet({ branchId, onClose, limited = false, canEdi
   const [address, setAddress] = useState(contact.address);
   const [phone, setPhone] = useState(contact.phone);
   const [email, setEmail] = useState(prof.email);
-  const [hours, setHours] = useState(prof.hours);
+  const savedWeek = prof.week ?? DEFAULT_WEEK;
+  const [week, setWeek] = useState<WeekHours>(savedWeek);
+  const [mapLink, setMapLink] = useState(prof.mapLink ?? '');
   const [move, setMove] = useState<BranchStatus | null>(null);
   const [reason, setReason] = useState('');
   const mode = branchPaymentMode(branchId);
   const methods = enabledMethods(branchId);
-  const changed = address !== contact.address || phone !== contact.phone || email !== prof.email || hours !== prof.hours;
+  const weekChanged = !prof.week || JSON.stringify(week) !== JSON.stringify(savedWeek);
+  const changed = address !== contact.address || phone !== contact.phone || email !== prof.email || mapLink !== (prof.mapLink ?? '') || weekChanged;
+  const mapErr = mapLinkProblem(mapLink);
+  const weekErr = weekProblem(week);
   const [triedContact, setTriedContact] = useState(false);
   const history = statusHistory(branchId);
   const toggleMethod = (m: PaymentMethod) => {
@@ -454,32 +461,33 @@ export function BranchSettingsSheet({ branchId, onClose, limited = false, canEdi
       </Panel>
       {!canEdit ? (
         <Panel title="Contact and hours" note="Printed on this branch's receipts. Ask the Branch Manager or the Company Admin to change them.">
-          <Facts rows={[{ label: 'Address', value: address || 'Not on record' }, { label: 'Phone', value: phone || 'Not on record' }, { label: 'Email', value: email || 'Not on record' }]} />
+          <Facts rows={[{ label: 'Address', value: address || 'Not on record' }, { label: 'Phone', value: phone || 'Not on record' }, { label: 'Email', value: email || 'Not on record' }, { label: 'Google Maps', value: prof.mapLink || 'Not on record' }, { label: 'Opening hours', value: weekText(savedWeek) }]} />
         </Panel>
       ) : (
-      <Panel title="Contact and hours" note="Printed on this branch's receipts and quotes.">
+      <Panel title="Contact and hours" note="On receipts and quotes, and in the message PR agents send to patients (with the map link and opening hours).">
         <div className="space-y-3">
           <LongText label="Address" value={address} onChange={setAddress} max={240} placeholder={"Street, building and area\nLandmark, city"} hint="Printed on this branch's receipts. Press Enter for a new line." />
           <RuleInput kind="phone" label="Phone" value={phone} onChange={setPhone} showError={triedContact} />
           <RuleInput kind="email" label="Branch email" optional value={email} onChange={setEmail} showError={triedContact} />
-          <label className="block">
-            <FieldLabel label="Opening hours" optional />
-            <input value={hours} onChange={(e) => setHours(e.target.value)} placeholder="For example Mon to Sat, 7am to 8pm" className={inputCls()} />
-          </label>
+          <MapLinkInput value={mapLink} onChange={setMapLink} error={triedContact ? mapErr : null} />
+          <div>
+            <FieldLabel label="Opening hours" required />
+            <WeekHoursEditor value={week} onChange={setWeek} error={triedContact ? weekErr : null} />
+          </div>
           <button
             type="button"
             disabled={!changed}
             onClick={() => {
               setTriedContact(true);
-              if (phoneProblem(phone) || emailProblem(email)) return;
+              if (phoneProblem(phone) || emailProblem(email) || mapErr || weekErr) return;
               updateBranchContact(branchId, { address: address.trim(), phone: phone.trim() });
-              updateBranchProfile(branchId, { email: email.trim(), hours: hours.trim() });
-              logAudit({ category: 'Settings', action: 'Branch contact changed', record: b.name, details: 'Address, phone, email or hours updated', branchId });
+              updateBranchProfile(branchId, { email: email.trim(), mapLink: mapLink.trim(), week, hours: weekText(week) });
+              logAudit({ category: 'Settings', action: 'Branch contact changed', record: b.name, details: `Address, phone, email, Google Maps link or hours updated. Hours: ${weekText(week)}`, branchId });
               showToast('Branch contact saved');
             }}
             className="press min-h-11 w-full rounded-2xl bg-brand-600 text-[14.5px] font-semibold text-white disabled:opacity-40"
           >
-            Save contact
+            Save contact and hours
           </button>
         </div>
       </Panel>

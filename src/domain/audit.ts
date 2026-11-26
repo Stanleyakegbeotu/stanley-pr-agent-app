@@ -11,7 +11,7 @@ export type AuditEvent =
   | { type: 'auth.signout' }
   | { type: 'auth.lockout' }
   | { type: 'request.sent'; requestId: string }
-  | { type: 'patient.message'; requestId: string; channel?: 'whatsapp' | 'sms' };
+  | { type: 'patient.message'; requestId: string; channel?: 'whatsapp' | 'sms' | 'sms-short' };
 
 const KEY = 'stanley.pr.audit.queue';
 

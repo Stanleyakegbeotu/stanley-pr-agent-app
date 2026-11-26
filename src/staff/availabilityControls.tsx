@@ -7,7 +7,10 @@ import { useState } from 'react';
 import { Check, ChevronRight, Clock3, DoorClosed, DoorOpen } from 'lucide-react';
 import { useApp as useCompany } from '@company/app/AppState';
 import { logAudit } from '@company/services/audit';
-import { DEFAULT_HOURS, branchStatus, daysText, ruleOf, setBranchHours, setBranchOverride, setTestSetting, testStatus, useAvailability, windowText, type TestRule, type Window } from '@/domain/availability';
+import { branchStatus, daysText, ruleOf, setBranchOverride, setTestSetting, testStatus, useAvailability, windowText, type TestRule, type Window } from '@/domain/availability';
+import { updateBranchProfile } from '@company/services/settingsStore';
+import { weekProblem, weekText, type WeekHours } from '@company/services/openingHours';
+import { WeekHoursEditor } from '@/admin/hoursEditor';
 import { useNav } from '@/app/store';
 import { Sheet } from '@/admin/ui';
 import { LongText } from '@/admin/fields';
@@ -21,7 +24,7 @@ const localInput = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).p
 /* ─────────────── dashboard card ─────────────── */
 
 export function ReceivingCard({ branchId }: { branchId: string }) {
-  const avail = useAvailability();
+  const avail = useAvailability(branchId);
   const st = branchStatus(avail);
   const [open, setOpen] = useState(false);
   return (
@@ -44,20 +47,21 @@ function ReceivingSheet({ branchId, onClose }: { branchId: string; onClose: () =
   const { user } = useCompany();
   const { showToast } = useNav();
   const right = useRight();
-  const avail = useAvailability();
+  const avail = useAvailability(branchId);
   const cur = avail.override && (!avail.override.until || new Date(avail.override.until) > new Date()) ? avail.override : undefined;
   const [mode, setMode] = useState<'hours' | 'open' | 'closed'>(cur?.state ?? 'hours');
   const [until, setUntil] = useState(cur?.until ? localInput(new Date(cur.until)) : '');
   const [note, setNote] = useState(cur?.note ?? '');
-  const [hours, setHours] = useState<Window>(avail.hours ?? DEFAULT_HOURS);
+  const [hours, setHours] = useState<WeekHours>(avail.hours);
   const [tried, setTried] = useState(false);
   const canHours = right('branch.settings');
   const err = mode === 'closed' && note.trim().length < 3 ? 'Say why, for example: public holiday, power outage.' : null;
+  const hoursErr = canHours ? weekProblem(hours) : null;
   const save = () => {
-    if (err) return setTried(true);
+    if (err || hoursErr) return setTried(true);
     setBranchOverride(mode === 'hours' ? null : { state: mode, until: until ? new Date(until).toISOString() : undefined, note: note.trim() || undefined, by: user.name, at: new Date().toISOString() });
-    if (canHours && JSON.stringify(hours) !== JSON.stringify(avail.hours)) setBranchHours(hours);
-    logAudit({ category: 'Settings', action: mode === 'hours' ? 'Branch follows its opening hours' : mode === 'open' ? 'Branch marked open now' : 'Branch marked closed now', record: 'Receiving patients', details: [until ? `until ${until.replace('T', ' ')}` : '', note.trim(), canHours ? `hours ${windowText(hours)}` : ''].filter(Boolean).join(' · '), branchId });
+    if (canHours && JSON.stringify(hours) !== JSON.stringify(avail.hours)) updateBranchProfile(branchId, { week: hours, hours: weekText(hours) });
+    logAudit({ category: 'Settings', action: mode === 'hours' ? 'Branch follows its opening hours' : mode === 'open' ? 'Branch marked open now' : 'Branch marked closed now', record: 'Receiving patients', details: [until ? `until ${until.replace('T', ' ')}` : '', note.trim(), canHours ? `hours ${weekText(hours)}` : ''].filter(Boolean).join(' · '), branchId });
     showToast('Saved. PR agents see it now.');
     onClose();
   };
@@ -66,7 +70,7 @@ function ReceivingSheet({ branchId, onClose }: { branchId: string; onClose: () =
       <div className="space-y-3 px-1 pb-3">
         {(
           [
-            ['hours', 'Follow the opening hours', `Open ${windowText(hours)}`],
+            ['hours', 'Follow the opening hours', weekText(hours)],
             ['open', 'Open now', 'Receiving patients now, even outside the usual hours'],
             ['closed', 'Closed now', 'Not receiving patients, for example a public holiday or power outage'],
           ] as const
@@ -93,9 +97,11 @@ function ReceivingSheet({ branchId, onClose }: { branchId: string; onClose: () =
         <div className="rounded-[20px] bg-white p-3.5 ring-1 ring-line/70">
           <p className="text-[14.5px] font-bold text-ink">Opening hours</p>
           {canHours ? (
-            <WindowEditor value={hours} onChange={setHours} />
+            <div className="mt-2">
+              <WeekHoursEditor value={hours} onChange={setHours} error={tried ? hoursErr : null} />
+            </div>
           ) : (
-            <p className="mt-1 text-[13px] text-ink-2">{windowText(hours)}. The Branch Manager changes these.</p>
+            <p className="mt-1 text-[13px] text-ink-2">{weekText(hours)}. The Branch Manager changes these.</p>
           )}
         </div>
       </div>

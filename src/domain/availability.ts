@@ -14,8 +14,15 @@
  * Inventory; PR agents see it on the catalogue, the request, the calculator
  * and in the message to the patient ("Available from Monday 9:00").
  * Kept on this device until the cloud connection carries it.
+ *
+ * Opening hours (owner, 2026-11-26) are the branch's own, set by the Company
+ * Admin or the Branch Manager in the branch settings (24/7, or per day), and
+ * shared with the desktop (company settings, openingHours).
  */
-import { useSyncExternalStore } from 'react';
+import { useMemo, useSyncExternalStore } from 'react';
+import { DEFAULT_WEEK, closesAt, isOpenAt, nextOpen, weekText, type WeekHours } from '@company/services/openingHours';
+import { useBranchProfile } from '@company/services/settingsStore';
+import { BRANCH } from '@/config/org';
 
 export interface Window {
   /** 0 Sunday to 6 Saturday. */
@@ -39,13 +46,14 @@ export interface TestSetting {
   at: string;
 }
 
-interface Store {
-  hours: Window;
+interface Saved {
   override?: BranchOverride;
   tests: Record<string, TestSetting>;
 }
-
-export const DEFAULT_HOURS: Window = { days: [1, 2, 3, 4, 5, 6], from: '07:30', to: '20:00' };
+export interface Store extends Saved {
+  /** The branch's opening hours (branch settings). */
+  hours: WeekHours;
+}
 /** Categories run by a visiting specialist: weekdays, 9:00 to 16:00, until the branch says otherwise. */
 const SPECIALIST: Record<string, Window> = {
   MRI: { days: [1, 2, 3, 4, 5], from: '09:00', to: '16:00' },
@@ -60,16 +68,16 @@ const SPECIALIST: Record<string, Window> = {
 
 const KEY = 'stanley.availability.v1';
 const listeners = new Set<() => void>();
-let cache: Store = load();
-function load(): Store {
+let cache: Saved = load();
+function load(): Saved {
   try {
-    const s = JSON.parse(localStorage.getItem(KEY) ?? 'null') as Store | null;
-    return s ? { hours: s.hours ?? DEFAULT_HOURS, override: s.override, tests: s.tests ?? {} } : { hours: DEFAULT_HOURS, tests: {} };
+    const s = JSON.parse(localStorage.getItem(KEY) ?? 'null') as Saved | null;
+    return s ? { override: s.override, tests: s.tests ?? {} } : { tests: {} };
   } catch {
-    return { hours: DEFAULT_HOURS, tests: {} };
+    return { tests: {} };
   }
 }
-function commit(next: Store) {
+function commit(next: Saved) {
   cache = next;
   try {
     localStorage.setItem(KEY, JSON.stringify(next));
@@ -87,8 +95,9 @@ if (typeof window !== 'undefined')
   });
 
 /** Re-render when availability changes (and every minute, so "open now" stays right). */
-export function useAvailability(): Store {
-  return useSyncExternalStore(
+export function useAvailability(branchId: string = BRANCH.id): Store {
+  const week = useBranchProfile(branchId).week ?? DEFAULT_WEEK;
+  const saved = useSyncExternalStore(
     (l) => {
       listeners.add(l);
       const t = window.setInterval(l, 60_000);
@@ -99,9 +108,10 @@ export function useAvailability(): Store {
     },
     () => cache,
   );
+  return useMemo(() => ({ ...saved, hours: week }), [saved, week]);
 }
+const withDefault = (): Store => ({ ...cache, hours: DEFAULT_WEEK });
 
-export const setBranchHours = (hours: Window) => commit({ ...cache, hours });
 export const setBranchOverride = (o: BranchOverride | null) => commit({ ...cache, override: o ?? undefined });
 export function setTestSetting(id: string | number, rule: TestRule | null, by?: string) {
   const tests = { ...cache.tests };
@@ -156,23 +166,29 @@ export interface Status {
   note?: string;
 }
 
-export function branchStatus(s: Store = cache, now = new Date()): Status {
+const clock = (d: Date) => `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
+
+export function branchStatus(s: Store = withDefault(), now = new Date()): Status {
   const o = s.override;
   if (o && (!o.until || new Date(o.until) > now)) {
     if (o.state === 'closed') {
       const back = o.until ? new Date(o.until) : null;
-      const reopen = back ? (inWindow(s.hours, back) ? back : nextStart(s.hours, back)) : null;
+      const reopen = back ? (isOpenAt(s.hours, back) ? back : nextOpen(s.hours, back)) : null;
       return { ok: false, label: 'Closed now', detail: `The branch is closed${reopen ? `, back ${whenText(reopen, now)}` : ''}${o.note ? ` (${o.note})` : ''}.`, next: reopen ?? undefined, note: o.note };
     }
     return { ok: true, label: 'Open now', detail: `The branch is open now${o.until ? ` until ${whenText(new Date(o.until), now)}` : ''}.`, note: o.note };
   }
-  if (inWindow(s.hours, now)) return { ok: true, label: 'Open now', detail: `Open now until ${hm(s.hours.to)}. Hours: ${windowText(s.hours)}.` };
-  const next = nextStart(s.hours, now);
-  return { ok: false, label: 'Closed now', detail: `Closed now${next ? `, opens ${whenText(next, now)}` : ''}. Hours: ${windowText(s.hours)}.`, next: next ?? undefined };
+  if (isOpenAt(s.hours, now)) {
+    const shut = closesAt(s.hours, now);
+    const until = !shut ? ', 24 hours' : shut.toDateString() === now.toDateString() ? ` until ${clock(shut)}` : ` until ${whenText(shut, now)}`;
+    return { ok: true, label: 'Open now', detail: `Open now${until}. Hours: ${weekText(s.hours)}.` };
+  }
+  const next = nextOpen(s.hours, now);
+  return { ok: false, label: 'Closed now', detail: `Closed now${next ? `, opens ${whenText(next, now)}` : ''}. Hours: ${weekText(s.hours)}.`, next: next ?? undefined };
 }
 
 /** The rule for a test: its own setting, else the specialist schedule of its category, else opening hours. */
-export function ruleOf(id: string | number, category: string, s: Store = cache): TestRule {
+export function ruleOf(id: string | number, category: string, s: Saved = cache): TestRule {
   const own = s.tests[String(id)];
   if (own) {
     if (own.rule.kind === 'off' && own.rule.until && new Date(own.rule.until) <= new Date()) return { kind: 'hours' };
@@ -182,16 +198,20 @@ export function ruleOf(id: string | number, category: string, s: Store = cache):
   return sp ? { kind: 'schedule', ...sp } : { kind: 'hours' };
 }
 
-export function testStatus(id: string | number, category: string, s: Store = cache, now = new Date()): Status {
+export function testStatus(id: string | number, category: string, s: Store = withDefault(), now = new Date()): Status {
   const branch = branchStatus(s, now);
   const rule = ruleOf(id, category, s);
   if (rule.kind === 'off') {
     const back = rule.until ? new Date(rule.until) : null;
     return { ok: false, label: back ? `Back ${whenText(back, now)}` : 'Not available', detail: `Not available now${back ? `, back ${whenText(back, now)}` : ''}${rule.note ? ` (${rule.note})` : ''}.`, next: back ?? undefined, note: rule.note };
   }
-  const w = rule.kind === 'schedule' ? rule : s.hours;
-  if (inWindow(w, now) && branch.ok) return { ok: true, label: 'Available now', detail: rule.kind === 'schedule' ? `Available now. Usually ${windowText(w)}.` : 'Available now, during opening hours.' };
+  if (rule.kind === 'hours') {
+    if (branch.ok) return { ok: true, label: 'Available now', detail: 'Available now, during opening hours.' };
+    return { ok: false, label: branch.next ? `From ${whenText(branch.next, now)}` : 'Not available', detail: `Done during opening hours, ${weekText(s.hours)}${branch.next ? `. Next: ${whenText(branch.next, now)}` : ''}.`, next: branch.next };
+  }
+  const w = rule;
+  if (inWindow(w, now) && branch.ok) return { ok: true, label: 'Available now', detail: `Available now. Usually ${windowText(w)}.` };
   const after = branch.ok ? now : (branch.next ?? now);
   const next = inWindow(w, after) ? after : nextStart(w, after);
-  return { ok: false, label: next ? `From ${whenText(next, now)}` : 'Not available', detail: `${rule.kind === 'schedule' ? `Done ${windowText(w)}` : `Done during opening hours, ${windowText(w)}`}${next ? `. Next: ${whenText(next, now)}` : ''}.`, next: next ?? undefined };
+  return { ok: false, label: next ? `From ${whenText(next, now)}` : 'Not available', detail: `Done ${windowText(w)}${next ? `. Next: ${whenText(next, now)}` : ''}.`, next: next ?? undefined };
 }
