@@ -13,6 +13,7 @@ import { Chips, PageTitle } from '@/admin/branchFirst';
 import { Sticker } from '@/ui/kit';
 import { stamp } from './data';
 import { notificationPrefs } from './settings';
+import { hasAgreed, policyOf, rulesVersion } from '@company/services/marketing';
 import { useMk } from './ui';
 
 export type AlertKind = 'target' | 'agent' | 'hospital' | 'report';
@@ -48,6 +49,20 @@ export function useAlerts(): Alert[] {
       const last = r.history[r.history.length - 1]!;
       out.push({ key: `report-${r.id}-${r.history.length}`, kind: 'report', tone: r.status === 'resolved' ? 'ok' : 'brand', title: `Your report: ${last.action.toLowerCase()}`, text: `${r.subject}${last.note ? ` · ${last.note}` : ''}`, at: last.at, onOpen: () => go('centre') });
     }
+    // Marketing rules (owner, 2026-11-27): cautions, transfers, tasks and rules.
+    const pol = policyOf(m.st, m.branchId);
+    for (const c of m.st.cautions.filter((x) => x.branchId === m.branchId && x.marketerId === me.id && !x.reply)) out.push({ key: `caution-${c.id}`, kind: 'hospital', tone: 'danger', title: `Caution: ${c.hospital} is dormant`, text: `From ${c.by}. Answer within ${pol.replyDays} days on your dashboard.`, at: c.at, onOpen: () => go('dashboard') });
+    const nm = (id: string | null) => m.marketers.find((x) => x.id === id)?.name ?? 'a colleague';
+    for (const t of m.st.transfers.filter((x) => x.branchId === m.branchId)) {
+      const last = t.steps[t.steps.length - 1]!;
+      if (t.stage === 'owner' && t.from === me.id) out.push({ key: `trf-${t.id}-ask`, kind: 'hospital', tone: 'warn', title: `Release ${t.hospital}?`, text: `Your manager asks you to pass it to ${nm(t.to)}: ${t.reason}`, at: t.at, onOpen: () => go('dashboard') });
+      else if (t.stage === 'receiver' && t.to === me.id) out.push({ key: `trf-${t.id}-offer`, kind: 'hospital', tone: 'brand', title: `${t.hospital} offered to you`, text: `By ${nm(t.from)}: ${t.reason}`, at: t.at, onOpen: () => go('dashboard') });
+      else if (t.stage === 'declined' && (t.from === me.id || t.to === me.id)) out.push({ key: `trf-${t.id}-declined`, kind: 'hospital', tone: 'brand', title: `Transfer of ${t.hospital} not going ahead`, text: `${last.by}: ${last.action}${last.note ? ` · ${last.note}` : ''}`, at: last.at, onOpen: () => go('hospitals') });
+      else if (t.stage === 'manager' && t.from === me.id) out.push({ key: `trf-${t.id}-accepted`, kind: 'hospital', tone: 'brand', title: `${nm(t.to)} accepted ${t.hospital}`, text: 'Waiting for your manager to approve.', at: last.at });
+    }
+    const tk = m.st.tasks[`${m.branchId}|${m.ym}`];
+    if (tk) out.push({ key: `tasks-${m.ym}-${tk.at}`, kind: 'target', tone: 'brand', title: `Your tasks for ${new Date(`${m.ym}-01T12:00:00`).toLocaleDateString('en-GB', { month: 'long' })} are ${tk.carried ? 'carried over' : 'set'}`, text: tk.carried ? "Last month's tasks continue this month." : `Set by ${tk.setBy}.`, at: tk.at, onOpen: () => go('dashboard') });
+    if (!hasAgreed(m.st, m.branchId, me.id)) out.push({ key: `rules-${rulesVersion(m.st, m.branchId)}`, kind: 'report', tone: 'warn', title: 'Rules of engagement: please read and agree', text: 'How hospitals, transfers, targets and bonus work.', onOpen: () => go('rules') });
     // Only what they chose in Settings > Notifications.
     const prefs = notificationPrefs(me.id);
     const on: Record<AlertKind, boolean> = { target: prefs.week, agent: prefs.quiet, hospital: prefs.hospitals, report: prefs.reports };

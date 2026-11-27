@@ -12,6 +12,8 @@ import { hasPhone } from '@company/data/legacy';
 import { postText } from '@/domain/chat';
 import { copyText } from '@/ui/privacy';
 import { approachFor, templatesFor } from './guide';
+import { LockNote, OfferSheet, useMyStatuses } from './duties';
+import { policyOf } from '@company/services/marketing';
 import { marketerAgentChat } from './chat';
 import { useApp as useCompany } from '@company/app/AppState';
 import { logAudit } from '@company/services/audit';
@@ -360,6 +362,10 @@ export function HospitalSheet({ h, onClose }: { h: HospitalInfo; onClose: () => 
   const f = m.figs.get(h.key);
   const lf = m.lastFigs.get(h.key);
   const entries = m.st.entries.filter((e) => e.branchId === m.branchId && e.hospital === h.key).slice(0, 4);
+  const st = useMyStatuses(m).get(h.key);
+  const [offer, setOffer] = useState(false);
+  const pol = policyOf(m.st, m.branchId);
+  const openCaution = m.st.cautions.find((c) => c.branchId === m.branchId && c.hospital === h.key && !c.reply);
   return (
     <Sheet back tall title={h.key} subtitle={`${plural(h.agentIds.length, 'PR agent')} · yours`} onClose={onClose} search={{ value: q, onChange: setQ, placeholder: `Find a PR agent at ${h.key}` }}>
       {!t && (
@@ -384,6 +390,32 @@ export function HospitalSheet({ h, onClose }: { h: HospitalInfo; onClose: () => 
               <UserPlus size={16} /> New PR agent
             </button>
           </div>
+          {st && (
+            <div className="mb-2 space-y-1.5">
+              {st.handoverUntil && (
+                <p className="rounded-xl bg-[#f3efff] px-3 py-2 text-[12.5px] text-[#4c1d95]">
+                  <b>Handover until {new Date(`${st.handoverUntil}T12:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}:</b> contact every PR agent here so they know you.
+                </p>
+              )}
+              {['flagged', 'overdue', 'cautioned', 'snoozed'].includes(st.dormant) && (
+                <p className="rounded-xl bg-[#fff6f6] px-3 py-2 text-[12.5px] text-[#7f1d1d] ring-1 ring-[#f6caca]">
+                  <b>Dormant:</b> {st.daysSince === null ? 'no patient in 6 months' : `no patient for ${st.daysSince} days`}. {openCaution ? 'Your manager sent a caution: answer it on your dashboard.' : `Revive it within ${pol.snoozeDays} days or it may move to a colleague.`}
+                </p>
+              )}
+              {st.growth && (
+                <p className="rounded-xl bg-brand-50 px-3 py-2 text-[12.5px] text-brand-800">
+                  <b>Needs growth:</b> only {plural(h.agentIds.length, 'PR agent')} here. Meet more doctors and nurses and bring in new agents.
+                </p>
+              )}
+              {st.locked ? (
+                <LockNote />
+              ) : (
+                <button type="button" onClick={() => setOffer(true)} className="press flex w-full items-center justify-center gap-1.5 rounded-xl py-2 text-[12.5px] font-semibold text-muted">
+                  Offer this hospital to a colleague
+                </button>
+              )}
+            </div>
+          )}
         </>
       )}
       {/* Filters stay pinned while the agents scroll. */}
@@ -425,6 +457,7 @@ export function HospitalSheet({ h, onClose }: { h: HospitalInfo; onClose: () => 
       )}
       {visit && <VisitSheet hospital={h.key} onClose={() => setVisit(false)} />}
       {recruit && <RecruitSheet hospital={h.key} onClose={() => setRecruit(false)} />}
+      {offer && <OfferSheet hospital={h.key} onClose={() => setOffer(false)} />}
     </Sheet>
   );
 }

@@ -36,6 +36,7 @@ import { SettingsPage } from './pages/Settings';
 import { ReportsPageMobile } from './reportsPage';
 import { AnnouncementsPage } from './announcementsPage';
 import { NavCount, useNavCounts } from '@/staff/navCounts';
+import { MarketingPage } from './marketingPage';
 
 interface AdminPage {
   id: string;
@@ -51,6 +52,7 @@ export const ADMIN_PAGES: AdminPage[] = [
   { id: 'inventory', label: 'Inventory', icon: Package, screen: InventoryPage },
   { id: 'staff', label: 'Staff Management', icon: Users, screen: StaffPage },
   { id: 'pr', label: 'PR Management', icon: Handshake, screen: PRPage },
+  { id: 'marketing', label: 'Marketing', icon: Megaphone, screen: MarketingPage },
   { id: 'patients', label: 'Patients', icon: UserRound, screen: PatientsPage },
   { id: 'finance', label: 'Finance & Expenses', icon: Wallet, screen: FinancePage },
   { id: 'analysis', label: 'Analysis', icon: ChartLine, screen: ReportsPage },

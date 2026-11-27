@@ -241,6 +241,8 @@ export const PAGE_PERMISSION: Record<string, string | null> = {
   records: "patients.view",
   inventory: "services.view",
   pr: "referral.view",
+  // Marketers and their hospitals, tasks, bonus and rules: Branch Manager and Company Admin (owner, 2026-11-27).
+  marketing: "referral.manage",
   analysis: "analytics.view",
   expenses: "expenses.record",
   staff: "staff.view",

@@ -131,14 +131,18 @@ export function WeekAnnouncements() {
   const { m, me } = useMk();
   const r = useWeekReview(m);
   const [open, setOpen] = useState<Insight | null>(null);
-  const { openLog } = useMk();
+  const { openLog, go } = useMk();
   if (!r) return null;
   const list = insightsFor(r, (n) => m.money(n), first(me.name));
-  if (!list.length) return null;
-  const slides: Slide[] = list.map((i) => ({
-    ...i.slide,
-    actions: [{ label: 'See what changed', onClick: () => setOpen(i) }, ...(i.kind === 'follow' || i.kind === 'down' || i.kind === 'improve' ? [{ label: 'Follow up', onClick: openLog }] : [])],
-  }));
+  const duty = dutySlides(m, me.id, go);
+  if (!list.length && !duty.length) return null;
+  const slides: Slide[] = [
+    ...duty,
+    ...list.map((i) => ({
+      ...i.slide,
+      actions: [{ label: 'See what changed', onClick: () => setOpen(i) }, ...(i.kind === 'follow' || i.kind === 'down' || i.kind === 'improve' ? [{ label: 'Follow up', onClick: openLog }] : [])],
+    })),
+  ];
   return (
     <>
       <SlideCarousel slides={slides} label="Your week" />
@@ -270,4 +274,24 @@ function howToGetMore(r: WeekReview, money: (n: number) => string, focus?: strin
   if (small) tips.push(`${plural(small, 'hospital')} sent nobody in the last two weeks. Bring in a new PR agent there.`);
   if (r.daysLeft && r.w.revenue < r.w.target) tips.push(`Aim for about ${money((r.w.target - r.w.revenue) / r.daysLeft)} a day for the rest of the week.`);
   return tips.slice(0, 5);
+}
+
+/**
+ * Hospital moves, new tasks and cautions on the announcement bar, for up to a
+ * week (owner, 2026-11-27): a hospital that became theirs or moved away, the
+ * month's tasks, and a caution waiting for their answer.
+ */
+function dutySlides(m: Mine, meId: string, go: (p: string) => void): Slide[] {
+  const out: Slide[] = [];
+  const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
+  const nm = (id: string | null) => m.marketers.find((x) => x.id === id)?.name.split(' ')[0] ?? 'a colleague';
+  for (const c of m.st.cautions.filter((x) => x.branchId === m.branchId && x.marketerId === meId && !x.reply).slice(0, 2))
+    out.push({ id: `caution-${c.id}`, theme: THEMES.red, sticker: 'bell', label: 'Caution · answer needed', isNew: true, title: `${c.hospital} is dormant`, text: `${c.by} asks why, and your plan to revive it. Answer on your dashboard.`, actions: [{ label: 'Answer now', onClick: () => go('dashboard') }] });
+  for (const h of m.st.ownerHistory.filter((x) => x.branchId === m.branchId && x.at >= weekAgo && x.by !== 'STANLEY' && (x.to === meId || x.from === meId)).slice(0, 3)) {
+    const mine = h.to === meId;
+    out.push({ id: `move-${h.hospital}-${h.at}`, theme: mine ? THEMES.violet : THEMES.indigo, sticker: 'hospital', label: mine ? 'New hospital for you' : 'Hospital moved', isNew: true, title: mine ? `${h.hospital} is now yours` : `${h.hospital} moved to ${nm(h.to)}`, text: mine ? `Get to know every PR agent there this week. ${h.reason}` : `Patients it sent while it was yours stay credited to you. ${h.reason}`, actions: [{ label: mine ? 'Open my hospitals' : 'My hospitals', onClick: () => go('hospitals') }] });
+  }
+  const tk = m.st.tasks[`${m.branchId}|${m.ym}`];
+  if (tk && tk.at >= weekAgo) out.push({ id: `tasks-${tk.at}`, theme: THEMES.teal, sticker: 'clipboard', label: 'This month', isNew: true, title: tk.carried ? "Last month's tasks continue" : 'Your new tasks are set', text: `Money target, new hospitals, new PR agents and weekly follow-ups. See them on your dashboard.`, actions: [{ label: 'See my tasks', onClick: () => go('dashboard') }] });
+  return out;
 }

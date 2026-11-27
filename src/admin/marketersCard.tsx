@@ -98,7 +98,7 @@ export function MarketersCard({ branchId }: { branchId: string }) {
   );
 }
 
-function Waiting({ branchId, d }: { branchId: string; d: Data }) {
+export function Waiting({ branchId, d }: { branchId: string; d: Data }) {
   const { user } = useCompany();
   const { showToast } = useNav();
   const list = d.st.partners.filter((p) => p.branchId === branchId && p.status === 'proposed');
@@ -311,7 +311,7 @@ function OwnerSheet({ branchId, h, marketers, onClose }: { branchId: string; h: 
   );
 }
 
-function SplitSheet({ branchId, d, mode, onClose }: { branchId: string; d: Data; mode: 'fill' | 'even'; onClose: () => void }) {
+export function SplitSheet({ branchId, d, mode, onClose }: { branchId: string; d: Data; mode: 'fill' | 'even'; onClose: () => void }) {
   const { user } = useCompany();
   const { showToast } = useNav();
   const active = d.marketers.filter((m) => m.status === 'Active');

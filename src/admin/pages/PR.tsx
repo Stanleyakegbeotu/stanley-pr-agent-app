@@ -33,8 +33,7 @@ import { AddAgentSheet, RateSheet } from '../prManage';
 import { PICK_THEME, BranchCrumb, BranchPick, Chips, PageTitle, useBranchFirst } from '../branchFirst';
 import { StickyTools } from '@/admin/kit';
 import { useRight } from '../access';
-import { MonitorCard, PayoutsCard } from '../prMonitor';
-import { MarketersCard } from '../marketersCard';
+import { PayoutsCard } from '../prMonitor';
 
 type Sort = 'agents' | 'referrals' | 'name';
 const PAGE = 12;
@@ -196,9 +195,6 @@ function Workspace({ branchId, crumb }: { branchId: string; crumb: boolean }) {
           )}
 
           {/* PR agent monitor and monthly payouts (owner, 2026-11-26). */}
-          <MonitorCard branchId={branchId} />
-          <MarketersCard branchId={branchId} />
-          <PayoutsCard branchId={branchId} />
 
           {ranked.length > 0 && <TopAgents money={seeMoney} title={`Top PR agents ${when}`} agents={ranked} onPick={setFocus} onAll={() => setList({})} action="View all" />}
 
@@ -369,6 +365,8 @@ function Workspace({ branchId, crumb }: { branchId: string; crumb: boolean }) {
             </div>
             </>
           )}
+          {/* Monthly payouts: the last section (owner, 2026-11-27). The monitor and marketers are on the Marketing page. */}
+          <PayoutsCard branchId={branchId} />
           <p className="mt-6 flex items-start gap-2 text-[12px] leading-relaxed text-muted">
             <Users size={15} className="mt-0.5 shrink-0" />
             Commission and account details stay on the company side. The Referrer Portal never shows money.

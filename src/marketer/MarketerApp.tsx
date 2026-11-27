@@ -10,7 +10,7 @@
  * Until login exists the marketer is picked in the menu (domain/role).
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react';
-import { Activity, BarChart3, Bell, CheckCircle2, Hospital, LayoutGrid, MessagesSquare, Plus, Settings, Stethoscope, X, type LucideIcon } from 'lucide-react';
+import { Activity, BarChart3, Bell, CheckCircle2, Hospital, LayoutGrid, MessagesSquare, Plus, ScrollText, Settings, Stethoscope, X, type LucideIcon } from 'lucide-react';
 import { AppStateProvider, useApp as useCompany } from '@company/app/AppState';
 import { branchRoute } from '@company/app/router';
 import { getBranch } from '@company/data/company';
@@ -30,6 +30,18 @@ import { MarketerActivity, MarketerAlerts, MarketerAnalysis, MarketerCentre, Mar
 import { useAlertsRead } from './notifications';
 import { AgentSheet, FollowHospitalsSheet, HospitalSheet, LogSheet, RegisterSheet } from './sheets';
 import { MarketerCtx, useMk, type MarketerCtxValue } from './ui';
+import { MarketerRules, RulesGate } from './duties';
+import { AdminTopBar, PageGlow } from '@/admin/kit';
+
+function RulesPage() {
+  return (
+    <div className="relative">
+      <PageGlow />
+      <AdminTopBar />
+      <MarketerRules />
+    </div>
+  );
+}
 
 interface Page {
   id: string;
@@ -44,6 +56,7 @@ const PAGES: Page[] = [
   { id: 'inbox', label: 'Inbox', icon: MessagesSquare, screen: MarketerInbox },
   { id: 'activity', label: 'Activity', icon: Activity, screen: MarketerActivity },
   { id: 'centre', label: 'Report centre', icon: Stethoscope, screen: MarketerCentre },
+  { id: 'rules', label: 'Rules of engagement', icon: ScrollText, screen: RulesPage },
   { id: 'settings', label: 'Settings', icon: Settings, screen: MarketerSettings },
 ];
 const EXTRA: Page[] = [{ id: 'alerts', label: 'Alerts', icon: Bell, screen: MarketerAlerts }];
@@ -153,6 +166,7 @@ function Workspace({ me, branchId, marketers }: { me: StaffRecord; branchId: str
             {register && <RegisterSheet onClose={() => setRegister(false)} />}
             {log && <LogSheet onClose={() => setLog(false)} />}
             {follow && <FollowHospitalsSheet onClose={() => setFollow(false)} />}
+            {!chatId && <RulesGate />}
             {toast && (
               <div role="status" className="fixed left-1/2 z-[90] flex w-[calc(100%-40px)] max-w-md -translate-x-1/2 items-center gap-3 rounded-2xl bg-ink px-4 py-3.5 text-[14px] font-medium text-white shadow-2xl" style={{ bottom: 'calc(96px + var(--safe-bottom))' }}>
                 <CheckCircle2 size={19} className="shrink-0 text-[#4ade80]" />

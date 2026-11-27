@@ -6,7 +6,7 @@
  * the amount their hospitals generate). Hospital-level money only.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowDownRight, ArrowUpRight, Building2, CalendarCheck, ChevronRight, ClipboardCheck, Hospital, MessageCircle, Plus, SquarePen, Target, TrendingUp, Trophy, UserPlus, Users, Wallet } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, Building2, CalendarCheck, ChevronRight, ClipboardCheck, Hospital, MessageCircle, Plus, SquarePen, Target, TrendingUp, Trophy, UserPlus, Users, Wallet, Lock } from 'lucide-react';
 import { useApp as useCompany } from '@company/app/AppState';
 import { ENTRY_TEXT, PARTNER_STATUS_TEXT, dailyFor, monthName, monthRange, paceWord, shiftMonth, weekStartOf, type HospitalInfo } from '@company/services/marketing';
 import { STATUS_LABEL, type AgentStatus } from '@company/services/agentMonitor';
@@ -22,6 +22,8 @@ import { AgentAvatar } from '@/admin/agentPhotos';
 import { ConversationRow, InboxSection } from '@/screens/chat/Inbox';
 import { first, initials, plural, stamp } from './data';
 import { WeekAnnouncements } from './insights';
+import { ActionItems, BonusCard, TasksCard, useMyStatuses } from './duties';
+import type { HospitalStatus } from '@company/services/marketing';
 import { SixMonthsExplain } from './analysis';
 import { BoostPrompt } from './boost';
 import { MyReports } from './reports';
@@ -75,6 +77,7 @@ export function MarketerHome() {
   const due = m.myHealth.filter((a) => a.due);
   const pw = p ? paceWord(p) : null;
   const total = m.mine.reduce((s, h) => s + (m.figs.get(h.key)?.revenue ?? 0), 0);
+  const statuses = useMyStatuses(m);
   return (
     <Page>
       {/* Main card: monthly target, patients attended, amount generated. */}
@@ -133,6 +136,7 @@ export function MarketerHome() {
       {p && <WeekCard />}
       {/* System-written announcements about the week (owner, 2026-11-26). */}
       <WeekAnnouncements />
+      <ActionItems />
 
       <div className="mt-2.5 grid grid-cols-4 gap-2">
         {[
@@ -170,13 +174,16 @@ export function MarketerHome() {
             )}
           </Card>
 
+          <TasksCard />
+          <BonusCard />
+
           <SectionTitle title="Your hospitals this month" action="See all" onAction={() => go('hospitals')} />
           <div className="space-y-2">
             {[...m.mine]
               .sort((a, b) => (m.figs.get(b.key)?.revenue ?? 0) - (m.figs.get(a.key)?.revenue ?? 0))
               .slice(0, 4)
               .map((h) => (
-                <HospitalCard key={h.key} h={h} total={total} onOpen={() => openHospital(h)} />
+                <HospitalCard key={h.key} h={h} s={statuses.get(h.key)} total={total} onOpen={() => openHospital(h)} />
               ))}
           </div>
         </>
@@ -227,7 +234,7 @@ function WeekCard() {
   );
 }
 
-function HospitalCard({ h, total, onOpen }: { h: HospitalInfo; total: number; onOpen: () => void }) {
+function HospitalCard({ h, s, total, onOpen }: { h: HospitalInfo; s?: HospitalStatus; total: number; onOpen: () => void }) {
   const { m } = useMk();
   const f = m.figs.get(h.key);
   const lf = m.lastFigs.get(h.key);
@@ -243,7 +250,18 @@ function HospitalCard({ h, total, onOpen }: { h: HospitalInfo; total: number; on
           <span className="block truncate text-[12px] text-muted">
             {plural(h.agentIds.length, 'agent')} · {plural(f?.patients ?? 0, 'patient')}
           </span>
-          {need > 0 && <span className="block text-[11.5px] font-semibold text-[#b45309]">{need} need you</span>}
+          <span className="mt-1 flex flex-wrap gap-1">
+            {s?.locked && (
+              <span className="inline-flex items-center gap-0.5 rounded-full bg-brand-50 px-1.5 py-0.5 text-[10.5px] font-bold text-brand-700">
+                <Lock size={10} /> Top
+              </span>
+            )}
+            {s && ['flagged', 'overdue', 'cautioned', 'snoozed'].includes(s.dormant) && <span className="rounded-full bg-[#ffe4e4] px-1.5 py-0.5 text-[10.5px] font-bold text-[#b42318]">Dormant</span>}
+            {s?.dormant === 'revived' && <span className="rounded-full bg-[#e6f8ee] px-1.5 py-0.5 text-[10.5px] font-bold text-good-ink">Revived</span>}
+            {s?.growth && <span className="rounded-full bg-[#eef4ff] px-1.5 py-0.5 text-[10.5px] font-bold text-brand-700">Needs growth</span>}
+            {s?.handoverUntil && <span className="rounded-full bg-[#f3efff] px-1.5 py-0.5 text-[10.5px] font-bold text-violet">Handover</span>}
+            {need > 0 && <span className="rounded-full bg-[#fff1de] px-1.5 py-0.5 text-[10.5px] font-bold text-[#b45309]">{need} need you</span>}
+          </span>
         </span>
         <span className="text-right">
           <b className="block text-[15px] text-ink">{m.money(f?.revenue ?? 0)}</b>
@@ -302,6 +320,7 @@ export function MarketerHospitals() {
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState<HFilter>('all');
   const total = m.mine.reduce((s, h) => ({ revenue: s.revenue + (m.figs.get(h.key)?.revenue ?? 0), patients: s.patients + (m.figs.get(h.key)?.patients ?? 0) }), { revenue: 0, patients: 0 });
+  const statuses = useMyStatuses(m);
   const need = (h: HospitalInfo) => m.myHealth.some((a) => a.hospital === h.key && NEEDS.includes(a.status));
   const trend = (h: HospitalInfo) => (m.figs.get(h.key)?.revenue ?? 0) - (m.lastFigs.get(h.key)?.revenue ?? 0);
   const test = (h: HospitalInfo, f: HFilter) => (f === 'all' ? true : f === 'need' ? need(h) : f === 'up' ? trend(h) > 0 : trend(h) < 0);
@@ -353,7 +372,7 @@ export function MarketerHospitals() {
       )}
       <div className="mt-2 space-y-2">
         {shown.map((h) => (
-          <HospitalCard key={h.key} h={h} total={total.revenue} onOpen={() => openHospital(h)} />
+          <HospitalCard key={h.key} h={h} s={statuses.get(h.key)} total={total.revenue} onOpen={() => openHospital(h)} />
         ))}
         {!shown.length && <p className="rounded-[20px] bg-white p-4 text-center text-[13.5px] text-muted ring-1 ring-line/70">{m.mine.length ? 'No hospital matches.' : 'No hospitals yet. Your Branch Manager gives you your hospitals.'}</p>}
       </div>

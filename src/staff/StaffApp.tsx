@@ -43,6 +43,7 @@ import { ChatThread } from '@/screens/chat/ChatThread';
 import { ExpensesPage } from './pages/Expenses';
 import { AnnouncementsPage } from '@/admin/announcementsPage';
 import { ReportsPageMobile } from '@/admin/reportsPage';
+import { MarketingPage } from '@/admin/marketingPage';
 import { NavCount, useNavCounts, type NavCounts } from './navCounts';
 import { staffKey, useAccountAccess } from '@company/services/accountAccess';
 
@@ -60,6 +61,7 @@ const PAGES: StaffPage[] = [
   { id: 'records', label: 'Records', icon: FolderOpen, screen: () => <PatientsPage /> },
   { id: 'inventory', label: 'Inventory', icon: Package, screen: InventoryPage },
   { id: 'pr', label: 'PR Management', icon: Handshake, screen: () => <PRPage /> },
+  { id: 'marketing', label: 'Marketing', icon: Megaphone, screen: MarketingPage },
   { id: 'analysis', label: 'Analysis', icon: ChartColumn, screen: ReportsPage },
   { id: 'reports', label: 'Reports', icon: Flag, screen: ReportsPageMobile },
   { id: 'expenses', label: 'Expenses', icon: Banknote, screen: ExpensesPage },

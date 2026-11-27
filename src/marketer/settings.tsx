@@ -5,7 +5,7 @@
  * notifications they want; and what they can and cannot see.
  */
 import { useRef, useState } from 'react';
-import { BellRing, Camera, ChevronRight, KeyRound, ShieldCheck, Trash2, UserRound } from 'lucide-react';
+import { BellRing, Camera, ChevronRight, KeyRound, ScrollText, ShieldCheck, Trash2, UserRound } from 'lucide-react';
 import { useApp as useCompany } from '@company/app/AppState';
 import { logAudit } from '@company/services/audit';
 import { readImage, updateProfile, useProfile } from '@company/services/settingsStore';
@@ -32,7 +32,7 @@ const readPrefs = (id: string): Prefs => {
 };
 
 export function MarketerSettings() {
-  const { m, me } = useMk();
+  const { m, me, go } = useMk();
   const { user } = useCompany();
   const { showToast } = useNav();
   const p = useProfile(user.key);
@@ -96,6 +96,7 @@ export function MarketerSettings() {
           <div className="-mx-1 divide-y divide-line">
             {[
               { icon: <UserRound size={19} />, tint: 'bg-brand-50 text-brand-700', title: 'Profile details', sub: 'Name, email, phone and address', on: () => setSheet('profile') },
+              { icon: <ScrollText size={19} />, tint: 'bg-tint-orange text-warn-ink', title: 'Rules of engagement', sub: 'How hospitals, transfers, targets and bonus work', on: () => go('rules') },
               { icon: <KeyRound size={19} />, tint: 'bg-tint-purple text-violet', title: 'Sign-in and password', sub: signIn?.hash ? `Password set · signs in with ${signIn.email || 'no email yet'}` : 'Set up your sign-in email and password', on: () => setSheet('password') },
             ].map((r) => (
               <button key={r.title} type="button" onClick={r.on} className="press flex w-full items-center gap-3 px-1 py-3 text-left">
