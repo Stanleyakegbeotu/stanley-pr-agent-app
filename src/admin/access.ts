@@ -9,9 +9,9 @@
  */
 import { useApp as useCompany } from '@company/app/AppState';
 import { can, usePermissions } from '@company/services/permissions';
-import { useRole } from '@/domain/role';
+import { useActingStaff, useRole } from '@/domain/role';
 import { useStaffChrome } from '@/staff/chrome';
-import { staffAgentId, staffTeamId } from '@/staff/chat';
+import { staffAgentId, staffInboxIdentity, staffTeamId } from '@/staff/chat';
 import { agentConvId, frontDeskId, managerId } from './chat';
 
 /** right('services.edit'): may this person do it? (Company Admin: always.) */
@@ -28,6 +28,7 @@ export const useInBranch = () => !!useStaffChrome().branchId;
 export function useChatLink() {
   const { branchId } = useStaffChrome();
   const role = useRole();
+  const acting = useActingStaff();
   if (!branchId)
     return {
       agent: (id: number) => `/messages/${agentConvId(id)}`,
@@ -36,7 +37,7 @@ export function useChatLink() {
     };
   const base = `/branch/${branchId}/messages`;
   // Inside a branch: a Front Desk person's team chat is the manager; a manager's is the shared front desk inbox.
-  const team = `${base}/${staffTeamId(branchId, role)}`;
+  const team = `${base}/${staffTeamId(branchId, staffInboxIdentity(role, acting))}`;
   return {
     agent: (id: number) => `${base}/${staffAgentId(id)}`,
     manager: (_b?: string) => (role === 'frontdesk' ? team : base),

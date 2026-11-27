@@ -32,6 +32,7 @@ function Bar({ p }: { p: Progress }) {
 
 export function MarketersCard({ branchId }: { branchId: string }) {
   const right = useRight();
+  const canReassign = right('marketing.hospitals.reassign');
   const d = useBranchMarketing(branchId);
   const [viewing, setViewing] = useState<string | null>(null);
   const [owners, setOwners] = useState(false);
@@ -86,9 +87,9 @@ export function MarketersCard({ branchId }: { branchId: string }) {
         <button type="button" onClick={() => setOwners(true)} className="press flex min-h-11 items-center justify-center gap-1.5 rounded-2xl bg-page text-[13.5px] font-semibold text-ink-2 ring-1 ring-line">
           <Hospital size={15} /> Hospitals
         </button>
-        <button type="button" onClick={() => setSplit(unowned.length ? 'fill' : 'even')} className={`press flex min-h-11 items-center justify-center gap-1.5 rounded-2xl text-[13.5px] font-semibold ${unowned.length ? 'bg-[#fff1de] text-[#b45309]' : 'bg-page text-ink-2 ring-1 ring-line'}`}>
+        {canReassign && <button type="button" onClick={() => setSplit(unowned.length ? 'fill' : 'even')} className={`press flex min-h-11 items-center justify-center gap-1.5 rounded-2xl text-[13.5px] font-semibold ${unowned.length ? 'bg-[#fff1de] text-[#b45309]' : 'bg-page text-ink-2 ring-1 ring-line'}`}>
           <Scale size={15} /> {unowned.length ? `${unowned.length} need a marketer` : 'Even out the split'}
-        </button>
+        </button>}
       </div>
       {waiting.length > 0 && <Waiting branchId={branchId} d={d} />}
       {viewing && <MarketerSheet branchId={branchId} d={d} marketerId={viewing} onClose={() => setViewing(null)} />}
@@ -148,6 +149,7 @@ export function Waiting({ branchId, d }: { branchId: string; d: Data }) {
 function MarketerSheet({ branchId, d, marketerId, onClose }: { branchId: string; d: Data; marketerId: string; onClose: () => void }) {
   const { user } = useCompany();
   const { showToast } = useNav();
+  const canSetTargets = useRight()('marketing.targets.manage');
   const m = d.marketers.find((x) => x.id === marketerId)!;
   const p = d.progress.find((x) => x.marketerId === marketerId)!;
   const [target, setT] = useState(String(p.target));
@@ -195,12 +197,12 @@ function MarketerSheet({ branchId, d, marketerId, onClose }: { branchId: string;
       <div className="mb-3 rounded-[20px] bg-white p-3.5 ring-1 ring-line/70">
         <p className="mb-2 text-[13px] font-semibold text-ink-2">Target for {monthName(d.ym, true)} (₦, amount generated)</p>
         <div className="flex gap-2">
-          <input inputMode="numeric" value={target} onChange={(e) => setT(e.target.value.replace(/\D/g, ''))} className={inputCls()} aria-label="Target amount" />
+          <input inputMode="numeric" value={target} onChange={(e) => setT(e.target.value.replace(/\D/g, ''))} readOnly={!canSetTargets} className={inputCls()} aria-label="Target amount" />
           <button
             type="button"
-            disabled={!Number(target) || Number(target) === p.target}
+            disabled={!canSetTargets || !Number(target) || Number(target) === p.target}
             onClick={() => {
-              setTarget(branchId, marketerId, d.ym, Number(target), user.name);
+              setTarget(branchId, marketerId, d.ym, Number(target), user.name, user.role);
               logAudit({ category: 'PR agents', action: 'Marketer target set', record: `${m.name} · ${monthName(d.ym, true)}`, details: `${d.money(Number(target))} (usual month ${d.money(p.baseline)})`, branchId });
               showToast(`Target set: ${d.money(Number(target))}`);
             }}
@@ -273,6 +275,7 @@ function OwnersSheet({ branchId, d, onClose }: { branchId: string; d: Data; onCl
 function OwnerSheet({ branchId, h, marketers, onClose }: { branchId: string; h: HospitalInfo; marketers: StaffRecord[]; onClose: () => void }) {
   const { user } = useCompany();
   const { showToast } = useNav();
+  const canReassign = useRight()('marketing.hospitals.reassign');
   const [to, setTo] = useState(h.owner?.marketerId ?? '');
   const [why, setWhy] = useState('');
   return (
@@ -284,9 +287,9 @@ function OwnerSheet({ branchId, h, marketers, onClose }: { branchId: string; h: 
       footer={
         <button
           type="button"
-          disabled={(to || null) === (h.owner?.marketerId ?? null) || why.trim().length < 3}
+          disabled={!canReassign || (to || null) === (h.owner?.marketerId ?? null) || why.trim().length < 3}
           onClick={() => {
-            setHospitalOwner(branchId, h.key, to || null, user.name, why);
+            setHospitalOwner(branchId, h.key, to || null, user.name, why, user.role);
             const name = marketers.find((m) => m.id === to)?.name;
             logAudit({ category: 'PR agents', action: 'Hospital marketer changed', record: h.key, details: `${marketers.find((m) => m.id === h.owner?.marketerId)?.name ?? 'No marketer'} → ${name ?? 'No marketer'} · ${why.trim()}`, branchId });
             showToast(name ? `${h.key} is now ${name}'s` : `${h.key} has no marketer`);
@@ -300,7 +303,7 @@ function OwnerSheet({ branchId, h, marketers, onClose }: { branchId: string; h: 
     >
       <div className="space-y-1.5 px-1 pb-2">
         {[...marketers.map((m) => ({ id: m.id, name: m.name })), { id: '', name: 'No marketer' }].map((m) => (
-          <button key={m.id || 'none'} type="button" aria-pressed={to === m.id} onClick={() => setTo(m.id)} className={`press flex min-h-12 w-full items-center gap-3 rounded-2xl px-3 text-left text-[15px] font-semibold ring-1 ${to === m.id ? 'bg-brand-50 text-brand-700 ring-2 ring-brand-500' : 'bg-white text-ink ring-line'}`}>
+          <button key={m.id || 'none'} type="button" disabled={!canReassign} aria-pressed={to === m.id} onClick={() => setTo(m.id)} className={`press flex min-h-12 w-full items-center gap-3 rounded-2xl px-3 text-left text-[15px] font-semibold ring-1 ${to === m.id ? 'bg-brand-50 text-brand-700 ring-2 ring-brand-500' : 'bg-white text-ink ring-line'}`}>
             {m.name}
             {m.id === (h.owner?.marketerId ?? null) && <span className="ml-auto text-[12px] font-medium text-muted">Now</span>}
           </button>
@@ -329,7 +332,7 @@ export function SplitSheet({ branchId, d, mode, onClose }: { branchId: string; d
           type="button"
           disabled={!moves.length}
           onClick={() => {
-            applyMoves(branchId, moves, user.name, mode === 'fill' ? 'Fair split: hospitals without a marketer' : 'Fair split: evened out');
+            applyMoves(branchId, moves, user.name, mode === 'fill' ? 'Fair split: hospitals without a marketer' : 'Fair split: evened out', user.role);
             logAudit({ category: 'PR agents', action: 'Hospitals shared out to marketers', record: `${moves.length} hospitals`, details: moves.map((m) => `${m.hospital} → ${name(m.to)}`).join(', '), branchId });
             showToast(`${moves.length} hospital${moves.length === 1 ? '' : 's'} given to marketers`);
             onClose();

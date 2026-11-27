@@ -14,10 +14,11 @@
  */
 import { useSyncExternalStore } from 'react';
 
-export type Role = 'admin' | 'manager' | 'frontdesk' | 'marketer' | 'clinician';
+export type Role = 'admin' | 'manager' | 'assistant_manager' | 'frontdesk' | 'marketer' | 'clinician';
 export const ROLES: { id: Role; label: string; note: string }[] = [
   { id: 'admin', label: 'Company Admin', note: 'All branches, finance, staff, PR, reports' },
   { id: 'manager', label: 'Branch Manager', note: 'Runs one branch: billing, staff, expenses' },
+  { id: 'assistant_manager', label: 'Assistant Manager', note: 'Same branch workspace; selected marketing decisions stay with the Branch Manager' },
   { id: 'frontdesk', label: 'Front Desk', note: 'Patients, billing and payments' },
   { id: 'marketer', label: 'Marketer', note: 'Their hospitals, PR agents and target' },
   { id: 'clinician', label: 'Referring clinician', note: 'Requests, patients and results' },
@@ -28,10 +29,12 @@ const KEY = 'stanley.dev.role';
 const STAFF_KEY = 'stanley.dev.staff';
 /** Which branch the staff workspace opens on. */
 const BRANCH_KEY = 'stanley.dev.branch';
+export const ASSISTANT_MANAGER_ACCOUNT_ID = 'STF-0012';
+export const ASSISTANT_MANAGER_USERNAME = 'assistant.manager.demo';
 const listeners = new Set<() => void>();
 const read = (): Role => {
   const r = localStorage.getItem(KEY);
-  return r === 'clinician' || r === 'manager' || r === 'frontdesk' || r === 'marketer' ? r : 'admin';
+  return r === 'clinician' || r === 'manager' || r === 'assistant_manager' || r === 'frontdesk' || r === 'marketer' ? r : 'admin';
 };
 let role = read();
 
@@ -45,7 +48,8 @@ export function setActingStaff(id: string) {
 export function setRole(r: Role) {
   role = r;
   localStorage.setItem(KEY, r);
-  if (r !== 'frontdesk' && r !== 'marketer') localStorage.removeItem(STAFF_KEY);
+  if (r === 'assistant_manager') setActingStaff(ASSISTANT_MANAGER_ACCOUNT_ID);
+  else if (r !== 'frontdesk' && r !== 'marketer') localStorage.removeItem(STAFF_KEY);
   // Each workspace has its own pages: start on its home screen.
   window.location.hash = r === 'admin' ? '#/admin/dashboard' : r === 'clinician' ? '#/' : `#/admin/branch/${staffBranch()}/dashboard`;
   listeners.forEach((l) => l());

@@ -13,7 +13,7 @@
  * employment type. Changes last for the session until the database exists.
  */
 import { useMemo, useRef, useState, type ReactNode } from 'react';
-import { BadgeCheck, CalendarDays, Camera, ChevronRight, Copy, Crown, Mail, MessageCircle, Pencil, Phone, Plus, Search, ShieldCheck, Trash2, Users, X } from 'lucide-react';
+import { BadgeCheck, CalendarDays, Camera, ChevronRight, Copy, Crown, Download, Mail, MessageCircle, Pencil, Phone, Plus, Search, ShieldCheck, Trash2, Users, X } from 'lucide-react';
 import { useApp as useCompany } from '@company/app/AppState';
 import { ACTIVE_BRANCHES, getBranch } from '@company/data/company';
 import { EMPLOYMENT_TYPES, MANAGER_ROLE, STAFF_ROLES, STAFF_STATUSES, isManager, managerOf, type StaffRecord, type StaffStatus } from '@company/data/userRecords';
@@ -38,6 +38,8 @@ import { useChatLink, useInBranch, useRight } from '../access';
 import { AccountCard, QueriesCard } from '../staffQueries';
 import { staffKey, useAccountAccess } from '@company/services/accountAccess';
 import { usesApp } from '@company/data/userRecords';
+import { REPORTS } from '@company/features/reports/specs';
+import { BuilderSheet } from './Reports';
 
 const STATUS_TONE: Record<StaffStatus, string> = { Active: 'bg-tint-green text-good-ink', 'On leave': 'bg-[#fff1e0] text-[#b45309]', Suspended: 'bg-[#fdecec] text-[#b42318]', Left: 'bg-page text-muted' };
 const longDate = (iso: string) => (iso ? new Date(`${iso}T00:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Not on record');
@@ -109,6 +111,7 @@ function Workspace({ branchId, crumb }: { branchId: string; crumb: boolean }) {
   const [status, setStatus] = useState<'all' | StaffStatus>('all');
   const [open, setOpen] = useState<string | null>(null);
   const [adding, setAdding] = useState<{ role?: string } | null>(null);
+  const [staffReportOpen, setStaffReportOpen] = useState(false);
   // Roles and Permissions: front desk staff (staff.manage); the manager is appointed by the Company Admin (branch.managers).
   const chatLink = useChatLink();
   const right = useRight();
@@ -128,9 +131,14 @@ function Workspace({ branchId, crumb }: { branchId: string; crumb: boolean }) {
         title="Staff Management"
         sub={`${b.name} branch · ${b.code}`}
         action={
-          canManage && <button type="button" onClick={() => setAdding({})} aria-label="Add staff" className="press flex min-h-11 items-center gap-1.5 rounded-full bg-brand-600 pl-3 pr-4 text-[14px] font-semibold text-white shadow-[0_8px_18px_rgba(31,111,232,0.3)]">
-            <Plus size={18} /> Add
-          </button>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={() => setStaffReportOpen(true)} aria-label="Preview and download staff list" className="press flex min-h-11 items-center gap-1.5 rounded-full bg-white px-3.5 text-[13px] font-semibold text-brand-700 shadow-sm ring-1 ring-line">
+              <Download size={17} /> Staff list
+            </button>
+            {canManage && <button type="button" onClick={() => setAdding({})} aria-label="Add staff" className="press flex min-h-11 items-center gap-1.5 rounded-full bg-brand-600 pl-3 pr-4 text-[14px] font-semibold text-white shadow-[0_8px_18px_rgba(31,111,232,0.3)]">
+              <Plus size={18} /> Add
+            </button>}
+          </div>
         }
       />
 
@@ -258,6 +266,7 @@ function Workspace({ branchId, crumb }: { branchId: string; crumb: boolean }) {
 
       {open && staff.find((s) => s.id === open) && <StaffProfileSheet member={staff.find((s) => s.id === open)!} onClose={() => setOpen(null)} />}
       {adding && <AddStaffSheet branchId={branchId} presetRole={adding.role} onClose={() => setAdding(null)} onCreated={setOpen} />}
+      {staffReportOpen && <BuilderSheet spec={REPORTS.find((r) => r.id === 'staff')!} initialBranch={branchId} lockBranch long initialVariant="directory" onClose={() => setStaffReportOpen(false)} />}
     </>
   );
 }

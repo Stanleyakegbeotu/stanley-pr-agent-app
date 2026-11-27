@@ -17,8 +17,8 @@
 import { useSyncExternalStore } from "react";
 import { logAudit } from "./audit";
 
-export type RoleName = "Company Admin" | "Branch Manager" | "Front Desk";
-export const BRANCH_ROLES: Exclude<RoleName, "Company Admin">[] = ["Branch Manager", "Front Desk"];
+export type RoleName = "Company Admin" | "Branch Manager" | "Assistant Manager" | "Front Desk";
+export const BRANCH_ROLES: Exclude<RoleName, "Company Admin">[] = ["Branch Manager", "Assistant Manager", "Front Desk"];
 
 export interface PermissionDef {
   id: string;
@@ -28,8 +28,10 @@ export interface PermissionDef {
   sensitive?: boolean;
   /** Only the Company Admin — can't be granted to branch roles (by design). */
   adminOnly?: boolean;
-  /** Never given to the Front Desk (owner, 2026-11-26): e.g. Staff Management, since they are staff themselves. */
+  /** Only management roles: e.g. Staff Management, since the Front Desk are staff themselves. */
   managersOnly?: boolean;
+  /** Fixed Branch Manager authority; cannot be granted to Assistant Manager by role settings. */
+  branchManagerOnly?: boolean;
 }
 
 export interface PermissionGroup {
@@ -95,6 +97,15 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     ],
   },
   {
+    id: "marketingAuthority",
+    label: "Marketing management authority",
+    perms: [
+      { id: "marketing.targets.manage", label: "Configure monthly marketer targets", description: "Create, edit, reset or remove marketers' monthly targets.", branchManagerOnly: true, sensitive: true },
+      { id: "marketing.transfers.decide", label: "Approve or reject hospital transfers", description: "Make the final decision on marketer hospital transfer requests.", branchManagerOnly: true, sensitive: true },
+      { id: "marketing.hospitals.reassign", label: "Directly reassign hospitals", description: "Change a hospital's marketer ownership without the transfer approval workflow.", branchManagerOnly: true, sensitive: true },
+    ],
+  },
+  {
     id: "reports",
     label: "Reports",
     perms: [
@@ -146,10 +157,12 @@ export const ALL_PERMISSIONS = PERMISSION_GROUPS.flatMap((g) => g.perms);
 const PERM_BY_ID = new Map(ALL_PERMISSIONS.map((p) => [p.id, p]));
 
 const MANAGER_DEFAULT = ALL_PERMISSIONS.filter((p) => !p.adminOnly).map((p) => p.id);
+const ASSISTANT_MANAGER_DEFAULT = MANAGER_DEFAULT.filter((id) => !PERM_BY_ID.get(id)!.branchManagerOnly);
 const FRONT_DESK_DEFAULT = ["dash.branch", "analytics.view", "patients.view", "patients.register", "billing.create", "billing.reprint", "expenses.record", "services.view", "reports.view", "referral.view"];
 
 export const DEFAULT_GRANTS: Record<Exclude<RoleName, "Company Admin">, string[]> = {
   "Branch Manager": MANAGER_DEFAULT,
+  "Assistant Manager": ASSISTANT_MANAGER_DEFAULT,
   "Front Desk": FRONT_DESK_DEFAULT,
 };
 
@@ -161,9 +174,11 @@ function load(): Grants {
     const raw = window.localStorage.getItem(KEY);
     if (!raw) return { ...DEFAULT_GRANTS };
     const saved = JSON.parse(raw) as Partial<Grants>;
-    const clean = (list: unknown, fallback: string[]) => (Array.isArray(list) ? list.filter((id) => PERM_BY_ID.has(id) && !PERM_BY_ID.get(id)!.adminOnly) : fallback);
-    const frontDesk = clean(saved["Front Desk"], FRONT_DESK_DEFAULT).filter((id) => !PERM_BY_ID.get(id)!.managersOnly);
-    return { "Branch Manager": clean(saved["Branch Manager"], MANAGER_DEFAULT), "Front Desk": frontDesk };
+    const clean = (list: unknown, fallback: string[], role: Exclude<RoleName, "Company Admin">) => (Array.isArray(list) ? list.filter((id) => PERM_BY_ID.has(id) && !PERM_BY_ID.get(id)!.adminOnly && !(role === "Assistant Manager" && PERM_BY_ID.get(id)!.branchManagerOnly)) : fallback);
+    const manager = clean(saved["Branch Manager"], MANAGER_DEFAULT, "Branch Manager");
+    const assistant = clean(saved["Assistant Manager"], manager.filter((id) => !PERM_BY_ID.get(id)!.branchManagerOnly), "Assistant Manager");
+    const frontDesk = clean(saved["Front Desk"], FRONT_DESK_DEFAULT, "Front Desk").filter((id) => !PERM_BY_ID.get(id)!.managersOnly);
+    return { "Branch Manager": manager, "Assistant Manager": assistant, "Front Desk": frontDesk };
   } catch {
     return { ...DEFAULT_GRANTS };
   }
@@ -190,12 +205,13 @@ export function can(role: string, permission: string): boolean {
   if (!def || def.adminOnly) return false;
   // Marketers use their own mobile workspace (services/marketing), never the branch pages.
   if (role === "Marketer") return false;
-  if (role !== "Branch Manager" && def.managersOnly) return false;
-  const list = role === "Branch Manager" ? grants["Branch Manager"] : grants["Front Desk"];
+  if (role !== "Branch Manager" && role !== "Assistant Manager" && def.managersOnly) return false;
+  if (role !== "Branch Manager" && def.branchManagerOnly) return false;
+  const list = role === "Assistant Manager" ? grants["Branch Manager"] : role === "Branch Manager" ? grants["Branch Manager"] : grants["Front Desk"];
   return list.includes(permission);
 }
 
-export const grantsFor = (role: Exclude<RoleName, "Company Admin">) => grants[role];
+export const grantsFor = (role: Exclude<RoleName, "Company Admin">) => role === "Assistant Manager" ? grants["Branch Manager"].filter((id) => !PERM_BY_ID.get(id)?.branchManagerOnly) : grants[role];
 export const isDefault = (role: Exclude<RoleName, "Company Admin">, id: string) => DEFAULT_GRANTS[role].includes(id);
 
 /** Re-render when permissions change (pages read `can` during render). */
@@ -214,7 +230,8 @@ export function usePermissions(): number {
 
 export function setPermission(role: Exclude<RoleName, "Company Admin">, permission: string, on: boolean, by: string) {
   const def = PERM_BY_ID.get(permission);
-  if (!def || def.adminOnly || (def.managersOnly && role === "Front Desk")) return;
+  if (!def || def.adminOnly || (def.managersOnly && role === "Front Desk") || (def.branchManagerOnly && role !== "Branch Manager")) return;
+  if (role === "Assistant Manager") return;
   const cur = grants[role];
   if (on === cur.includes(permission)) return;
   commit({ ...grants, [role]: on ? [...cur, permission] : cur.filter((p) => p !== permission) });
@@ -222,6 +239,7 @@ export function setPermission(role: Exclude<RoleName, "Company Admin">, permissi
 }
 
 export function resetRole(role: Exclude<RoleName, "Company Admin">, by: string) {
+  if (role === "Assistant Manager") return;
   commit({ ...grants, [role]: [...DEFAULT_GRANTS[role]] });
   logAudit({ category: "Settings", action: "Role reset to defaults", record: role, details: `All ${role} permissions restored to the standard set · by ${by}`, branchId: null });
 }
@@ -230,7 +248,7 @@ export function resetRole(role: Exclude<RoleName, "Company Admin">, by: string) 
 export function grantable(role: string, permission: string): boolean {
   if (role === "Company Admin") return true;
   const def = PERM_BY_ID.get(permission);
-  return !!def && !def.adminOnly && !(def.managersOnly && role !== "Branch Manager");
+  return !!def && !def.adminOnly && !(def.managersOnly && role !== "Branch Manager" && role !== "Assistant Manager") && !(def.branchManagerOnly && role !== "Branch Manager");
 }
 
 /** Branch pages and the permission each needs (Settings is always available — everyone has their own account). */

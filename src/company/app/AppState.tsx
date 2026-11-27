@@ -15,7 +15,7 @@ import { useHashRoute, type Route } from "./router";
 import { BRANCH_MANAGER_PLACEHOLDER, CURRENT_USER, getBranch, type AppUser } from "@company/data/company";
 import { LEGACY_BRANCH_ID, hospitalKey } from "@company/data/legacy";
 import { logAudit, setAuditActor } from "@company/services/audit";
-import { BASELINE_AGENTS, EMPTY_INVENTORY_CHANGES, applyAgentEdits, mergeAgents, nextServiceId, nextUserId, type AddedService, type AgentEdit, type AgentRecord, type BankDetails, type InventoryChanges, MOCK_STAFF, MARKETER_ROLE, isManager, managerOf, nextStaffId, usesApp, type StaffRecord } from "@company/data/userRecords";
+import { ASSISTANT_MANAGER_ROLE, BASELINE_AGENTS, EMPTY_INVENTORY_CHANGES, applyAgentEdits, mergeAgents, nextServiceId, nextUserId, type AddedService, type AgentEdit, type AgentRecord, type BankDetails, type InventoryChanges, MOCK_STAFF, MARKETER_ROLE, isManagementRole, isManager, managerOf, nextStaffId, usesApp, type StaffRecord } from "@company/data/userRecords";
 import { resolvePhoto, useSettings } from "@company/services/settingsStore";
 import { putBackExpense, takeExpense, type ExpenseRecord } from "@company/services/expenses";
 import { restoreDraft, restoreOrder, takeDraft, takeOrder, type BillingSession, type Order } from "@company/services/billing";
@@ -123,6 +123,7 @@ export const TRASH_RETENTION_DAYS = 30;
 
 const STAFF_KEY = "stanley.staff.v1";
 const MARKETERS_SEEDED = "stanley.staff.marketers-seeded";
+const ASSISTANT_MANAGER_SEEDED = "stanley.staff.assistant-manager-seeded";
 function loadStaff(): StaffRecord[] {
   try {
     const raw = readStore(STAFF_KEY);
@@ -138,7 +139,9 @@ function loadStaff(): StaffRecord[] {
       // The sample marketers (2026-11-26) join a saved team once.
       const marketers = readStore(MARKETERS_SEEDED) ? [] : MOCK_STAFF.filter((m) => m.role === MARKETER_ROLE && !list.some((s) => s.id === m.id));
       writeStore(MARKETERS_SEEDED, "1");
-      return [...merged, ...extra, ...marketers];
+      const assistant = readStore(ASSISTANT_MANAGER_SEEDED) ? [] : MOCK_STAFF.filter((m) => m.role === ASSISTANT_MANAGER_ROLE && !list.some((s) => s.id === m.id));
+      writeStore(ASSISTANT_MANAGER_SEEDED, "1");
+      return [...merged, ...extra, ...marketers, ...assistant];
     }
   } catch {
     /* unreadable — start from the sample team */
@@ -505,7 +508,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     });
     // A deactivated account (Staff Management → Access & account) can't be signed in to.
     const picked = staff.find((s) => s.id === actingAs[branchId] && s.branchId === branchId && s.status !== "Left" && s.status !== "Suspended" && !accountAccess[staffKey(s.id)]?.off);
-    if (picked) return fromStaff(picked, isManager(picked) ? "manager" : "staff");
+    if (picked) return fromStaff(picked, isManagementRole(picked) ? "manager" : "staff");
     const m = managerOf(staff, branchId);
     if (m) return fromStaff(m, "manager");
     // No manager yet: the legacy branch keeps its named placeholder; a new branch shows a neutral one.

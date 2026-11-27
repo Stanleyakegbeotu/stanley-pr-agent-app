@@ -405,7 +405,7 @@ async function printPages(doc: ReturnType<ReportSpec['build']>, pages: Page[], p
   w.print();
 }
 
-function BuilderSheet({ spec, initialBranch, onClose, lockBranch = false, long = true }: { spec: ReportSpec; initialBranch: string; onClose: () => void; /** Branch workspace: its own branch only. */ lockBranch?: boolean; /** Periods longer than a month. */ long?: boolean }) {
+export function BuilderSheet({ spec, initialBranch, onClose, lockBranch = false, long = true, initialVariant }: { spec: ReportSpec; initialBranch: string; onClose: () => void; /** Branch workspace: its own branch only. */ lockBranch?: boolean; /** Periods longer than a month. */ long?: boolean; initialVariant?: string }) {
   const { agents: raw, user, staff } = useCompany();
   const { showToast } = useNav();
   const banks = useAgentBanks();
@@ -414,7 +414,7 @@ function BuilderSheet({ spec, initialBranch, onClose, lockBranch = false, long =
   const hideProfit = user.kind !== 'admin';
   setReportPreparer(user.name, user.role);
 
-  const [variant, setVariant] = useState(spec.variants[0]!.id);
+  const [variant, setVariant] = useState(spec.variants.find((v) => v.id === initialVariant)?.id ?? spec.variants[0]!.id);
   const [preset, setPreset] = useState<Preset>('month');
   const [from, setFrom] = useState(isoDate(addDays(TODAY, -6)));
   const [to, setTo] = useState(isoDate(TODAY));

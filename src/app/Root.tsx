@@ -25,7 +25,7 @@ export function Root() {
       <PrivacyGuard on={role !== 'admin'} />
       {role === 'admin' ? (
         <AdminApp key="admin" />
-      ) : role === 'manager' || role === 'frontdesk' ? (
+      ) : role === 'manager' || role === 'assistant_manager' || role === 'frontdesk' ? (
         <StaffApp key="staff" />
       ) : role === 'marketer' ? (
         <MarketerApp key="marketer" />

@@ -13,11 +13,13 @@ import { useMemo } from 'react';
 import { useApp as useCompany } from '@company/app/AppState';
 import { CURRENT_USER, getBranch } from '@company/data/company';
 import { registerConversations, type Conversation, type Person } from '@/data/team';
-import { useRole } from '@/domain/role';
+import { ASSISTANT_MANAGER_ACCOUNT_ID, useRole } from '@/domain/role';
 import { photoOf, useTeam, type Who } from '@/admin/people';
 import { useAgentPhotos } from '@/admin/agentPhotos';
 
 export const STAFF_AGENT_PREFIX = 'st-pr-';
+export const staffInboxIdentity = (role: string, accountId?: string) =>
+  role === 'assistant_manager' ? `assistant_manager:${accountId || ASSISTANT_MANAGER_ACCOUNT_ID}` : role;
 export const staffAdminId = (branchId: string, role: string) => `st-admin-${branchId}-${role}`;
 export const staffTeamId = (branchId: string, role: string) => `st-team-${branchId}-${role}`;
 export const staffAgentId = (agentId: number) => `${STAFF_AGENT_PREFIX}${agentId}`;
@@ -27,15 +29,16 @@ const person = (w: Who): Person => ({ id: w.name, name: w.name, role: w.role, ph
 export function useStaffConversations(branchId: string) {
   const team = useTeam();
   const role = useRole();
-  const { agents } = useCompany();
+  const { agents, user } = useCompany();
   const photos = useAgentPhotos();
   return useMemo(() => {
     const b = getBranch(branchId);
     const name = b?.name ?? '';
+    const identity = staffInboxIdentity(role, user.staffId);
     const admin: Person = { id: 'company-admin', name: CURRENT_USER.name, role: CURRENT_USER.role, photo: CURRENT_USER.photo };
     const fixed: Conversation[] = [
       {
-        id: staffAdminId(branchId, role),
+        id: staffAdminId(branchId, identity),
         kind: 'admin',
         name: 'Company Admin',
         role: `${CURRENT_USER.name}. Approvals, prices, anything for head office`,
@@ -48,7 +51,7 @@ export function useStaffConversations(branchId: string) {
     if (role === 'frontdesk') {
       const mgr = team.manager(branchId);
       fixed.push({
-        id: staffTeamId(branchId, role),
+        id: staffTeamId(branchId, identity),
         kind: 'manager',
         name: mgr?.name ?? `Branch Manager, ${name}`,
         role: mgr ? `Branch Manager, ${name} branch` : `Branch Manager, ${name} (not assigned yet)`,
@@ -60,7 +63,7 @@ export function useStaffConversations(branchId: string) {
     } else {
       const desk = team.frontDesk(branchId);
       fixed.push({
-        id: staffTeamId(branchId, role),
+        id: staffTeamId(branchId, identity),
         kind: 'frontdesk',
         name: `Front Desk, ${name}`,
         get role() {
@@ -89,5 +92,5 @@ export function useStaffConversations(branchId: string) {
     registerConversations([...fixed, ...agentConvs]);
     return { fixed, agentConvs };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [team, agents, photos, branchId, role]);
+  }, [team, agents, photos, branchId, role, user.staffId]);
 }

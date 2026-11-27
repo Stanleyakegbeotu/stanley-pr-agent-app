@@ -96,6 +96,9 @@ export function MarketingPage() {
 function Workspace({ branchId, name }: { branchId: string; name: string }) {
   const right = useRight();
   const canManage = right('referral.manage');
+  const canSetTargets = right('marketing.targets.manage');
+  const canDecideTransfers = right('marketing.transfers.decide');
+  const canReassignHospitals = right('marketing.hospitals.reassign');
   const d = useMarketingAdmin(branchId);
   const [open, setOpen] = useState<Open>(null);
   const [allDormant, setAllDormant] = useState(false);
@@ -124,7 +127,7 @@ function Workspace({ branchId, name }: { branchId: string; name: string }) {
                 <p className="mt-0.5 text-[12.5px] text-[#8a4b00]">Marketers see their tasks, bonus and rules once these are set.</p>
                 <div className="mt-3 space-y-1.5">
                   {d.setup.map((x) => (
-                    <button key={x.key} type="button" disabled={x.done} onClick={() => go(x.key)} className={`press flex w-full items-center gap-3 rounded-2xl bg-white/80 px-3 py-2.5 text-left ${x.done ? 'opacity-55' : ''}`}>
+                    <button key={x.key} type="button" disabled={x.done || (x.key === 'tasks' && !canSetTargets) || (x.key === 'owners' && !canReassignHospitals)} onClick={() => go(x.key)} className={`press flex w-full items-center gap-3 rounded-2xl bg-white/80 px-3 py-2.5 text-left ${x.done ? 'opacity-55' : ''}`}>
                       <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full ${x.done ? 'bg-[#22a06b] text-white' : 'ring-2 ring-[#f2a93b]'}`}>{x.done && <Check size={14} />}</span>
                       <span className="min-w-0 flex-1">
                         <b className="block text-[14px] text-ink">{x.label}</b>
@@ -213,7 +216,7 @@ function Workspace({ branchId, name }: { branchId: string; name: string }) {
 
             {d.unowned.length > 0 && (
               <>
-                <SectionTitle title="Without a marketer" action={canManage ? 'Share out' : undefined} onAction={() => setOpen({ kind: 'split' })} />
+                <SectionTitle title="Without a marketer" action={canReassignHospitals ? 'Share out' : undefined} onAction={() => setOpen({ kind: 'split' })} />
                 <div className="flex flex-wrap gap-1.5">
                   {d.unowned.map((h) => (
                     <button key={h.key} type="button" onClick={() => canManage && setOpen({ kind: 'move', hospital: h.key })} className="press rounded-full bg-white px-3 py-1.5 text-[12.5px] text-muted ring-1 ring-line">
@@ -267,7 +270,7 @@ function Workspace({ branchId, name }: { branchId: string; name: string }) {
                     { k: 'tasks' as const, l: 'Monthly tasks', i: <Target size={22} className="text-brand-600" />, t: 'bg-tint-blue border-[#d6e7ff]' },
                     { k: 'bonus' as const, l: 'Bonus', i: <Gift size={22} className="text-good" />, t: 'bg-tint-green border-[#cdeedb]' },
                     { k: 'rules' as const, l: 'Rules', i: <FileText size={22} className="text-violet" />, t: 'bg-tint-purple border-[#e2d8ff]' },
-                  ].map((x) => (
+                  ].filter((x) => x.k !== 'tasks' || canSetTargets).map((x) => (
                     <button key={x.k} type="button" onClick={() => setOpen({ kind: x.k })} className={`press flex min-h-[92px] flex-col items-center justify-center gap-1.5 rounded-[18px] border ${x.t}`}>
                       {x.i}
                       <span className="text-[12.5px] font-semibold text-ink">{x.l}</span>
@@ -293,6 +296,7 @@ function Workspace({ branchId, name }: { branchId: string; name: string }) {
 function TransferCard({ d, t }: { d: D; t: Transfer }) {
   const { user } = useCompany();
   const { showToast } = useNav();
+  const canDecideTransfers = useRight()('marketing.transfers.decide');
   return (
     <div className="rounded-[20px] bg-white p-3.5 ring-1 ring-line/70">
       <p className="flex items-center gap-1.5 text-[14.5px] font-bold text-ink">
@@ -302,12 +306,12 @@ function TransferCard({ d, t }: { d: D; t: Transfer }) {
         {t.kind === 'offer' ? 'Offered by the marketer, accepted by the colleague' : 'Your request to release it'} · {t.reason}
       </p>
       <span className={`mt-1.5 inline-block rounded-full px-2 py-0.5 text-[11.5px] font-bold ${t.stage === 'manager' ? TONE.warn : TONE.info}`}>{STAGE_LABEL[t.stage]}</span>
-      {t.stage === 'manager' && (
+      {t.stage === 'manager' && canDecideTransfers && (
         <div className="mt-2 grid grid-cols-2 gap-1.5">
-          <button type="button" onClick={() => (decideTransfer(t.id, false, user.name, ''), showToast('Not approved'))} className="press flex min-h-10 items-center justify-center gap-1 rounded-xl bg-page text-[13px] font-semibold text-ink-2">
+          <button type="button" onClick={() => (decideTransfer(t.id, false, user.name, '', user.role), showToast('Not approved'))} className="press flex min-h-10 items-center justify-center gap-1 rounded-xl bg-page text-[13px] font-semibold text-ink-2">
             <X size={14} /> Decline
           </button>
-          <button type="button" onClick={() => (decideTransfer(t.id, true, user.name, ''), showToast(`${t.hospital} moved`))} className="press flex min-h-10 items-center justify-center gap-1 rounded-xl bg-brand-600 text-[13px] font-semibold text-white">
+          <button type="button" onClick={() => (decideTransfer(t.id, true, user.name, '', user.role), showToast(`${t.hospital} moved`))} className="press flex min-h-10 items-center justify-center gap-1 rounded-xl bg-brand-600 text-[13px] font-semibold text-white">
             <Check size={14} /> Approve
           </button>
         </div>
@@ -355,6 +359,7 @@ function DormantCard({ d, s, canManage, onCaution, onMove }: { d: D; s: Hospital
 function MarketerSheet({ d, id, onMove, onClose }: { d: D; id: string; onMove: (h: string) => void; onClose: () => void }) {
   const { user } = useCompany();
   const { showToast } = useNav();
+  const canSetTargets = useRight()('marketing.targets.manage');
   const m = d.marketers.find((x) => x.id === id)!;
   const p = d.progress.find((x) => x.marketerId === id)!;
   const t = tasksFor(d.st, d.branchId, id);
@@ -404,12 +409,12 @@ function MarketerSheet({ d, id, onMove, onClose }: { d: D; id: string; onMove: (
       </div>
       <p className="mb-2 px-1 text-[13px] font-semibold text-ink-2">Their target for {monthName(d.ym, true)} (₦)</p>
       <div className="mb-3 flex gap-2">
-        <input inputMode="numeric" value={target} onChange={(e) => setT(e.target.value.replace(/\D/g, ''))} className={inputCls()} aria-label="Target" />
+        <input inputMode="numeric" value={target} onChange={(e) => setT(e.target.value.replace(/\D/g, ''))} readOnly={!canSetTargets} className={inputCls()} aria-label="Target" />
         <button
           type="button"
-          disabled={!Number(target) || Number(target) === p.target}
+          disabled={!canSetTargets || !Number(target) || Number(target) === p.target}
           onClick={() => {
-            setTarget(d.branchId, id, d.ym, Number(target), user.name);
+            setTarget(d.branchId, id, d.ym, Number(target), user.name, user.role);
             logAudit({ category: 'PR agents', action: 'Marketer target set', record: `${m.name} · ${monthName(d.ym, true)}`, details: d.money(Number(target)), branchId: d.branchId });
             showToast(`Target set: ${d.money(Number(target))}`);
           }}
@@ -425,6 +430,7 @@ function MarketerSheet({ d, id, onMove, onClose }: { d: D; id: string; onMove: (
 function MoveSheet({ d, hospital, onClose }: { d: D; hospital: string; onClose: () => void }) {
   const { user } = useCompany();
   const { showToast } = useNav();
+  const canDirectReassign = useRight()('marketing.hospitals.reassign');
   const s = d.statuses.get(hospital);
   const owner = s?.owner ?? null;
   const m = moveMode(s, owner ? d.isActive(owner) : true);
@@ -438,13 +444,13 @@ function MoveSheet({ d, hospital, onClose }: { d: D; hospital: string; onClose: 
       subtitle={`Now with ${d.nameOf(owner)}`}
       onClose={onClose}
       footer={
-        m.mode !== 'locked' && !pending ? (
+        m.mode !== 'locked' && !pending && (m.mode !== 'direct' || canDirectReassign) ? (
           <button
             type="button"
             disabled={!to || why.trim().length < 3}
             onClick={() => {
               if (m.mode === 'direct') {
-                directMove(d.branchId, hospital, owner, to, why, user.name);
+                directMove(d.branchId, hospital, owner, to, why, user.name, user.role);
                 showToast(`${hospital} moved to ${d.nameOf(to)}`);
               } else {
                 requestRelease(d.branchId, hospital, owner!, to, why, user.name);
@@ -533,6 +539,7 @@ function NumField({ label, hint, value, onChange }: { label: string; hint?: stri
 function TasksSheet({ d, onClose }: { d: D; onClose: () => void }) {
   const { user } = useCompany();
   const { showToast } = useNav();
+  const canSetTargets = useRight()('marketing.targets.manage');
   const { tasks, set } = effectiveTasks(d.st, d.branchId, d.ym);
   const [b, setB] = useState<TaskSet>(tasks.base);
   const [custom, setCustom] = useState<CustomTask[]>(set ? tasks.custom : []);
@@ -546,10 +553,10 @@ function TasksSheet({ d, onClose }: { d: D; onClose: () => void }) {
       onClose={onClose}
       footer={
         <div className="grid grid-cols-2 gap-2">
-          <button type="button" disabled={!tasks.setBy} onClick={() => (keepLastMonthTasks(d.branchId, d.ym, user.name), showToast("Last month's tasks kept"), onClose())} className="press min-h-12 rounded-2xl bg-page text-[14px] font-semibold text-ink-2 disabled:opacity-40">
+          <button type="button" disabled={!canSetTargets || !tasks.setBy} onClick={() => (keepLastMonthTasks(d.branchId, d.ym, user.name, user.role), showToast("Last month's tasks kept"), onClose())} className="press min-h-12 rounded-2xl bg-page text-[14px] font-semibold text-ink-2 disabled:opacity-40">
             Keep last month's
           </button>
-          <button type="button" onClick={() => (saveMonthTasks(d.branchId, d.ym, { base: b, overrides: tasks.overrides, custom }, user.name), showToast('Tasks saved'), onClose())} className="press min-h-12 rounded-2xl bg-brand-600 text-[14px] font-semibold text-white">
+          <button type="button" disabled={!canSetTargets} onClick={() => (saveMonthTasks(d.branchId, d.ym, { base: b, overrides: tasks.overrides, custom }, user.name, user.role), showToast('Tasks saved'), onClose())} className="press min-h-12 rounded-2xl bg-brand-600 text-[14px] font-semibold text-white">
             Save
           </button>
         </div>

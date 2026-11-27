@@ -145,6 +145,8 @@ export const STAFF_STATUSES: readonly StaffStatus[] = ["Active", "On leave", "Su
 
 /** The branch head. Each branch has at most one active manager; every other staff member reports to them. */
 export const MANAGER_ROLE = "Branch Manager";
+export const ASSISTANT_MANAGER_ROLE = "Assistant Manager";
+export const ASSISTANT_MANAGER_ROLE_ID = "assistant_manager";
 
 /**
  * STANLEY's only staff roles (owner, 2026-11-22). The system runs branch
@@ -158,6 +160,7 @@ export const FRONT_DESK_ROLE = "Front Desk";
 export const MARKETER_ROLE = "Marketer";
 export const STAFF_ROLES: readonly { value: string; access: string; permissions: string[] }[] = [
   { value: MANAGER_ROLE, access: "Runs the branch: billing, PR agents, staff, expenses, reports and settings", permissions: ["Register patients and create bills", "Change prices and give discounts", "Approve expenses and balances", "Manage front-desk staff", "Manage PR agents and hospitals", "Every branch report", "Branch settings, audit and trash"] },
+  { value: ASSISTANT_MANAGER_ROLE, access: "Shares the branch workspace; monthly targets, transfer decisions and direct hospital reassignment stay with the Branch Manager", permissions: ["Same branch operations as the Branch Manager", "Add and manage branch staff", "View marketer targets and hospital ownership"] },
   { value: FRONT_DESK_ROLE, access: "Front-desk attendant: patients, billing and payments", permissions: ["Register patients and create bills", "Take payments and print receipts", "Save and continue drafts", "Record expenses (approved by the manager)", "Payment, balance and price-list reports"] },
   { value: MARKETER_ROLE, access: "Looks after partner hospitals and their PR agents (mobile app only)", permissions: ["Their own hospitals and the PR agents there", "Follow-ups, visits and new PR agents", "Register new partner hospitals", "Their target and progress", "Hospital totals only: no commission, no agent amounts, no patient details"] },
 ];
@@ -189,7 +192,7 @@ export const RECORD_ROLES: readonly string[] = [
 ];
 export const DEPARTMENTS: readonly string[] = ["Front desk", "Management", "Imaging", "Laboratory", "Clinical", "Finance", "Marketing", "Facilities", "Security", "Transport", "IT"];
 /** The two roles that sign in to STANLEY; everyone else is on record only. */
-export const usesApp = (s: Pick<StaffRecord, "role">) => s.role === MANAGER_ROLE || s.role === FRONT_DESK_ROLE || s.role === MARKETER_ROLE;
+export const usesApp = (s: Pick<StaffRecord, "role">) => s.role === MANAGER_ROLE || s.role === ASSISTANT_MANAGER_ROLE || s.role === FRONT_DESK_ROLE || s.role === MARKETER_ROLE;
 
 export interface StaffPay {
   /** Monthly basic salary (naira). */
@@ -212,6 +215,10 @@ export interface StaffRecord {
   id: string;
   name: string;
   role: string;
+  /** Development-only mock account username. Not an authentication credential. */
+  username?: string;
+  /** Marks seeded demo accounts explicitly. */
+  accountType?: "Demo account";
   branchId: string;
   status: StaffStatus;
   email: string;
@@ -287,6 +294,22 @@ export const MOCK_STAFF: readonly StaffRecord[] = Object.freeze([
     bank: SAMPLE_BANKS[name.length % SAMPLE_BANKS.length]!(name),
     createdAt: MOCK_CREATED,
   })),
+  {
+    id: "STF-0012",
+    name: "Amina Yusuf",
+    role: ASSISTANT_MANAGER_ROLE,
+    username: "assistant.manager.demo",
+    accountType: "Demo account",
+    branchId: LEGACY_BRANCH_ID,
+    status: "Active",
+    email: "amina.yusuf@example.com",
+    phone: "",
+    employment: "Full-time",
+    startDate: "2026-11-27",
+    notes: "Development mock account. Not a real staff account or credential.",
+    department: "Management",
+    createdAt: MOCK_CREATED,
+  },
   ...(
     [
       ["STF-0005", "Tunde Adeyemi", "Radiographer", "Imaging", 220_000, "2022-08-01"],
@@ -318,6 +341,7 @@ export const MOCK_STAFF: readonly StaffRecord[] = Object.freeze([
 ]);
 
 export const isManager = (s: Pick<StaffRecord, "role">) => s.role === MANAGER_ROLE;
+export const isManagementRole = (s: Pick<StaffRecord, "role">) => s.role === MANAGER_ROLE || s.role === ASSISTANT_MANAGER_ROLE;
 
 /** The branch's current manager (active or on leave), if any. */
 export const managerOf = (staff: readonly StaffRecord[], branchId: string) => staff.find((s) => s.branchId === branchId && isManager(s) && s.status !== "Left");

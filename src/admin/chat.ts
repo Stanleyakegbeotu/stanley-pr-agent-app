@@ -21,6 +21,7 @@ import { useAgentPhotos } from './agentPhotos';
 export const AGENT_PREFIX = 'adm-pr-';
 export const frontDeskId = (branchId: string) => `adm-fd-${branchId}`;
 export const managerId = (branchId: string) => `adm-mgr-${branchId}`;
+export const assistantManagerId = (branchId: string, accountId: string) => `adm-assistant-manager-${branchId}-${accountId}`;
 export const agentConvId = (agentId: number) => `${AGENT_PREFIX}${agentId}`;
 
 const person = (w: Who): Person => ({ id: w.name, name: w.name, role: w.role, photo: w.photo });
@@ -28,7 +29,7 @@ const person = (w: Who): Person => ({ id: w.name, name: w.name, role: w.role, ph
 /** Registers every admin conversation and returns the fixed branch inboxes. */
 export function useAdminConversations() {
   const team = useTeam();
-  const { agents } = useCompany();
+  const { agents, staff } = useCompany();
   const photos = useAgentPhotos();
   return useMemo(() => {
     const fixed: Conversation[] = [];
@@ -62,6 +63,19 @@ export function useAdminConversations() {
         shared: false,
         messages: mgr ? [{ from: 'them', text: `Good morning. ${b.name} branch is open and the team is in.`, time: '07:45' }] : [],
       });
+      for (const assistant of staff.filter((s) => s.branchId === b.id && s.role === 'Assistant Manager' && s.status === 'Active')) {
+        const assistantPerson: Person = { id: assistant.id, name: assistant.name, role: assistant.role, photo: assistant.photo };
+        fixed.push({
+          id: assistantManagerId(b.id, assistant.id),
+          kind: 'manager',
+          name: assistant.name,
+          role: `Assistant Manager, ${b.name} branch`,
+          face: assistantPerson,
+          members: [assistantPerson],
+          shared: false,
+          messages: [],
+        });
+      }
     }
     // PR agents belong to the branch their referrals go to (the legacy branch until agents carry a branch).
     const home = getBranch(LEGACY_BRANCH_ID) ?? ACTIVE_BRANCHES[0];
@@ -81,5 +95,5 @@ export function useAdminConversations() {
     registerConversations([...fixed, ...agentConvs]);
     return { fixed, agentConvs, home };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [team, agents, photos]);
+  }, [team, agents, staff, photos]);
 }

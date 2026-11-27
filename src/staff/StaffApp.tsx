@@ -18,7 +18,7 @@ import { getBranch } from '@company/data/company';
 import { branchRoute } from '@company/app/router';
 import { isRead } from '@company/services/notifications';
 import { usePermissions } from '@company/services/permissions';
-import { ROLES, setActingStaff, setRole, staffBranch, useActingStaff, useRole } from '@/domain/role';
+import { ASSISTANT_MANAGER_ACCOUNT_ID, ROLES, setActingStaff, setRole, staffBranch, useActingStaff, useRole } from '@/domain/role';
 import { NavCtx } from '@/app/store';
 import { InitialsAvatar } from '@/ui/kit';
 import { AdminShellCtx } from '@/admin/shell';
@@ -121,7 +121,7 @@ function StaffFrame() {
   useEffect(() => {
     if (context !== branchId) setContext(branchId);
   }, [context, branchId, setContext]);
-  // Who is signed in: the manager, or a Front Desk person (today's on-seat one by default).
+  // Who is signed in: the manager, assistant manager, or a Front Desk person (today's on-seat one by default).
   const deskId = useMemo(() => {
     if (role !== 'frontdesk') return null;
     // A deactivated account can't be signed in to (Staff Management → Account).
@@ -130,10 +130,11 @@ function StaffFrame() {
     const duty = team.onDuty(branchId);
     return desk.find((s) => s.name === duty?.name)?.id ?? desk[0]?.id ?? null;
   }, [role, acting, team, branchId, access]);
+  const accountId = role === 'assistant_manager' ? ASSISTANT_MANAGER_ACCOUNT_ID : deskId;
   // Switch only when the signed-in person differs (each switch is written to the Audit Log, as on the desktop).
   useEffect(() => {
-    if (deskId ? user.staffId !== deskId : user.kind !== 'manager') switchAccount(branchId, deskId);
-  }, [branchId, deskId, switchAccount, user.staffId, user.kind]);
+    if (accountId ? user.staffId !== accountId : user.kind !== 'manager') switchAccount(branchId, accountId);
+  }, [branchId, accountId, switchAccount, user.staffId, user.kind]);
   useEffect(() => {
     scroller.current?.scrollTo({ top: 0 });
     setMenu(false);
